@@ -1,6 +1,7 @@
 #pragma once
 
 #include "model.h"
+#include "animation.h"
 #include <Adafruit_GFX.h>
 #include <Arduino.h>
 
@@ -24,12 +25,13 @@
 
 enum Screen {
   SCR_TIMER = 0,
+  SCR_QR, // QR First
   SCR_TASKS,
+  SCR_CALENDAR, // [NEW]
   SCR_STREAK,
-  SCR_CLOCK,
-  SCR_WIFI_INFO,
+  SCR_STATS,
   SCR_SETTINGS,
-  SCR_WIFI_QR
+  SCR_WIFI_INFO // Moved to end or kept debug
 };
 
 class TaskyUI {
@@ -45,6 +47,9 @@ public:
   uint32_t flashUntilMs = 0;
   bool baseDrawn = false;
 
+  // Animation system
+  AnimState anim;
+
   int lastShownMin = -1;
   int lastShownSec = -1;
   int lastProgSegOn = -1;
@@ -55,6 +60,7 @@ public:
   bool streakEditing = false;
   bool clockEditing = false;
   int clockField = 0;
+  bool timerEditing = false;  // For editing timer duration
 
   // Use correct circular driver
 #if DISPLAY_CIRCULAR
@@ -74,8 +80,10 @@ public:
   void drawTimerTime(int mm, int ss);
   void drawSettings();
   void drawTasks();
+  void drawTaskDetail(int index);
+  void drawCalendar(); // [NEW]
   void drawStreak();
-  void drawClock();
+  void drawStats();
   void drawWifi(bool wifiOn, String ssid, String pass, String ip);
   void drawQRFull(String ssid, String pass);
   void drawSplashTasky();
@@ -88,6 +96,8 @@ public:
   void applyTheme();
 
   void drawFrame(); // Implementation of the required abstraction
+
+  void drawNavDots(Screen current);  // Navigation indicator dots
 
 private:
   void drawProgressSegments();

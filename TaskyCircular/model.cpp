@@ -20,6 +20,14 @@ void TaskyModel::load() {
   cfg.ledBright = pref.getUChar("led", 180);
   cfg.soundOn = pref.getBool("snd", true);
   cfg.darkMode = pref.getBool("dark", true);
+  cfg.totalFocusMin = pref.getUInt("focus", 0);
+  cfg.wifiSSID = pref.getString("wss", "");
+  cfg.wifiSSID = pref.getString("wss", "");
+  cfg.wifiPass = pref.getString("wps", "");
+  cfg.timezone = pref.getChar("tz", -5);
+  cfg.githubUser = pref.getString("ghu", "");
+  cfg.githubToken = pref.getString("ght", "");
+  cfg.calendarUrl = pref.getString("cal", "");
 
   for (int i = 0; i < 3; i++) {
     String key = "t" + String(i);
@@ -63,6 +71,14 @@ void TaskyModel::save() {
   pref.putUChar("led", cfg.ledBright);
   pref.putBool("snd", cfg.soundOn);
   pref.putBool("dark", cfg.darkMode);
+  pref.putUInt("focus", cfg.totalFocusMin);
+  pref.putString("wss", cfg.wifiSSID);
+  pref.putString("wss", cfg.wifiSSID);
+  pref.putString("wps", cfg.wifiPass);
+  pref.putChar("tz", cfg.timezone);
+  pref.putString("ghu", cfg.githubUser);
+  pref.putString("ght", cfg.githubToken);
+  pref.putString("cal", cfg.calendarUrl);
 
   for (int i = 0; i < 3; i++) {
     String key = "t" + String(i);
@@ -105,6 +121,11 @@ void TaskyModel::finishTimer() {
   st.running = false;
   st.finished = true;
   st.pausedMs = phaseDurationMs();
+
+  if (phase == PHASE_WORK) {
+    cfg.totalFocusMin += cfg.workMin;
+    save();
+  }
 }
 
 void TaskyModel::nextPhase() {

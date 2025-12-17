@@ -4,8 +4,8 @@
 #include <Preferences.h>
 
 // -------------------- Constants --------------------
-#define STREAK_ROWS 7
-#define STREAK_COLS 16
+#define STREAK_ROWS 6   // Reduced for circular display
+#define STREAK_COLS 14  // Reduced for circular display corners
 #define STREAK_N (STREAK_ROWS * STREAK_COLS)
 
 enum Phase { PHASE_WORK, PHASE_BREAK };
@@ -17,6 +17,18 @@ struct Config {
   uint8_t ledBright = 180;
   bool soundOn = true;
   bool darkMode = true;
+  uint32_t totalFocusMin = 0;
+  String wifiSSID = "";
+  String wifiPass = "";
+  int8_t timezone = -5; // UTC Offset
+  String githubUser = "";
+  String githubToken = "";
+  String calendarUrl = "";
+
+  // Runtime Data (not saved to config necessarily, or maybe yes for offline
+  // cache)
+  String nextEventSummary = "No Events";
+  String nextEventTime = "--:--";
 };
 
 struct TimerState {

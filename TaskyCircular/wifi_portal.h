@@ -6,17 +6,19 @@
 #include <WebServer.h>
 #include <WiFi.h>
 
-// Managed by main sketch mostly, but logic here
+class TaskyNetManager; // Forward declaration
+
 class WiFiPortal {
 public:
   WebServer server;
   DNSServer dnsServer;
   TaskyModel *model;
+  TaskyNetManager *net; // [NEW]
   bool wifiOn = false;
   String apSSID = "Tasky";
-  String apPass = "EverySecondCounts";
+  String apPass = "GetItDone";
 
-  WiFiPortal(TaskyModel *m);
+  WiFiPortal(TaskyModel *m, TaskyNetManager *n); // [UPDATED]
 
   void begin();
   void stop();

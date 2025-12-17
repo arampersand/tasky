@@ -65,12 +65,8 @@ void TaskyUI::applyTheme() {
 }
 
 void TaskyUI::goToScreen(Screen s) {
-  // Clear screen properly with current BG
-  tft.fillScreen(C_BG);
+  // Just reset state - screen clearing handled by individual draw functions
   baseDrawn = false;
-  settingsEditing = false;
-  clockEditing = false;
-  streakEditing = false;
 }
 
 // Draw Frame Abstraction
@@ -83,12 +79,38 @@ void TaskyUI::drawFrame() {
 #endif
 }
 
+// Navigation dots indicator
+void TaskyUI::drawNavDots(Screen current) {
+  // Navigation order: Timer, Tasks, Calendar, Streak, Stats, Settings, QR, WiFi
+  const int navOrder[] = {SCR_TIMER, SCR_TASKS, SCR_CALENDAR, SCR_STREAK, 
+                          SCR_STATS, SCR_SETTINGS, SCR_QR, SCR_WIFI_INFO};
+  const int numDots = 8;
+  const int dotRadius = 3;
+  const int dotSpacing = 12;
+  
+  // Center the dots horizontally
+  int totalWidth = (numDots - 1) * dotSpacing;
+  int startX = CX - totalWidth / 2;
+  int y = 225;  // Near bottom of circular display
+  
+  for (int i = 0; i < numDots; i++) {
+    int x = startX + i * dotSpacing;
+    uint16_t color = (navOrder[i] == current) ? C_TEAL : C_LINE;
+    tft.fillCircle(x, y, dotRadius, color);
+  }
+}
+
 void TaskyUI::uiTick(bool strong) {
   uint32_t now = millis();
   if (model->cfg.soundOn && (now - lastUiBeepAt > 60)) {
     lastUiBeepAt = now;
     buzzerTone(strong ? 2600 : 2200);
     uiBeepOffAt = now + 10;
+  }
+  
+  // Trigger click animation for visual feedback
+  if (strong) {
+    anim.triggerClick();
   }
 
   // NOTE: Visual flash is only enabled if explicitly desired.
@@ -143,59 +165,40 @@ void TaskyUI::drawProgressSegments() {
   uint32_t rem = model->remainingMs();
 
   if (dur == 0)
-    dur = 1; // safety
+    dur = 1;
 
   float pct = (float)rem / (float)dur;
-  int totalDots = 60; // 60 dots ring
+  int totalDots = 60;
   int dotsOn = (int)(pct * totalDots);
   if (dotsOn < 0)
     dotsOn = 0;
   if (dotsOn > totalDots)
     dotsOn = totalDots;
 
-  // We redraw ONLY if changed?
-  // For smooth ring, we might just redraw all unless optimized.
-  // Optimization: only redraw if dotsOn changed.
-
-  static int lastDotsOn = -1;
-  // Force redraw if base redraw happened
-  if (lastDotsOn == dotsOn && baseDrawn && lastDotsOn != -1)
-    return;
-  lastDotsOn = dotsOn;
+  // No cache - always redraw to prevent blank screen after screen clear
 
 #if DISPLAY_CIRCULAR
-  int r = 114; // Radius
-  // Draw all 60 dots
+  int r = 114;
   for (int i = 0; i < totalDots; i++) {
-    // Angle: Start from top (-90 deg), go clockwise
-    float angle = (360.0 / totalDots) * i - 90;
+    // Reverse direction: Start from top (-90), go Left (Counter-Clockwise)
+    // Angle = -90 - (360/total) * i
+    float angle = -90.0 - (360.0 / totalDots) * i;
     float rad = angle * 3.14159 / 180.0;
-
-    // Determine color
-    // Active dots get color, inactive get muted/line
-    // As time passes, dots turn OFF (become muted)
-    // "Countdown": dots disappear.
-    // Or "Progress": dots fill. Protocol says "Countdown" usually.
-    // User said "ring of dots... blue yellow red when about to finish"
-    // So existing dots should have the color.
 
     uint16_t color = C_LINE;
     if (i < dotsOn) {
-      // Color depends on GLOBAL percentage, not per dot
       color = getRingColor(pct);
     }
 
-    // Draw dot (small circle or thick line)
     int x = CX + (int)(cos(rad) * r);
     int y = CY + (int)(sin(rad) * r);
 
     if (i < dotsOn)
-      tft.fillCircle(x, y, 2, color); // Active dot slightly larger?
+      tft.fillCircle(x, y, 2, color);
     else
-      tft.fillCircle(x, y, 1, C_LINE); // Inactive dot small
+      tft.fillCircle(x, y, 1, C_LINE);
   }
 #else
-  // Square fallback (simplified)
   int w = 220;
   int h = 6;
   int x = 10;
@@ -208,9 +211,11 @@ void TaskyUI::drawProgressSegments() {
 void TaskyUI::drawTimerBase() {
   tft.fillScreen(C_BG);
   flashOn = false;
+  
   drawFrame();
+  drawNavDots(SCR_TIMER);
 
-  // Phase dot
+  // Phase indicator
   uint16_t dot = accentColor();
   tft.fillCircle(CX, 22, 3, dot);
 
@@ -285,9 +290,12 @@ void TaskyUI::drawTimerTime(int mm, int ss) {
 
 void TaskyUI::drawSettings() {
   tft.fillScreen(C_BG);
-  centerTextFont("SETTINGS", 34, C_TEXT, &FreeSansBold12pt7b);
-  tft.drawFastHLine(40, 46, 160, C_LINE);
+  drawNavDots(SCR_SETTINGS);
+  
+  centerTextFont("SETTINGS", 30, C_TEXT, &FreeSansBold12pt7b);
+  tft.drawFastHLine(40, 42, 160, C_LINE);
 
+  // Settings: Work, Break, Sound, Bright, LED, Theme (0-5)
   const char *labels[6] = {"Work", "Break", "Sound", "Bright", "LED", "Theme"};
   String values[6];
   values[0] = String(model->cfg.workMin) + "m";
@@ -297,124 +305,266 @@ void TaskyUI::drawSettings() {
   values[4] = String((model->cfg.ledBright * 100) / 255) + "%";
   values[5] = model->cfg.darkMode ? "DARK" : "LIGHT";
 
-  int y0 = 74;
-  int rowH = 30;
+  int yStart = 62;
+  int rowH = 22;
 
-  // Safe margins for circular?
-  // Center is wide, edges narrow.
-  // 30px row height. Y range 74 to 74+5*30 = 224.
-  // 224 is near bottom edge. In circle R=120, at Y=224 (offset 104), X width is
-  // sqrt(120^2-104^2)*2 = sqrt(14400-10816)*2 = sqrt(3584)*2 = 60*2 = 120. Our
-  // content might be wider. Labels + Values. We might need to contract the list
-  // or scroll. For this refactor, we keep it simple. If it clips, it clips
-  // (user said "adapt to circular"). Maybe shift Y up a bit? y0=60.
-
-#if DISPLAY_CIRCULAR
-  y0 = 60;   // Shift up
-  rowH = 26; // Condense slightly
-#endif
-
+  // Draw all items
   for (int i = 0; i < 6; i++) {
-    int baseline = y0 + i * rowH;
+    int baseline = yStart + i * rowH;
     bool sel = (i == settingsSel);
 
+    // Draw highlight for selected item
     if (sel) {
-      uint16_t bg = settingsEditing ? 0x0841 : 0x1082;
-      // Circular list visual: maybe rounded rect that fits
-      int w = 212;
-      if (baseline > 190)
-        w = 140; // Narrower at bottom
+      int w = 190;
       int x = (W - w) / 2;
-      tft.fillRoundRect(x, baseline - 18, w, 22, 10, bg);
-      tft.drawRoundRect(x, baseline - 18, w, 22, 10,
-                        settingsEditing ? C_TEAL : C_LINE);
+      if (settingsEditing) {
+        tft.drawRoundRect(x, baseline - 14, w, 20, 5, C_TEAL);
+      } else {
+        tft.drawRoundRect(x, baseline - 14, w, 20, 5, C_LINE);
+      }
     }
 
-    tft.setTextColor(C_TEXT);
-    tft.setFont(&FreeSans12pt7b);
-
-    // Simple layout: Label Left, Value Right
-    // Adjust margins for circular
-    int xL = 22;
-    int xR = 218;
-
-    // Quick heuristic for circular width at Y
-    // .. skipping complex math, just indentation if near edges
-    if (baseline > 200 || baseline < 40) {
-      xL = 50;
-      xR = 190;
-    }
-
-    tft.setCursor(xL, baseline);
+    // Text color - always visible
+    uint16_t labelColor = sel ? C_TEAL : C_TEXT;
+    uint16_t valueColor = sel ? C_TEAL : C_MUTED;
+    
+    tft.setTextColor(labelColor);
+    tft.setFont(&FreeSans9pt7b);
+    tft.setCursor(30, baseline);
     tft.print(labels[i]);
+    rightTextFont(values[i], 210, baseline, valueColor, &FreeSans9pt7b);
+  }
 
-    rightTextFont(values[i], xR, baseline, sel ? C_SOFT : C_TEXT,
-                  &FreeSans12pt7b);
-    tft.setFont();
+  // Bottom hint
+  tft.setFont();
+  tft.setTextSize(1);
+  tft.setTextColor(C_MUTED);
+  if (settingsEditing) {
+    tft.setCursor(55, 200);
+    tft.print("Rotate +/-  Click to save");
+  } else {
+    tft.setCursor(75, 200);
+    tft.print("Click to edit");
   }
 }
 
+// End of ui.cpp or similar valid location. Since TargetContent was empty
+// previously, I will target the end of file or a known specific function to
+// append/insert. Let's target the end of drawTasks or similar.
 void TaskyUI::drawTasks() {
   tft.fillScreen(C_BG);
+  drawNavDots(SCR_TASKS);
+  
   centerTextFont("TASKS", 34, C_TEXT, &FreeSansBold12pt7b);
   tft.drawFastHLine(40, 46, 160, C_LINE);
 
-  int y0 = 80;
-  int rowH = 44;
-
+  // Check if all tasks are empty (no real content)
+  bool allEmpty = true;
   for (int i = 0; i < 3; i++) {
-    int baseline = y0 + i * rowH;
-    bool sel = (i == tasksSel);
+    if (model->tasks[i].length() > 0 && model->tasks[i] != "Empty")
+      allEmpty = false;
+  }
 
-    if (sel) {
-      tft.fillRoundRect(12, baseline - 22, 216, 34, 12, 0x0841);
-      tft.drawRoundRect(12, baseline - 22, 216, 34, 12, C_TEAL);
-    }
+  if (allEmpty) {
+    // Empty state - balanced spacing
+    centerTextFont("No tasks yet", 80, C_TEXT, &FreeSansBold12pt7b);
+    centerTextFont("Scan the QR code", 108, C_MUTED, &FreeSans9pt7b);
+    centerTextFont("to add your tasks", 126, C_MUTED, &FreeSans9pt7b);
+    
+    // QR icon hint - centered with more space
+    int qrX = 108, qrY = 140;
+    tft.drawRect(qrX, qrY, 24, 24, C_TEAL);
+    tft.fillRect(qrX + 3, qrY + 3, 6, 6, C_TEAL);
+    tft.fillRect(qrX + 15, qrY + 3, 6, 6, C_TEAL);
+    tft.fillRect(qrX + 3, qrY + 15, 6, 6, C_TEAL);
+    tft.fillRect(qrX + 13, qrY + 13, 5, 5, C_TEAL);
+    
+    centerTextFont("Press MODE for QR", 188, C_MUTED, &FreeSans9pt7b);
+    return;
+  }
 
+  // Compact layout for 3 tasks
+  int yBase = 65;
+  int rowH = 38;
+  
+  // Draw cursor highlight for selected item
+  int cursorY = yBase + tasksSel * rowH;
+  tft.fillRoundRect(14, cursorY - 16, 212, 30, 10, 0x0841);
+  tft.drawRoundRect(14, cursorY - 16, 212, 30, 10, C_TEAL);
+
+  // Draw all tasks
+  for (int i = 0; i < 3; i++) {
+    int baseline = yBase + i * rowH;
+
+    // Checkbox
     uint16_t boxC = model->taskDone[i] ? C_GREEN : C_MUTED;
-    tft.drawRoundRect(22, baseline - 10, 18, 18, 4, boxC);
+    tft.drawRoundRect(22, baseline - 8, 16, 16, 3, boxC);
     if (model->taskDone[i]) {
-      tft.drawLine(26, baseline - 2, 30, baseline + 4, C_GREEN);
-      tft.drawLine(30, baseline + 4, 38, baseline - 6, C_GREEN);
+      // Checkmark
+      tft.drawLine(25, baseline - 1, 28, baseline + 3, C_GREEN);
+      tft.drawLine(28, baseline + 3, 35, baseline - 5, C_GREEN);
     }
 
+    // Task text
     tft.setTextColor(model->taskDone[i] ? C_MUTED : C_TEXT);
     tft.setFont(&FreeSans12pt7b);
-    tft.setCursor(46, baseline);
+    tft.setCursor(44, baseline);
     String t = model->tasks[i];
-    if (t.length() > 16)
-      t = t.substring(0, 16) + "...";
+    if (t == "Empty") t = "---";
+    if (t.length() > 14)
+      t = t.substring(0, 14) + "..";
     tft.print(t);
     tft.setFont();
+  }
+
+  // Bottom hint - moved up for circular display
+  centerTextFont("Click to complete", 195, C_MUTED, &FreeSans9pt7b);
+}
+
+void TaskyUI::drawCalendar() {
+  tft.fillScreen(C_BG);
+  drawNavDots(SCR_CALENDAR);
+  
+  centerTextFont("CALENDAR", 34, C_TEXT, &FreeSansBold12pt7b);
+  tft.drawFastHLine(40, 46, 160, C_LINE);
+
+  // Check if calendar is configured
+  if (model->cfg.calendarUrl.length() == 0) {
+    // No calendar configured - balanced spacing
+    centerTextFont("No Calendar", 80, C_TEXT, &FreeSansBold12pt7b);
+    centerTextFont("Connect via WiFi", 108, C_MUTED, &FreeSans9pt7b);
+    centerTextFont("and add your", 126, C_MUTED, &FreeSans9pt7b);
+    centerTextFont("iCal URL in settings", 144, C_MUTED, &FreeSans9pt7b);
+    
+    // WiFi icon hint
+    tft.fillCircle(120, 165, 3, C_TEAL);
+    tft.drawCircle(120, 165, 8, C_TEAL);
+    tft.drawCircle(120, 165, 14, C_TEAL);
+    
+    centerTextFont("Scan QR to setup", 195, C_MUTED, &FreeSans9pt7b);
+    return;
+  }
+
+  // Show next event info
+  centerTextFont("NEXT EVENT", 65, C_MUTED, &FreeSans9pt7b);
+
+  // Event Time - prominent display
+  tft.setTextColor(C_TEAL);
+  tft.setFont(&FreeSansBold18pt7b);
+  int16_t x1, y1;
+  uint16_t w, h;
+  tft.getTextBounds(model->cfg.nextEventTime, 0, 0, &x1, &y1, &w, &h);
+  tft.setCursor(120 - w / 2, 105);
+  tft.print(model->cfg.nextEventTime);
+
+  // Event Title
+  tft.setTextColor(C_TEXT);
+  tft.setFont(&FreeSans12pt7b);
+
+  String title = model->cfg.nextEventSummary;
+  if (title.length() > 18)
+    title = title.substring(0, 18) + "..";
+
+  tft.getTextBounds(title, 0, 0, &x1, &y1, &w, &h);
+  tft.setCursor(120 - w / 2, 145);
+  tft.print(title);
+
+  // Separator
+  tft.drawFastHLine(50, 160, 140, C_LINE);
+
+  // Instructions - moved up for circular display
+  centerTextFont("Syncs from your", 180, C_MUTED, &FreeSans9pt7b);
+  centerTextFont("iCal calendar", 198, C_MUTED, &FreeSans9pt7b);
+}
+
+void TaskyUI::drawTaskDetail(int index) {
+  if (index < 0 || index >= 3)
+    return;
+  String full = model->tasks[index];
+  if (full.length() == 0)
+    return;
+
+  // Overlay style
+  tft.fillRoundRect(20, 40, 200, 160, 10, C_BG);
+  tft.drawRoundRect(20, 40, 200, 160, 10, C_TEAL);
+
+  tft.setTextColor(C_TEXT);
+  tft.setFont(&FreeSansBold12pt7b);
+  tft.setCursor(30, 70);
+  tft.print("Task Details:");
+
+  tft.setFont(&FreeSans9pt7b);
+
+  // Simple word wrap or multi-line
+  // For now simple print, improve later if user complains
+  int y = 100;
+  int start = 0;
+  while (start < full.length() && y < 190) {
+    String line = full.substring(start);
+    if (line.length() > 20) {
+      // Find space?
+      int sp = line.lastIndexOf(' ', 20);
+      if (sp > 0)
+        line = line.substring(0, sp);
+      else
+        line = line.substring(0, 20);
+    }
+    tft.setCursor(30, y);
+    tft.print(line);
+    start += line.length();
+    while (start < full.length() && full[start] == ' ')
+      start++;
+    y += 20;
   }
 }
 
 void TaskyUI::drawStreak() {
   tft.fillScreen(C_BG);
+  drawNavDots(SCR_STREAK);
+  
   centerTextFont("STREAK", 34, C_TEXT, &FreeSansBold12pt7b);
   tft.drawFastHLine(40, 46, 160, C_LINE);
 
-  int sz = 10;
-  int gap = 3;
+  // 6 rows x 14 cols - smaller squares for circular display
+  int sz = 12;
+  int gap = 2;
   int gridW = STREAK_COLS * sz + (STREAK_COLS - 1) * gap;
-  // int gridH = STREAK_ROWS * sz + (STREAK_ROWS - 1) * gap;
+  int gridH = STREAK_ROWS * sz + (STREAK_ROWS - 1) * gap;
 
+  // Centered grid
   int gx = (W - gridW) / 2;
-  int gy = 70;
+  int gy = 58;
 
+  // Draw all squares
   for (int r = 0; r < STREAK_ROWS; r++) {
     for (int c = 0; c < STREAK_COLS; c++) {
       int idx = r * STREAK_COLS + c;
+
       int x = gx + c * (sz + gap);
       int y = gy + r * (sz + gap);
 
       tft.fillRoundRect(x, y, sz, sz, 2, streakColor(model->streak[idx]));
 
+      // Highlight current day
       if (idx == model->currentDayIndex)
         tft.drawRoundRect(x - 1, y - 1, sz + 2, sz + 2, 3, C_TEAL);
-      if (idx == model->streakCursor)
+      // Highlight cursor position (only when editing)
+      if (streakEditing && idx == model->streakCursor)
         tft.drawRoundRect(x - 2, y - 2, sz + 4, sz + 4, 4, C_TEXT);
     }
+  }
+
+  // Bottom hint - at very bottom of screen
+  tft.setFont();
+  tft.setTextSize(1);
+  if (streakEditing) {
+    tft.setTextColor(C_TEAL);
+    tft.setCursor(70, 195);
+    tft.print("Click to save");
+  } else {
+    tft.setTextColor(C_MUTED);
+    tft.setCursor(70, 195);
+    tft.print("Click to edit");
   }
 }
 
@@ -428,113 +578,166 @@ uint16_t TaskyUI::streakColor(uint8_t v) {
   return C_GREEN;
 }
 
-void TaskyUI::drawClock() {
+void TaskyUI::drawStats() {
   tft.fillScreen(C_BG);
-  centerTextFont("CLOCK", 34, C_TEXT, &FreeSansBold12pt7b);
+  drawNavDots(SCR_STATS);
+  
+  centerTextFont("STATS", 34, C_TEXT, &FreeSansBold12pt7b);
   tft.drawFastHLine(40, 46, 160, C_LINE);
 
-  int hh, mm, ss;
-  model->getClockNow(hh, mm, ss);
-  char buf[10];
-  snprintf(buf, sizeof(buf), "%02d:%02d:%02d", hh, mm, ss);
+  // Focus Time - Main stat
+  uint32_t mins = model->cfg.totalFocusMin;
+  int hours = mins / 60;
+  int m = mins % 60;
 
-  tft.setTextColor(C_TEXT);
-  tft.setFont(&FreeSansBold18pt7b);
-  int w = 0, h = 0, x1 = 0, y1 = 0;
-  // Use text bounds if needed, or approx centering
-  // centerTextFont handles it
-  centerTextFont(buf, 134, C_TEXT, &FreeSansBold18pt7b);
+  char buf[32];
+  snprintf(buf, sizeof(buf), "%dh %02dm", hours, m);
 
-  centerTextFont("EVERY SECOND COUNTS", 168, C_MUTED, &FreeSans9pt7b);
+  centerTextFont(buf, 100, C_TEXT, &FreeSansBold18pt7b);
+  centerTextFont("Total Focus Time", 126, C_MUTED, &FreeSans9pt7b);
 
-  if (clockEditing) {
-    tft.fillRoundRect(82, 184, 76, 18, 8, 0x0841);
-    tft.drawRoundRect(82, 184, 76, 18, 8, C_TEAL);
-    const char *txt = (clockField == 0)
-                          ? "EDIT H"
-                          : ((clockField == 1) ? "EDIT M" : "EDIT S");
-    centerTextFont(txt, 198, C_SOFT, &FreeSans9pt7b);
+  // Sessions completed today (calculated from streak)
+  int todaySessions = model->streak[model->currentDayIndex];
+  snprintf(buf, sizeof(buf), "%d sessions today", todaySessions);
+  centerTextFont(buf, 165, C_TEAL, &FreeSans12pt7b);
+
+  // Motivational message
+  if (todaySessions == 0) {
+    centerTextFont("Start a session!", 188, C_MUTED, &FreeSans9pt7b);
+  } else if (todaySessions >= 3) {
+    centerTextFont("Great work!", 188, C_GREEN, &FreeSans9pt7b);
+  } else {
+    centerTextFont("Keep going!", 188, C_MUTED, &FreeSans9pt7b);
   }
 }
 
 void TaskyUI::drawWifi(bool wifiOn, String ssid, String pass, String ip) {
   tft.fillScreen(C_BG);
+  drawNavDots(SCR_WIFI_INFO);
+  
   centerTextFont("WIFI", 34, C_TEXT, &FreeSansBold12pt7b);
   tft.drawFastHLine(40, 46, 160, C_LINE);
 
-  tft.setTextColor(C_TEXT);
+  // SSID row
+  tft.setTextColor(C_MUTED);
+  tft.setFont(&FreeSans9pt7b);
+  tft.setCursor(25, 75);
+  tft.print("SSID");
+  
+  tft.setTextColor(C_TEAL);
   tft.setFont(&FreeSans12pt7b);
-  tft.setCursor(18, 84);
-  tft.print("SSID:");
-  tft.setCursor(80, 84);
+  tft.setCursor(25, 97);
   tft.print(ssid);
 
-  tft.setCursor(18, 116);
-  tft.print("PASS:");
-  tft.setCursor(80, 116);
+  // PASS row
+  tft.setTextColor(C_MUTED);
+  tft.setFont(&FreeSans9pt7b);
+  tft.setCursor(25, 122);
+  tft.print("PASS");
+  
+  tft.setTextColor(C_TEAL);
+  tft.setFont(&FreeSans12pt7b);
+  tft.setCursor(25, 144);
   tft.print(pass);
 
-  tft.setFont(&FreeSans9pt7b);
-  tft.setTextColor(C_MUTED);
-  centerTextFont("Click to show QR", 170, C_MUTED, &FreeSans9pt7b);
-
-  tft.setTextColor(C_SOFT);
-  centerTextFont(ip.c_str(), 204, C_SOFT, &FreeSans9pt7b);
+  centerTextFont("Click to show QR", 172, C_MUTED, &FreeSans9pt7b);
+  centerTextFont(ip.c_str(), 190, C_SOFT, &FreeSans9pt7b);
   tft.setFont();
 }
 
 void TaskyUI::drawQRFull(String ssid, String pass) {
-  // Use pure white for QR readability
   tft.fillScreen(0xFFFF);
 
-  // Construct WiFi payload: WIFI:S:SSID;T:WPA;P:PASSWORD;;
-  // Note: escaping special chars in SSID/PASS might be needed but for now
-  // simple concatenation.
   String payload = "WIFI:S:" + ssid + ";T:WPA;P:" + pass + ";;";
-
-  // Use Nayuki's C++ API directly
-  // We use Ecc::LOW for best density/size trade-off on small screen
   qrcodegen::QrCode qr =
       qrcodegen::QrCode::encodeText(payload.c_str(), ECC_LOW);
 
   int size = qr.getSize();
-
-  // Calculate scaling to fit 240x240 circular screen
-  // The safe square inside 240 circle is ~170x170
-  // We add a quiet zone (border) of at least 2 modules
-  int border = 2; // Quiet zone modules
+  int border = 1;
   int totalModules = size + (border * 2);
 
-  int scale = 168 / totalModules;
+  // Bigger QR - use more of the circular area
+  int scale = 160 / totalModules;
   if (scale < 1)
     scale = 1;
 
   int dimension = totalModules * scale;
   int startX = (W - dimension) / 2;
-  int startY = (H - dimension) / 2;
+  int startY = (H - dimension) / 2 - 10;  // Centered, slightly up for text
 
-  // Draw QR
   for (int y = -border; y < size + border; y++) {
     for (int x = -border; x < size + border; x++) {
-      // Determine color: Black (true) or White (false)
-      // Border area is always white
       bool isBlack = false;
       if (x >= 0 && x < size && y >= 0 && y < size) {
         if (qr.getModule(x, y)) {
           isBlack = true;
         }
       }
-
       uint16_t color = isBlack ? 0x0000 : 0xFFFF;
       tft.fillRect(startX + (x + border) * scale, startY + (y + border) * scale,
                    scale, scale, color);
     }
   }
+
+  // Text below QR
+  centerTextFont("Scan to Start", 210, 0x0000, &FreeSans9pt7b);
+  
+  // Nav dots with colors for white background
+  const int navOrder[] = {SCR_TIMER, SCR_TASKS, SCR_CALENDAR, SCR_STREAK, 
+                          SCR_STATS, SCR_SETTINGS, SCR_QR, SCR_WIFI_INFO};
+  const int numDots = 8;
+  int dotStartX = CX - (numDots - 1) * 12 / 2;
+  for (int i = 0; i < numDots; i++) {
+    int dx = dotStartX + i * 12;
+    uint16_t color = (navOrder[i] == SCR_QR) ? C_TEAL : 0xC618;  // Gray for white bg
+    tft.fillCircle(dx, 225, 3, color);
+  }
 }
 
 void TaskyUI::drawSplashTasky() {
-  tft.fillScreen(C_SPLASH_BG);
-  centerTextFont("Tasky", 128, C_SPLASH_TX, &FreeSansBold24pt7b);
+  // Elegant dark intro with expanding rings
+  tft.fillScreen(C_BG);
+  
+  // Animated expanding rings from center
+  for (int r = 10; r <= 110; r += 15) {
+    uint16_t ringColor = (r < 50) ? C_TEAL : C_LINE;
+    tft.drawCircle(120, 120, r, ringColor);
+    delay(30);
+  }
+  
+  delay(150);
+  
+  // Quick fade - redraw background
+  tft.fillScreen(C_BG);
+  
+  // Draw elegant frame
+  tft.drawCircle(120, 120, 105, C_LINE);
+  
+  // Calculate text position
+  tft.setFont(&FreeSansBold24pt7b);
+  const char *logo = "Tasky";
+  int16_t x1, y1;
+  uint16_t w, h;
+  tft.getTextBounds(logo, 0, 120, &x1, &y1, &w, &h);
+  int textX = (W - w) / 2;
+  
+  // Smooth fade-in text (simulated with color steps)
+  uint16_t fadeColors[] = {0x1082, 0x2104, 0x4208, 0x630C, 0x8410, C_TEXT};
+  for (int i = 0; i < 6; i++) {
+    tft.setTextColor(fadeColors[i]);
+    tft.setCursor(textX, 120);
+    tft.print(logo);
+    delay(50);
+  }
+  
+  // Accent dot below logo
+  tft.fillCircle(120, 140, 3, C_TEAL);
+  
+  // Tagline fades in
+  delay(150);
+  centerTextFont("Focus. Flow. Finish.", 170, C_MUTED, &FreeSans9pt7b);
+  
+  delay(500);
 }
 
 void TaskyUI::centerTextFont(const char *s, int baselineY, uint16_t color,
