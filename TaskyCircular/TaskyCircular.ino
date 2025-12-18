@@ -317,7 +317,36 @@ void handleCalendar(int step, EncClickType click) {
     ui.drawCalendar();
     ui.baseDrawn = true;
   }
-  // Calendar is view-only for now
+
+  // Get days in current month for bounds
+  time_t nowTime = time(nullptr);
+  int daysInMonth = 31;  // Default
+  if (nowTime > 1577836800) {
+    struct tm now;
+    localtime_r(&nowTime, &now);
+    // Simple days in month calculation
+    int month = now.tm_mon;
+    int year = now.tm_year + 1900;
+    const int dpm[] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
+    daysInMonth = dpm[month];
+    if (month == 1 && ((year % 4 == 0 && year % 100 != 0) || year % 400 == 0)) {
+      daysInMonth = 29;
+    }
+  }
+
+  // Encoder: navigate days
+  if (step != 0) {
+    ui.calendarSelDay += step;
+    if (ui.calendarSelDay < 1) ui.calendarSelDay = daysInMonth;
+    if (ui.calendarSelDay > daysInMonth) ui.calendarSelDay = 1;
+    ui.drawCalendar();
+  }
+
+  // Click: could show day details in the future
+  if (click == ENC_SHORT) {
+    ui.uiTick(false);
+    // For now, just visual feedback - could expand to show events
+  }
 }
 
 void handleStreak(int step, EncClickType click) {
@@ -537,33 +566,27 @@ void loop() {
   int step = encoderStep();
   EncClickType click = encoderClickType();
 
-  // 3.5. Long-press MODE = toggle screensaver
-  if (modeClick == MODE_LONG) {
-    if (screensaverActive) {
-      // Exit screensaver
-      screensaverActive = false;
-      screen = screenBeforeScreensaver;
-      ui.goToScreen(screen);
-    } else {
-      // Enter screensaver (only if timer not running)
-      if (!model.st.running && !model.st.finished) {
-        screenBeforeScreensaver = screen;
-        screensaverActive = true;
-        ui.quoteIndex = random(30);
-        ui.drawQuotes();
-      }
+  // 3.5. Long-press MODE = enter screensaver
+  if (modeClick == MODE_LONG && !screensaverActive) {
+    // Enter screensaver (only if timer not running)
+    if (!model.st.running && !model.st.finished) {
+      screenBeforeScreensaver = screen;
+      screensaverActive = true;
+      ui.quoteIndex = random(30);
+      ui.drawQuotes();
     }
     return;
   }
 
-  // 3.6. If screensaver active, encoder changes quotes, any click exits
+  // 3.6. If screensaver active
   if (screensaverActive) {
+    // Encoder changes quotes
     if (step != 0) {
       ui.quoteIndex = (ui.quoteIndex + step + 30) % 30;
       ui.drawQuotes();
     }
-    if (click != ENC_NONE) {
-      // Any encoder click exits screensaver
+    // Any button press exits screensaver (MODE short/long OR encoder click)
+    if (modeClick != MODE_NONE || click != ENC_NONE) {
       screensaverActive = false;
       screen = screenBeforeScreensaver;
       ui.goToScreen(screen);

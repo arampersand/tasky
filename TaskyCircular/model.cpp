@@ -180,14 +180,18 @@ void TaskyModel::getClockNow(int &h, int &m, int &s) {
 }
 
 int TaskyModel::calculateCurrentStreak() {
-  // Count consecutive days with activity, going backwards from current day
+  // Count consecutive days with activity (value > 0), going backwards from current day
+  // Supports wrap-around: if we reach index 0, we continue from STREAK_N-1
   int count = 0;
   int idx = currentDayIndex;
+  int checked = 0;
 
-  // Check if current day has activity
-  while (idx >= 0 && streak[idx] > 0) {
+  // Check consecutive days with activity (wrap around the array)
+  while (checked < STREAK_N && streak[idx] > 0) {
     count++;
+    checked++;
     idx--;
+    if (idx < 0) idx = STREAK_N - 1;  // Wrap around
   }
 
   // Update best streak if current is better
@@ -197,6 +201,15 @@ int TaskyModel::calculateCurrentStreak() {
   }
 
   return count;
+}
+
+int TaskyModel::calculateTotalActiveDays() {
+  // Count total days with any activity (green squares)
+  int total = 0;
+  for (int i = 0; i < STREAK_N; i++) {
+    if (streak[i] > 0) total++;
+  }
+  return total;
 }
 
 void TaskyModel::checkDayChange() {

@@ -83,8 +83,9 @@ public:
   uint8_t clampU8(int v, int lo, int hi);
 
   // Streak statistics
-  int calculateCurrentStreak();  // Returns consecutive days with activity from current day
-  void checkDayChange();  // Check if day changed and advance streak index
+  int calculateCurrentStreak();    // Returns consecutive days with activity from current day
+  int calculateTotalActiveDays();  // Returns total days with any activity (green squares)
+  void checkDayChange();           // Check if day changed and advance streak index
 
 private:
   int lastKnownDay = -1;  // For day change detection

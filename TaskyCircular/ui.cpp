@@ -319,13 +319,10 @@ void TaskyUI::drawSettings() {
 
 }
 
-// End of ui.cpp or similar valid location. Since TargetContent was empty
-// previously, I will target the end of file or a known specific function to
-// append/insert. Let's target the end of drawTasks or similar.
 void TaskyUI::drawTasks() {
   tft.fillScreen(C_BG);
-  drawFrame();
-  
+  // No frame for tasks - cleaner look
+
   centerTextFont("TASKS", 34, C_TEXT, &FreeSansBold12pt7b);
   tft.drawFastHLine(40, 46, 160, C_LINE);
 
@@ -338,12 +335,12 @@ void TaskyUI::drawTasks() {
 
   if (allEmpty) {
     // Empty state - centered vertically
-    centerTextFont("No tasks yet", 95, C_TEXT, &FreeSansBold12pt7b);
-    centerTextFont("Scan the QR code", 125, C_MUTED, &FreeSans9pt7b);
-    centerTextFont("to add your tasks", 145, C_MUTED, &FreeSans9pt7b);
-    
+    centerTextFont("No tasks yet", 110, C_TEXT, &FreeSansBold12pt7b);
+    centerTextFont("Scan the QR code", 140, C_MUTED, &FreeSans9pt7b);
+    centerTextFont("to add your tasks", 160, C_MUTED, &FreeSans9pt7b);
+
     // QR icon hint - centered
-    int qrX = 108, qrY = 165;
+    int qrX = 108, qrY = 175;
     tft.drawRect(qrX, qrY, 24, 24, C_TEAL);
     tft.fillRect(qrX + 3, qrY + 3, 6, 6, C_TEAL);
     tft.fillRect(qrX + 15, qrY + 3, 6, 6, C_TEAL);
@@ -352,53 +349,58 @@ void TaskyUI::drawTasks() {
     return;
   }
 
-  // Tasks layout - lowered for better spacing
-  int yBase = 80;
-  int rowH = 42;
-  
-  // Draw cursor highlight for selected item
-  int cursorY = yBase + tasksSel * rowH;
-  tft.fillRoundRect(14, cursorY - 16, 212, 30, 10, 0x0841);
-  tft.drawRoundRect(14, cursorY - 16, 212, 30, 10, C_TEAL);
+  // Tasks layout - vertically centered in available space (after header ~50px to ~220px)
+  // Available height: 170px, 3 tasks with spacing
+  const int contentTop = 60;
+  const int contentBottom = 220;
+  const int rowH = 45;
+  const int totalHeight = 3 * rowH;
+  const int yBase = contentTop + (contentBottom - contentTop - totalHeight) / 2 + 25;
 
-  // Draw all tasks with better centering
-  const int checkboxX = 24;
-  const int textStartX = 48;
-  const int textEndX = 216;
-  const int textAreaWidth = textEndX - textStartX;
+  const int checkboxX = 28;
+  const int textStartX = 52;
 
   for (int i = 0; i < 3; i++) {
     int baseline = yBase + i * rowH;
+    bool isSelected = (i == tasksSel);
 
-    // Checkbox - minimal TE style
-    uint16_t boxC = model->taskDone[i] ? C_GREEN : C_MUTED;
+    // Checkbox
+    uint16_t boxC = model->taskDone[i] ? C_GREEN : (isSelected ? C_TEAL : C_MUTED);
     tft.drawRoundRect(checkboxX, baseline - 10, 18, 18, 3, boxC);
     if (model->taskDone[i]) {
-      // Checkmark - thicker for TE style
+      // Checkmark
       tft.drawLine(checkboxX + 4, baseline - 2, checkboxX + 7, baseline + 2, C_GREEN);
       tft.drawLine(checkboxX + 5, baseline - 2, checkboxX + 8, baseline + 2, C_GREEN);
       tft.drawLine(checkboxX + 7, baseline + 2, checkboxX + 14, baseline - 6, C_GREEN);
       tft.drawLine(checkboxX + 8, baseline + 2, checkboxX + 15, baseline - 6, C_GREEN);
     }
 
-    // Task text - centered in available area
+    // Task text - aligned LEFT, color based on selection
     String t = model->tasks[i];
     if (t == "Empty") t = "---";
-    if (t.length() > 13)
-      t = t.substring(0, 13) + "..";
+    if (t.length() > 15)
+      t = t.substring(0, 15) + "..";
 
-    tft.setTextColor(model->taskDone[i] ? C_MUTED : C_TEXT);
+    // Color: teal if selected, muted if done, white otherwise
+    uint16_t textColor;
+    if (isSelected) {
+      textColor = C_TEAL;
+    } else if (model->taskDone[i]) {
+      textColor = C_MUTED;
+    } else {
+      textColor = C_TEXT;
+    }
+
+    tft.setTextColor(textColor);
     tft.setFont(&FreeSans12pt7b);
-
-    // Calculate text width for centering
-    int16_t tx1, ty1;
-    uint16_t tw, th;
-    tft.getTextBounds(t, 0, 0, &tx1, &ty1, &tw, &th);
-
-    // Center text in the available area
-    int textX = textStartX + (textAreaWidth - tw) / 2;
-    tft.setCursor(textX, baseline);
+    tft.setCursor(textStartX, baseline);
     tft.print(t);
+
+    // Selection indicator - small arrow or dot on the left
+    if (isSelected) {
+      tft.fillTriangle(18, baseline - 4, 18, baseline + 4, 24, baseline, C_TEAL);
+    }
+
     tft.setFont();
   }
 }
@@ -429,28 +431,51 @@ static int getFirstDayOfWeek(int month, int year) {
 
 void TaskyUI::drawCalendar() {
   tft.fillScreen(C_BG);
+  // No frame - cleaner look
 
-  // Get current date
+  // Show loading state
+  if (calendarLoading) {
+    centerTextFont("CALENDAR", 34, C_TEXT, &FreeSansBold12pt7b);
+    tft.drawFastHLine(40, 46, 160, C_LINE);
+    centerTextFont("Loading...", 130, C_TEAL, &FreeSans12pt7b);
+    return;
+  }
+
+  // Get current date (non-blocking)
+  time_t nowTime = time(nullptr);
   struct tm now;
-  bool hasTime = getLocalTime(&now);
+  bool hasTime = (nowTime > 1577836800);  // Valid if after 2020
 
-  int currentDay = hasTime ? now.tm_mday : 1;
-  int currentMonth = hasTime ? now.tm_mon : 11;  // 0-11
-  int currentYear = hasTime ? (now.tm_year + 1900) : 2024;
+  int currentDay, currentMonth, currentYear;
+  if (hasTime) {
+    localtime_r(&nowTime, &now);
+    currentDay = now.tm_mday;
+    currentMonth = now.tm_mon;      // 0-11
+    currentYear = now.tm_year + 1900;
+  } else {
+    currentDay = 1;
+    currentMonth = 0;   // January
+    currentYear = 2025; // Default 2025
+  }
 
-  // Month/Year header - OP-1 style
+  // Initialize selection to today if not set
+  if (calendarSelDay == 0) {
+    calendarSelDay = currentDay;
+  }
+
+  // Month/Year header
   const char* monthNames[] = {"JAN", "FEB", "MAR", "APR", "MAY", "JUN",
                               "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"};
   char headerBuf[16];
   snprintf(headerBuf, sizeof(headerBuf), "%s %d", monthNames[currentMonth], currentYear);
   centerTextFont(headerBuf, 28, C_TEXT, &FreeSansBold12pt7b);
 
-  // Day headers - OP-1 minimal style
+  // Day headers
   const char* dayHeaders[] = {"S", "M", "T", "W", "T", "F", "S"};
   int cellW = 32;
-  int cellH = 26;
-  int gridX = (W - 7 * cellW) / 2;
-  int gridY = 48;
+  int cellH = 24;
+  int gridX = (240 - 7 * cellW) / 2;
+  int gridY = 46;
 
   tft.setFont(&FreeSans9pt7b);
   tft.setTextColor(C_MUTED);
@@ -467,13 +492,15 @@ void TaskyUI::drawCalendar() {
   int firstDayOfWeek = getFirstDayOfWeek(currentMonth, currentYear);
   int daysInMonth = getDaysInMonth(currentMonth, currentYear);
 
+  // Clamp selection
+  if (calendarSelDay > daysInMonth) calendarSelDay = daysInMonth;
+
   // Draw day numbers
   int day = 1;
-  int startY = gridY + 18;
+  int startY = gridY + 16;
 
   for (int row = 0; row < 6 && day <= daysInMonth; row++) {
     for (int col = 0; col < 7 && day <= daysInMonth; col++) {
-      // Skip empty cells before first day
       if (row == 0 && col < firstDayOfWeek) {
         continue;
       }
@@ -481,13 +508,17 @@ void TaskyUI::drawCalendar() {
       int x = gridX + col * cellW;
       int y = startY + row * cellH;
 
-      // Check for events on this day
       bool hasEvent = (model->calendarEvents[day - 1] > 0);
       bool isToday = (day == currentDay);
+      bool isSelected = (day == calendarSelDay);
 
-      // Background for today
-      if (isToday) {
-        tft.drawRoundRect(x + 2, y - 14, cellW - 4, cellH - 2, 4, C_TEAL);
+      // Selection highlight (filled rectangle)
+      if (isSelected) {
+        tft.fillRoundRect(x + 2, y - 12, cellW - 4, cellH - 2, 3, C_TEAL);
+      }
+      // Today outline (if not selected)
+      else if (isToday) {
+        tft.drawRoundRect(x + 2, y - 12, cellW - 4, cellH - 2, 3, C_MUTED);
       }
 
       // Day number
@@ -499,13 +530,14 @@ void TaskyUI::drawCalendar() {
       uint16_t tw, th;
       tft.getTextBounds(dayStr, 0, 0, &tx1, &ty1, &tw, &th);
 
-      // Color based on events
-      uint16_t textColor = C_TEXT;
-      if (hasEvent) {
+      // Color based on state
+      uint16_t textColor;
+      if (isSelected) {
+        textColor = C_BG;  // Dark text on teal background
+      } else if (hasEvent) {
         textColor = C_TEAL;
-      }
-      if (isToday) {
-        textColor = C_TEAL;
+      } else {
+        textColor = C_TEXT;
       }
 
       tft.setTextColor(textColor);
@@ -513,23 +545,30 @@ void TaskyUI::drawCalendar() {
       tft.setCursor(textX, y);
       tft.print(dayStr);
 
-      // Event indicator dot (under the number)
-      if (hasEvent) {
-        tft.fillCircle(x + cellW / 2, y + 6, 2, C_TEAL);
+      // Event indicator dot (if not selected)
+      if (hasEvent && !isSelected) {
+        tft.fillCircle(x + cellW / 2, y + 5, 2, C_TEAL);
       }
 
       day++;
     }
-    // Yield after each row to prevent watchdog and keep system responsive
     yield();
   }
 
-  // Footer with calendar status
+  // Footer - show event count for selected day
   tft.setFont();
-  if (model->cfg.calendarUrl.length() == 0) {
-    centerTextFont("No calendar", 225, C_MUTED, &FreeSans9pt7b);
+  int eventsOnDay = model->calendarEvents[calendarSelDay - 1];
+  if (eventsOnDay > 0) {
+    char footerBuf[24];
+    snprintf(footerBuf, sizeof(footerBuf), "%d event%s on day %d",
+             eventsOnDay, eventsOnDay > 1 ? "s" : "", calendarSelDay);
+    centerTextFont(footerBuf, 225, C_TEAL, &FreeSans9pt7b);
+  } else if (model->cfg.calendarUrl.length() == 0) {
+    centerTextFont("No calendar linked", 225, C_MUTED, &FreeSans9pt7b);
   } else {
-    centerTextFont("iCal synced", 225, C_MUTED, &FreeSans9pt7b);
+    char footerBuf[24];
+    snprintf(footerBuf, sizeof(footerBuf), "Day %d - No events", calendarSelDay);
+    centerTextFont(footerBuf, 225, C_MUTED, &FreeSans9pt7b);
   }
 }
 
@@ -621,8 +660,8 @@ void TaskyUI::drawTaskDetail(int index) {
 
 void TaskyUI::drawStreak() {
   tft.fillScreen(C_BG);
-  drawFrame();
-  
+  // No frame - cleaner look
+
   centerTextFont("STREAK", 34, C_TEXT, &FreeSansBold12pt7b);
   tft.drawFastHLine(40, 46, 160, C_LINE);
 
@@ -660,12 +699,21 @@ void TaskyUI::drawStreak() {
   // Streak statistics
   int currentStreak = model->calculateCurrentStreak();
   int bestStreak = model->cfg.bestStreak;
-  
-  char statBuf[32];
-  snprintf(statBuf, sizeof(statBuf), "Now: %d  Best: %d", currentStreak, bestStreak);
-  centerTextFont(statBuf, 168, C_TEAL, &FreeSans9pt7b);
-  centerTextFont("days", 184, C_MUTED, &FreeSans9pt7b);
+  int totalActive = model->calculateTotalActiveDays();
 
+  // Current streak (consecutive days)
+  char statBuf[32];
+  snprintf(statBuf, sizeof(statBuf), "Streak: %d days", currentStreak);
+  centerTextFont(statBuf, 168, C_TEAL, &FreeSans12pt7b);
+
+  // Total active days and best record
+  snprintf(statBuf, sizeof(statBuf), "Total: %d  Best: %d", totalActive, bestStreak);
+  centerTextFont(statBuf, 190, C_MUTED, &FreeSans9pt7b);
+
+  // Progress indicator (how full is the streak grid)
+  int pct = (totalActive * 100) / STREAK_N;
+  snprintf(statBuf, sizeof(statBuf), "%d%% filled", pct);
+  centerTextFont(statBuf, 210, C_MUTED, &FreeSans9pt7b);
 }
 
 uint16_t TaskyUI::streakColor(uint8_t v) {
@@ -680,8 +728,8 @@ uint16_t TaskyUI::streakColor(uint8_t v) {
 
 void TaskyUI::drawStats() {
   tft.fillScreen(C_BG);
-  drawFrame();
-  
+  // No frame - cleaner look
+
   centerTextFont("STATS", 34, C_TEXT, &FreeSansBold12pt7b);
   tft.drawFastHLine(40, 46, 160, C_LINE);
 
@@ -713,7 +761,7 @@ void TaskyUI::drawStats() {
 
 void TaskyUI::drawWifi(bool wifiOn, String ssid, String pass, String ip) {
   tft.fillScreen(C_BG);
-  drawFrame();
+  // No frame - cleaner look
 
   centerTextFont("WIFI", 34, C_TEXT, &FreeSansBold12pt7b);
   tft.drawFastHLine(40, 46, 160, C_LINE);

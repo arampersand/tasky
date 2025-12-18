@@ -63,6 +63,10 @@ public:
   int clockField = 0;
   bool timerEditing = false;  // For editing timer duration
 
+  // Calendar navigation
+  int calendarSelDay = 0;  // 0 = no selection, 1-31 = selected day
+  bool calendarLoading = false;  // Show loading indicator
+
   // Quotes / Screensaver
   int quoteIndex = 0;
   uint32_t lastQuoteChange = 0;
