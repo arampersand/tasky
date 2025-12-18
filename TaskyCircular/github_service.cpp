@@ -47,9 +47,12 @@ void GithubService::parseContribs(String data) {
         data.substring(createdIdx + 14, createdIdx + 24); // YYYY-MM-DD
     Serial.println("[GH] Last Event: " + dateStr);
 
-    // Compare with system time
-    struct tm now;
-    if (getLocalTime(&now)) {
+    // Non-blocking time check using time() instead of getLocalTime()
+    time_t nowTime = time(nullptr);
+    if (nowTime > 1577836800) {  // Valid time (after year 2020)
+      struct tm now;
+      localtime_r(&nowTime, &now);  // Non-blocking
+
       char buf[12];
       snprintf(buf, sizeof(buf), "%04d-%02d-%02d", now.tm_year + 1900,
                now.tm_mon + 1, now.tm_mday);
@@ -57,18 +60,11 @@ void GithubService::parseContribs(String data) {
 
       bool activeToday = (dateStr == today);
 
-      // Update Model
-      // Logic: If activeToday is true, ensure currentDayIndex in streak is
-      // marked? Or just visual feedback? model->updateStreak(activeToday); //
-      // method to add
       Serial.println(activeToday ? "[GH] Active Today!"
                                  : "[GH] No activity yet today");
 
-      // For now, let's hack the streak visual
+      // Update streak visual if active today
       if (activeToday) {
-        // Mark the current cursor or day as '3' (Green)
-        // We might need a proper "map date to index" logic later for true
-        // scalability
         model->streak[model->currentDayIndex] = 3;
       }
     }

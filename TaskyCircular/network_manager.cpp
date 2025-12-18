@@ -35,6 +35,9 @@ void TaskyNetManager::loop() {
       Serial.print("IP: ");
       Serial.println(WiFi.localIP());
       setState(NET_CONNECTED);
+      // Configure NTP (non-blocking setup)
+      configTime(model->cfg.timezone * 3600, 0, "pool.ntp.org", "time.nist.gov");
+      syncStartAt = millis();
     } else {
       // Timeout check (15 seconds)
       if (millis() - connectionStartAt > 15000) {
@@ -50,36 +53,45 @@ void TaskyNetManager::loop() {
       setState(NET_DISCONNECTED);
       timeSynced = false;
     } else {
-      // If just connected and not synced, try sync
+      // Non-blocking time sync check
       if (!timeSynced) {
-        syncTime();
+        checkTimeSync();
       }
     }
   }
 }
 
-void TaskyNetManager::syncTime() {
-  Serial.println("Syncing Time...");
-  // configTime(gmtOffset_sec, daylightOffset_sec, ntpServer)
-  // Timezone is hours. Sec = tz * 3600
-  long gmtOffset_sec = model->cfg.timezone * 3600;
-  int daylightOffset_sec = 0; // No DST logic for now or manually managed?
+// Non-blocking time sync check - call repeatedly until synced
+void TaskyNetManager::checkTimeSync() {
+  // Check if time is available (non-blocking)
+  time_t now = time(nullptr);
 
-  configTime(gmtOffset_sec, daylightOffset_sec, "pool.ntp.org", "time.nis.gov");
+  // time() returns seconds since epoch. If > year 2020, NTP worked
+  if (now > 1577836800) {  // Jan 1, 2020
+    struct tm timeinfo;
+    localtime_r(&now, &timeinfo);  // Non-blocking conversion
 
-  struct tm timeinfo;
-  // Wait for time (blocking briefly or just check?)
-  // getLocalTime blocks for up to timeout (default 5000ms)
-  if (getLocalTime(&timeinfo)) {
-    Serial.println("Time Synced!");
     model->clockH = timeinfo.tm_hour;
     model->clockM = timeinfo.tm_min;
     model->clockS = timeinfo.tm_sec;
     model->clockSetAtMs = millis();
     timeSynced = true;
+    Serial.println("Time Synced!");
+    Serial.printf("Time: %02d:%02d:%02d\n", model->clockH, model->clockM, model->clockS);
   } else {
-    Serial.println("Time Sync Failed");
+    // Not synced yet - check if timeout (give NTP 10 seconds max)
+    if (millis() - syncStartAt > 10000) {
+      Serial.println("NTP sync timeout - using fallback time");
+      timeSynced = true;  // Give up, use default time
+    }
+    // Otherwise, just return and let loop continue - NTP will sync in background
   }
+}
+
+// Legacy function - kept for compatibility but now non-blocking
+void TaskyNetManager::syncTime() {
+  // NTP is already configured in begin(), just trigger a check
+  checkTimeSync();
 }
 
 bool TaskyNetManager::isConnected() {

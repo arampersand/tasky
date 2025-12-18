@@ -65,17 +65,26 @@ String WiFiPortal::htmlPage() {
   String s;
   s += "<!doctype html><html><head>";
   s += "<meta name='viewport' content='width=device-width,initial-scale=1'>";
-  s += "<style>body{font-family:Arial;background:#111;color:#fff;padding:16px}";
-  s += "input,button{width:100%;padding:12px;margin:8px 0;font-size:16px}";
-  s += "button{background:#00e5cc;border:none;color:#000;font-weight:bold}</"
-       "style>";
+  s += "<style>";
+  s += "body{font-family:'SF Mono',Monaco,Consolas,monospace;background:#000;color:#fff;padding:16px;max-width:400px;margin:0 auto}";
+  s += "h2{text-transform:uppercase;letter-spacing:2px;border-bottom:1px solid #333;padding-bottom:8px}";
+  s += "h3{color:#00e5cc;text-transform:uppercase;font-size:12px;letter-spacing:1px}";
+  s += "label{display:block;color:#888;font-size:11px;text-transform:uppercase;margin-top:12px;letter-spacing:1px}";
+  s += "input,textarea{width:100%;padding:12px;margin:4px 0 8px 0;font-size:14px;background:#111;color:#fff;border:1px solid #333;box-sizing:border-box;font-family:inherit}";
+  s += "input:focus,textarea:focus{border-color:#00e5cc;outline:none}";
+  s += "button{width:100%;padding:14px;margin:16px 0;font-size:14px;background:#00e5cc;border:none;color:#000;font-weight:bold;text-transform:uppercase;letter-spacing:2px;cursor:pointer}";
+  s += "button:hover{background:#00ffea}";
+  s += "hr{border:none;border-top:1px solid #222;margin:20px 0}";
+  s += "</style>";
   s += "</head><body>";
-  s += "<h2>Tasky Setup</h2>";
+  s += "<h2>Tasky</h2>";
   s += "<form method='POST' action='/save'>";
   for (int i = 0; i < 3; i++) {
     s += "<label>Task " + String(i + 1) + "</label>";
     s += "<input name='t" + String(i) + "' value='" + model->tasks[i] +
-         "' maxlength='40'>";
+         "' maxlength='40' placeholder='Task name'>";
+    s += "<textarea name='td" + String(i) + "' maxlength='200' placeholder='Description (optional)' style='height:60px;resize:vertical'>" +
+         model->taskDescription[i] + "</textarea>";
   }
   s += "<label>Pomodoro Minutes</label>";
   s += "<input name='work' value='" + String(model->cfg.workMin) + "'>";
@@ -107,6 +116,12 @@ void WiFiPortal::handleSave() {
       if (model->tasks[i].length() == 0)
         model->tasks[i] = "Empty";
       model->taskDone[i] = false;
+    }
+
+    // Task descriptions
+    String kd = "td" + String(i);
+    if (server.hasArg(kd)) {
+      model->taskDescription[i] = server.arg(kd);
     }
   }
 

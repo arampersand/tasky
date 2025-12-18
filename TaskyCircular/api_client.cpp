@@ -43,3 +43,123 @@ String ApiClient::get(String url, String token) {
   http.end();
   return payload;
 }
+
+bool ApiClient::getStreaming(const String& url, LineCallback callback, void* userData, const String& token) {
+  if (WiFi.status() != WL_CONNECTED) {
+    return false;
+  }
+
+  HTTPClient http;
+
+  Serial.print("[API] GET (streaming) ");
+  Serial.println(url);
+
+  http.begin(client, url);
+
+  if (token.length() > 0) {
+    http.addHeader("Authorization", "Bearer " + token);
+  }
+
+  http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
+  http.setTimeout(10000);  // 10 second connection timeout
+
+  int code = http.GET();
+
+  if (code != HTTP_CODE_OK && code != HTTP_CODE_MOVED_PERMANENTLY) {
+    Serial.printf("[API] Stream error: %d\n", code);
+    http.end();
+    return false;
+  }
+
+  // Get the stream
+  WiFiClient* stream = http.getStreamPtr();
+  if (!stream) {
+    Serial.println("[API] No stream");
+    http.end();
+    return false;
+  }
+
+  // SAFETY LIMITS - prevent infinite loops
+  const int MAX_BYTES = 100000;       // Max 100KB
+  const uint32_t MAX_TIME_MS = 20000; // Max 20 seconds total
+  const uint32_t IDLE_TIMEOUT_MS = 3000; // Max 3 seconds without data
+
+  // Line buffer - 256 bytes max per line (iCal lines are typically short)
+  const int LINE_BUF_SIZE = 256;
+  char lineBuf[LINE_BUF_SIZE];
+  int linePos = 0;
+  bool success = true;
+  int bytesRead = 0;
+  int linesProcessed = 0;
+
+  uint32_t startTime = millis();
+  uint32_t lastDataTime = millis();
+
+  // Read and process line by line with safety limits
+  while ((http.connected() || stream->available()) &&
+         bytesRead < MAX_BYTES &&
+         (millis() - startTime) < MAX_TIME_MS) {
+
+    if (stream->available()) {
+      char c = stream->read();
+      bytesRead++;
+      lastDataTime = millis();  // Reset idle timer
+
+      if (c == '\r') {
+        continue;  // Skip CR
+      }
+
+      if (c == '\n') {
+        // End of line - process it
+        lineBuf[linePos] = '\0';
+
+        if (linePos > 0) {
+          linesProcessed++;
+          if (!callback(lineBuf, userData)) {
+            // Callback requested stop
+            success = true;  // Not an error, just early termination
+            break;
+          }
+        }
+        linePos = 0;
+      } else {
+        // Add character to buffer
+        if (linePos < LINE_BUF_SIZE - 1) {
+          lineBuf[linePos++] = c;
+        }
+        // If line too long, just truncate silently
+      }
+    } else {
+      // No data available
+      if ((millis() - lastDataTime) > IDLE_TIMEOUT_MS) {
+        Serial.println("[API] Stream idle timeout");
+        break;
+      }
+      delay(1);  // Brief yield while waiting for data
+    }
+
+    // Yield frequently to prevent watchdog and allow other tasks
+    if (bytesRead % 500 == 0) {
+      yield();
+    }
+  }
+
+  // Check why we exited
+  if (bytesRead >= MAX_BYTES) {
+    Serial.println("[API] Stream max bytes reached");
+  }
+  if ((millis() - startTime) >= MAX_TIME_MS) {
+    Serial.println("[API] Stream max time reached");
+  }
+
+  // Process any remaining data in buffer
+  if (linePos > 0) {
+    lineBuf[linePos] = '\0';
+    callback(lineBuf, userData);
+  }
+
+  Serial.printf("[API] Stream done: %d bytes, %d lines, %lu ms\n",
+                bytesRead, linesProcessed, millis() - startTime);
+  http.end();
+  return success;
+}

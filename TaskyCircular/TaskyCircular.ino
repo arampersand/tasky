@@ -35,13 +35,19 @@ WiFiPortal portal(&model, &net);
 
 // ==================== STATE ====================
 Screen screen = SCR_TIMER;
+Screen screenBeforeScreensaver = SCR_TIMER;  // Remember screen before screensaver
 
 // Input state
 bool lastEncBtn = HIGH;
 uint32_t encBtnDownAt = 0;
 bool lastModeBtn = HIGH;
-uint32_t lastModeAt = 0;
 const uint32_t ENC_LONGPRESS_MS = 900;
+
+// Screensaver state (activated by long-press MODE button)
+bool screensaverActive = false;
+
+// Mode button click types
+enum ModeClickType { MODE_NONE, MODE_SHORT, MODE_LONG };
 
 // Timer alarm state
 uint32_t lastAnimAt = 0;
@@ -103,20 +109,29 @@ EncClickType encoderClickType() {
   return ENC_NONE;
 }
 
-// Mode button with debounce
-bool modeClick() {
+// Mode button with long-press detection
+ModeClickType modeClickType() {
+  static uint32_t modeDownAt = 0;
   bool b = digitalRead(MODO_BTN);
-  bool clicked = false;
-  
+
   if (b == LOW && lastModeBtn == HIGH) {
-    if (millis() - lastModeAt > 200) {
-      clicked = true;
-      lastModeAt = millis();
-    }
+    modeDownAt = millis();
   }
+
+  if (b == HIGH && lastModeBtn == LOW) {
+    uint32_t press = millis() - modeDownAt;
+    lastModeBtn = b;
+    if (press < 80) return MODE_NONE;  // Debounce
+    return (press >= 1500) ? MODE_LONG : MODE_SHORT;
+  }
+
   lastModeBtn = b;
-  return clicked;
+  return MODE_NONE;
 }
+
+// ==================== SCREENSAVER ====================
+// Screensaver is now activated by long-press MODE button (1.5s)
+// No timeout-based activation - saves memory and CPU cycles
 
 // ==================== NAVIGATION ====================
 
@@ -493,11 +508,23 @@ void setup() {
 
 // ==================== MAIN LOOP ====================
 void loop() {
-  // 1. Network services
+  uint32_t now = millis();
+
+  // 1. WiFi portal - always process (fast, handles web requests)
   portal.loop();
+
+  // 2. Network manager - check connection status (fast, non-blocking now)
   net.loop();
-  calendar.loop();
-  github.loop();
+
+  // 3. Background services - throttled to prevent blocking
+  // Only run these every 5 seconds to keep UI responsive
+  static uint32_t lastServiceCheck = 0;
+  if (now - lastServiceCheck > 5000) {
+    lastServiceCheck = now;
+    calendar.loop();  // Will only actually update every 15 min internally
+    github.loop();    // Will only actually update every 30 min internally
+    model.checkDayChange();  // Non-blocking now
+  }
 
   // 2. Audio tick
   if (uiBeepOffAt && millis() >= uiBeepOffAt) {
@@ -506,12 +533,46 @@ void loop() {
   }
 
   // 3. Read inputs ONCE
-  bool modePressed = modeClick();
+  ModeClickType modeClick = modeClickType();
   int step = encoderStep();
   EncClickType click = encoderClickType();
 
-  // 4. MODE button: navigate to next screen
-  if (modePressed) {
+  // 3.5. Long-press MODE = toggle screensaver
+  if (modeClick == MODE_LONG) {
+    if (screensaverActive) {
+      // Exit screensaver
+      screensaverActive = false;
+      screen = screenBeforeScreensaver;
+      ui.goToScreen(screen);
+    } else {
+      // Enter screensaver (only if timer not running)
+      if (!model.st.running && !model.st.finished) {
+        screenBeforeScreensaver = screen;
+        screensaverActive = true;
+        ui.quoteIndex = random(30);
+        ui.drawQuotes();
+      }
+    }
+    return;
+  }
+
+  // 3.6. If screensaver active, encoder changes quotes, any click exits
+  if (screensaverActive) {
+    if (step != 0) {
+      ui.quoteIndex = (ui.quoteIndex + step + 30) % 30;
+      ui.drawQuotes();
+    }
+    if (click != ENC_NONE) {
+      // Any encoder click exits screensaver
+      screensaverActive = false;
+      screen = screenBeforeScreensaver;
+      ui.goToScreen(screen);
+    }
+    return;
+  }
+
+  // 4. Short-press MODE = navigate to next screen
+  if (modeClick == MODE_SHORT) {
     navigateNext();
     return;
   }

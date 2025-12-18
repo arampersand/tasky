@@ -14,22 +14,24 @@ public:
   // Connection tracking
   uint32_t lastCheckAt = 0;
   uint32_t connectionStartAt = 0;
+  uint32_t syncStartAt = 0;  // NTP sync start time
   int retryCount = 0;
   const int MAX_RETRIES = 3;
 
   TaskyNetManager(TaskyModel *m);
 
   void begin(); // Start connection attempt if configured
-  void loop();  // Monitor status
+  void loop();  // Monitor status (non-blocking)
   void disconnect();
 
   bool isConnected();
   String getIP();
   String getStatusString();
 
-  void syncTime(); // [NEW] Fetch NTP time
+  void syncTime(); // Trigger NTP time sync (non-blocking)
 
 private:
   void setState(NetworkState s);
+  void checkTimeSync();  // Non-blocking time sync check
   bool timeSynced = false;
 };

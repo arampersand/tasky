@@ -25,13 +25,14 @@
 
 enum Screen {
   SCR_TIMER = 0,
-  SCR_QR, // QR First
+  SCR_QR,
   SCR_TASKS,
-  SCR_CALENDAR, // [NEW]
+  SCR_CALENDAR,
   SCR_STREAK,
   SCR_STATS,
   SCR_SETTINGS,
-  SCR_WIFI_INFO // Moved to end or kept debug
+  SCR_WIFI_INFO,
+  SCR_QUOTES  // Inspirational quotes (screensaver mode)
 };
 
 class TaskyUI {
@@ -62,6 +63,10 @@ public:
   int clockField = 0;
   bool timerEditing = false;  // For editing timer duration
 
+  // Quotes / Screensaver
+  int quoteIndex = 0;
+  uint32_t lastQuoteChange = 0;
+
   // Use correct circular driver
 #if DISPLAY_CIRCULAR
   Adafruit_GC9A01A tft;
@@ -88,6 +93,7 @@ public:
   void drawQRFull(String ssid, String pass);
   void drawSplashTasky();
   void drawFinishScreen(const char *msg);
+  void drawQuotes();  // Inspirational quotes screen
 
   void uiTick(bool strong = false); // kept for visual reference, sound handled
                                     // externally if desired or inside

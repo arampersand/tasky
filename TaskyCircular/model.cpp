@@ -1,6 +1,5 @@
 #include "model.h"
-
-#include "model.h"
+#include <time.h>  // For getLocalTime()
 
 void TaskyModel::begin() { load(); }
 
@@ -23,7 +22,6 @@ void TaskyModel::load() {
   cfg.totalFocusMin = pref.getUInt("focus", 0);
   cfg.bestStreak = pref.getUShort("best", 0);
   cfg.wifiSSID = pref.getString("wss", "");
-  cfg.wifiSSID = pref.getString("wss", "");
   cfg.wifiPass = pref.getString("wps", "");
   cfg.timezone = pref.getChar("tz", -5);
   cfg.githubUser = pref.getString("ghu", "");
@@ -35,6 +33,13 @@ void TaskyModel::load() {
     tasks[i] = pref.getString(key.c_str(), "Empty");
     String keyd = "d" + String(i);
     taskDone[i] = pref.getBool(keyd.c_str(), false);
+    String keyDesc = "td" + String(i);
+    taskDescription[i] = pref.getString(keyDesc.c_str(), "");
+  }
+
+  // Calendar events (reset on load, will be populated by calendar service)
+  for (int i = 0; i < 31; i++) {
+    calendarEvents[i] = 0;
   }
 
   for (int i = 0; i < STREAK_N; i++) {
@@ -75,7 +80,6 @@ void TaskyModel::save() {
   pref.putUInt("focus", cfg.totalFocusMin);
   pref.putUShort("best", cfg.bestStreak);
   pref.putString("wss", cfg.wifiSSID);
-  pref.putString("wss", cfg.wifiSSID);
   pref.putString("wps", cfg.wifiPass);
   pref.putChar("tz", cfg.timezone);
   pref.putString("ghu", cfg.githubUser);
@@ -87,6 +91,8 @@ void TaskyModel::save() {
     pref.putString(key.c_str(), tasks[i]);
     String keyd = "d" + String(i);
     pref.putBool(keyd.c_str(), taskDone[i]);
+    String keyDesc = "td" + String(i);
+    pref.putString(keyDesc.c_str(), taskDescription[i]);
   }
 
   for (int i = 0; i < STREAK_N; i++) {
@@ -177,18 +183,57 @@ int TaskyModel::calculateCurrentStreak() {
   // Count consecutive days with activity, going backwards from current day
   int count = 0;
   int idx = currentDayIndex;
-  
+
   // Check if current day has activity
   while (idx >= 0 && streak[idx] > 0) {
     count++;
     idx--;
   }
-  
+
   // Update best streak if current is better
   if (count > (int)cfg.bestStreak) {
     cfg.bestStreak = count;
     // Note: save() should be called by caller to persist
   }
-  
+
   return count;
+}
+
+void TaskyModel::checkDayChange() {
+  // Non-blocking time check using time() instead of getLocalTime()
+  time_t nowTime = time(nullptr);
+
+  // Check if time is valid (after year 2020 means NTP synced)
+  if (nowTime < 1577836800) {
+    // No valid time yet - NTP hasn't synced
+    return;
+  }
+
+  struct tm now;
+  localtime_r(&nowTime, &now);  // Non-blocking conversion
+
+  int today = now.tm_yday;  // Day of year (0-365)
+
+  // First call - just store the day
+  if (lastKnownDay == -1) {
+    lastKnownDay = today;
+    return;
+  }
+
+  // Check if day changed
+  if (today != lastKnownDay) {
+    // Day changed! Advance streak index
+    currentDayIndex = (currentDayIndex + 1) % STREAK_N;
+    streak[currentDayIndex] = 0;  // Reset new day to 0
+
+    // Clear calendar events for refresh
+    for (int i = 0; i < 31; i++) {
+      calendarEvents[i] = 0;
+    }
+
+    lastKnownDay = today;
+    save();
+
+    Serial.println("[Model] Day changed, streak index advanced to " + String(currentDayIndex));
+  }
 }

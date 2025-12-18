@@ -48,7 +48,11 @@ public:
 
   // Tasks
   String tasks[3];
+  String taskDescription[3];  // Extended descriptions for long press view
   bool taskDone[3];
+
+  // Calendar events (for grid view)
+  uint8_t calendarEvents[31];  // Events per day of month (0-3 intensity)
 
   // Streak
   uint8_t streak[STREAK_N];
@@ -77,9 +81,11 @@ public:
   void streakAddCompletion();
   void getClockNow(int &h, int &m, int &s);
   uint8_t clampU8(int v, int lo, int hi);
-  
+
   // Streak statistics
   int calculateCurrentStreak();  // Returns consecutive days with activity from current day
+  void checkDayChange();  // Check if day changed and advance streak index
 
 private:
+  int lastKnownDay = -1;  // For day change detection
 };
