@@ -21,6 +21,7 @@ void TaskyModel::load() {
   cfg.soundOn = pref.getBool("snd", true);
   cfg.darkMode = pref.getBool("dark", true);
   cfg.totalFocusMin = pref.getUInt("focus", 0);
+  cfg.bestStreak = pref.getUShort("best", 0);
   cfg.wifiSSID = pref.getString("wss", "");
   cfg.wifiSSID = pref.getString("wss", "");
   cfg.wifiPass = pref.getString("wps", "");
@@ -72,6 +73,7 @@ void TaskyModel::save() {
   pref.putBool("snd", cfg.soundOn);
   pref.putBool("dark", cfg.darkMode);
   pref.putUInt("focus", cfg.totalFocusMin);
+  pref.putUShort("best", cfg.bestStreak);
   pref.putString("wss", cfg.wifiSSID);
   pref.putString("wss", cfg.wifiSSID);
   pref.putString("wps", cfg.wifiPass);
@@ -169,4 +171,24 @@ void TaskyModel::getClockNow(int &h, int &m, int &s) {
   int rem = total % 3600;
   m = rem / 60;
   s = rem % 60;
+}
+
+int TaskyModel::calculateCurrentStreak() {
+  // Count consecutive days with activity, going backwards from current day
+  int count = 0;
+  int idx = currentDayIndex;
+  
+  // Check if current day has activity
+  while (idx >= 0 && streak[idx] > 0) {
+    count++;
+    idx--;
+  }
+  
+  // Update best streak if current is better
+  if (count > (int)cfg.bestStreak) {
+    cfg.bestStreak = count;
+    // Note: save() should be called by caller to persist
+  }
+  
+  return count;
 }

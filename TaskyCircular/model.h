@@ -18,6 +18,7 @@ struct Config {
   bool soundOn = true;
   bool darkMode = true;
   uint32_t totalFocusMin = 0;
+  uint16_t bestStreak = 0;  // Best consecutive days with activity
   String wifiSSID = "";
   String wifiPass = "";
   int8_t timezone = -5; // UTC Offset
@@ -76,6 +77,9 @@ public:
   void streakAddCompletion();
   void getClockNow(int &h, int &m, int &s);
   uint8_t clampU8(int v, int lo, int hi);
+  
+  // Streak statistics
+  int calculateCurrentStreak();  // Returns consecutive days with activity from current day
 
 private:
 };

@@ -26,17 +26,16 @@ void TaskyUI::init() {
   digitalWrite(_rst, HIGH);
   delay(150);
 
-  // GC9A01A Init
-  tft.begin();
-  // tft.setSPISpeed(4000000); // Conservative speed if needed
-  // tft.setSPISpeed(
-  //     40000000); // Attempt high speed if SoftSPI supports it or ignored
 #if DISPLAY_CIRCULAR
+  // GC9A01A circular display init
+  tft.begin();
   tft.setRotation(0);
-  tft.invertDisplay(
-      true); // Fix for washed out colors / ghosting on some GC9A01
+  tft.invertDisplay(true); // Fix for washed out colors on some GC9A01
 #else
-  tft.setRotation(2); // From original code
+  // ST7789 square display init (240x240)
+  tft.init(240, 240);
+  tft.setRotation(2);
+  tft.invertDisplay(true); // Most ST7789 need inversion
 #endif
 
   applyTheme();
@@ -75,7 +74,8 @@ void TaskyUI::drawFrame() {
   // Circular frame: rim logic
   tft.drawCircle(CX, CY, 119, C_LINE);
 #else
-  tft.drawRoundRect(10, 10, 220, 220, 16, C_LINE);
+  // Square display: no frame on non-timer screens
+  // Timer screen draws its own progress dots
 #endif
 }
 
@@ -91,7 +91,12 @@ void TaskyUI::drawNavDots(Screen current) {
   // Center the dots horizontally
   int totalWidth = (numDots - 1) * dotSpacing;
   int startX = CX - totalWidth / 2;
+  
+#if DISPLAY_CIRCULAR
   int y = 225;  // Near bottom of circular display
+#else
+  int y = 210;  // Above progress dots on square display
+#endif
   
   for (int i = 0; i < numDots; i++) {
     int x = startX + i * dotSpacing;
@@ -199,12 +204,44 @@ void TaskyUI::drawProgressSegments() {
       tft.fillCircle(x, y, 1, C_LINE);
   }
 #else
-  int w = 220;
-  int h = 6;
-  int x = 10;
-  int y = 220;
-  tft.drawRect(x, y, w, h, C_LINE);
-  tft.fillRect(x, y, (int)(w * pct), h, getRingColor(pct));
+  // Square display: dots around 4 edges following frame margin
+  // 60 dots total: 15 per edge
+  // Using 10px margin from edge (same as old frame rectangle)
+  int margin = 10;
+  int edgeLen = 220;    // Frame was 220x220
+  int spacing = edgeLen / 15;  // ~14.6px between dots
+  
+  uint16_t activeColor = getRingColor(pct);
+  
+  for (int i = 0; i < totalDots; i++) {
+    int px, py;
+    int edge = i / 15;  // 0=top, 1=right, 2=bottom, 3=left
+    int pos = i % 15;   // Position within edge
+    
+    switch (edge) {
+      case 0:  // Top edge (left to right)
+        px = margin + pos * spacing;
+        py = margin;
+        break;
+      case 1:  // Right edge (top to bottom)
+        px = W - margin;
+        py = margin + pos * spacing;
+        break;
+      case 2:  // Bottom edge (right to left)
+        px = W - margin - pos * spacing;
+        py = H - margin;
+        break;
+      case 3:  // Left edge (bottom to top)
+        px = margin;
+        py = H - margin - pos * spacing;
+        break;
+    }
+    
+    if (i < dotsOn)
+      tft.fillCircle(px, py, 2, activeColor);
+    else
+      tft.fillCircle(px, py, 1, C_LINE);
+  }
 #endif
 }
 
@@ -213,7 +250,6 @@ void TaskyUI::drawTimerBase() {
   flashOn = false;
   
   drawFrame();
-  drawNavDots(SCR_TIMER);
 
   // Phase indicator
   uint16_t dot = accentColor();
@@ -239,9 +275,6 @@ void TaskyUI::drawFinishScreen(const char *msg) {
   // Let's use Teal or Text color.
 
   centerTextFont(msg, 130, C_TEXT, &FreeSansBold12pt7b);
-
-  // Subtext hint
-  centerTextFont("Click to continue", 160, C_MUTED, &FreeSans9pt7b);
 }
 
 void TaskyUI::drawTimerTime(int mm, int ss) {
@@ -290,10 +323,10 @@ void TaskyUI::drawTimerTime(int mm, int ss) {
 
 void TaskyUI::drawSettings() {
   tft.fillScreen(C_BG);
-  drawNavDots(SCR_SETTINGS);
+  drawFrame();
   
-  centerTextFont("SETTINGS", 30, C_TEXT, &FreeSansBold12pt7b);
-  tft.drawFastHLine(40, 42, 160, C_LINE);
+  centerTextFont("SETTINGS", 32, C_TEXT, &FreeSansBold12pt7b);
+  tft.drawFastHLine(30, 46, 180, C_LINE);
 
   // Settings: Work, Break, Sound, Bright, LED, Theme (0-5)
   const char *labels[6] = {"Work", "Break", "Sound", "Bright", "LED", "Theme"};
@@ -305,8 +338,8 @@ void TaskyUI::drawSettings() {
   values[4] = String((model->cfg.ledBright * 100) / 255) + "%";
   values[5] = model->cfg.darkMode ? "DARK" : "LIGHT";
 
-  int yStart = 62;
-  int rowH = 22;
+  int yStart = 72;
+  int rowH = 28;  // Bigger rows
 
   // Draw all items
   for (int i = 0; i < 6; i++) {
@@ -315,12 +348,12 @@ void TaskyUI::drawSettings() {
 
     // Draw highlight for selected item
     if (sel) {
-      int w = 190;
+      int w = 200;
       int x = (W - w) / 2;
       if (settingsEditing) {
-        tft.drawRoundRect(x, baseline - 14, w, 20, 5, C_TEAL);
+        tft.drawRoundRect(x, baseline - 16, w, 24, 6, C_TEAL);
       } else {
-        tft.drawRoundRect(x, baseline - 14, w, 20, 5, C_LINE);
+        tft.drawRoundRect(x, baseline - 16, w, 24, 6, C_LINE);
       }
     }
 
@@ -329,23 +362,12 @@ void TaskyUI::drawSettings() {
     uint16_t valueColor = sel ? C_TEAL : C_MUTED;
     
     tft.setTextColor(labelColor);
-    tft.setFont(&FreeSans9pt7b);
-    tft.setCursor(30, baseline);
+    tft.setFont(&FreeSans12pt7b);  // Bigger font
+    tft.setCursor(28, baseline);
     tft.print(labels[i]);
-    rightTextFont(values[i], 210, baseline, valueColor, &FreeSans9pt7b);
+    rightTextFont(values[i], 212, baseline, valueColor, &FreeSans12pt7b);
   }
 
-  // Bottom hint
-  tft.setFont();
-  tft.setTextSize(1);
-  tft.setTextColor(C_MUTED);
-  if (settingsEditing) {
-    tft.setCursor(55, 200);
-    tft.print("Rotate +/-  Click to save");
-  } else {
-    tft.setCursor(75, 200);
-    tft.print("Click to edit");
-  }
 }
 
 // End of ui.cpp or similar valid location. Since TargetContent was empty
@@ -353,7 +375,7 @@ void TaskyUI::drawSettings() {
 // append/insert. Let's target the end of drawTasks or similar.
 void TaskyUI::drawTasks() {
   tft.fillScreen(C_BG);
-  drawNavDots(SCR_TASKS);
+  drawFrame();
   
   centerTextFont("TASKS", 34, C_TEXT, &FreeSansBold12pt7b);
   tft.drawFastHLine(40, 46, 160, C_LINE);
@@ -366,26 +388,24 @@ void TaskyUI::drawTasks() {
   }
 
   if (allEmpty) {
-    // Empty state - balanced spacing
-    centerTextFont("No tasks yet", 80, C_TEXT, &FreeSansBold12pt7b);
-    centerTextFont("Scan the QR code", 108, C_MUTED, &FreeSans9pt7b);
-    centerTextFont("to add your tasks", 126, C_MUTED, &FreeSans9pt7b);
+    // Empty state - centered vertically
+    centerTextFont("No tasks yet", 95, C_TEXT, &FreeSansBold12pt7b);
+    centerTextFont("Scan the QR code", 125, C_MUTED, &FreeSans9pt7b);
+    centerTextFont("to add your tasks", 145, C_MUTED, &FreeSans9pt7b);
     
-    // QR icon hint - centered with more space
-    int qrX = 108, qrY = 140;
+    // QR icon hint - centered
+    int qrX = 108, qrY = 165;
     tft.drawRect(qrX, qrY, 24, 24, C_TEAL);
     tft.fillRect(qrX + 3, qrY + 3, 6, 6, C_TEAL);
     tft.fillRect(qrX + 15, qrY + 3, 6, 6, C_TEAL);
     tft.fillRect(qrX + 3, qrY + 15, 6, 6, C_TEAL);
     tft.fillRect(qrX + 13, qrY + 13, 5, 5, C_TEAL);
-    
-    centerTextFont("Press MODE for QR", 188, C_MUTED, &FreeSans9pt7b);
     return;
   }
 
-  // Compact layout for 3 tasks
-  int yBase = 65;
-  int rowH = 38;
+  // Tasks layout - lowered for better spacing
+  int yBase = 80;
+  int rowH = 42;
   
   // Draw cursor highlight for selected item
   int cursorY = yBase + tasksSel * rowH;
@@ -416,32 +436,29 @@ void TaskyUI::drawTasks() {
     tft.print(t);
     tft.setFont();
   }
-
-  // Bottom hint - moved up for circular display
-  centerTextFont("Click to complete", 195, C_MUTED, &FreeSans9pt7b);
 }
 
 void TaskyUI::drawCalendar() {
   tft.fillScreen(C_BG);
-  drawNavDots(SCR_CALENDAR);
+  drawFrame();
   
   centerTextFont("CALENDAR", 34, C_TEXT, &FreeSansBold12pt7b);
   tft.drawFastHLine(40, 46, 160, C_LINE);
 
   // Check if calendar is configured
   if (model->cfg.calendarUrl.length() == 0) {
-    // No calendar configured - balanced spacing
-    centerTextFont("No Calendar", 80, C_TEXT, &FreeSansBold12pt7b);
-    centerTextFont("Connect via WiFi", 108, C_MUTED, &FreeSans9pt7b);
-    centerTextFont("and add your", 126, C_MUTED, &FreeSans9pt7b);
-    centerTextFont("iCal URL in settings", 144, C_MUTED, &FreeSans9pt7b);
+    // No calendar configured - centered layout
+    centerTextFont("No Calendar", 90, C_TEXT, &FreeSansBold12pt7b);
+    centerTextFont("Connect via WiFi", 118, C_MUTED, &FreeSans9pt7b);
+    centerTextFont("and add your", 136, C_MUTED, &FreeSans9pt7b);
+    centerTextFont("iCal URL in settings", 154, C_MUTED, &FreeSans9pt7b);
     
-    // WiFi icon hint
-    tft.fillCircle(120, 165, 3, C_TEAL);
-    tft.drawCircle(120, 165, 8, C_TEAL);
-    tft.drawCircle(120, 165, 14, C_TEAL);
+    // WiFi icon hint - more space from text
+    tft.fillCircle(120, 180, 3, C_TEAL);
+    tft.drawCircle(120, 180, 8, C_TEAL);
+    tft.drawCircle(120, 180, 14, C_TEAL);
     
-    centerTextFont("Scan QR to setup", 195, C_MUTED, &FreeSans9pt7b);
+    centerTextFont("Scan QR to setup", 215, C_MUTED, &FreeSans9pt7b);
     return;
   }
 
@@ -520,7 +537,7 @@ void TaskyUI::drawTaskDetail(int index) {
 
 void TaskyUI::drawStreak() {
   tft.fillScreen(C_BG);
-  drawNavDots(SCR_STREAK);
+  drawFrame();
   
   centerTextFont("STREAK", 34, C_TEXT, &FreeSansBold12pt7b);
   tft.drawFastHLine(40, 46, 160, C_LINE);
@@ -545,27 +562,24 @@ void TaskyUI::drawStreak() {
 
       tft.fillRoundRect(x, y, sz, sz, 2, streakColor(model->streak[idx]));
 
-      // Highlight current day
+      // Highlight current day (teal border)
       if (idx == model->currentDayIndex)
         tft.drawRoundRect(x - 1, y - 1, sz + 2, sz + 2, 3, C_TEAL);
-      // Highlight cursor position (only when editing)
-      if (streakEditing && idx == model->streakCursor)
+      // Highlight cursor position (white border)
+      if (idx == model->streakCursor)
         tft.drawRoundRect(x - 2, y - 2, sz + 4, sz + 4, 4, C_TEXT);
     }
   }
 
-  // Bottom hint - at very bottom of screen
-  tft.setFont();
-  tft.setTextSize(1);
-  if (streakEditing) {
-    tft.setTextColor(C_TEAL);
-    tft.setCursor(70, 195);
-    tft.print("Click to save");
-  } else {
-    tft.setTextColor(C_MUTED);
-    tft.setCursor(70, 195);
-    tft.print("Click to edit");
-  }
+  // Streak statistics
+  int currentStreak = model->calculateCurrentStreak();
+  int bestStreak = model->cfg.bestStreak;
+  
+  char statBuf[32];
+  snprintf(statBuf, sizeof(statBuf), "Now: %d  Best: %d", currentStreak, bestStreak);
+  centerTextFont(statBuf, 168, C_TEAL, &FreeSans9pt7b);
+  centerTextFont("days", 184, C_MUTED, &FreeSans9pt7b);
+
 }
 
 uint16_t TaskyUI::streakColor(uint8_t v) {
@@ -580,7 +594,7 @@ uint16_t TaskyUI::streakColor(uint8_t v) {
 
 void TaskyUI::drawStats() {
   tft.fillScreen(C_BG);
-  drawNavDots(SCR_STATS);
+  drawFrame();
   
   centerTextFont("STATS", 34, C_TEXT, &FreeSansBold12pt7b);
   tft.drawFastHLine(40, 46, 160, C_LINE);
@@ -613,8 +627,8 @@ void TaskyUI::drawStats() {
 
 void TaskyUI::drawWifi(bool wifiOn, String ssid, String pass, String ip) {
   tft.fillScreen(C_BG);
-  drawNavDots(SCR_WIFI_INFO);
-  
+  drawFrame();
+
   centerTextFont("WIFI", 34, C_TEXT, &FreeSansBold12pt7b);
   tft.drawFastHLine(40, 46, 160, C_LINE);
 
@@ -640,8 +654,7 @@ void TaskyUI::drawWifi(bool wifiOn, String ssid, String pass, String ip) {
   tft.setCursor(25, 144);
   tft.print(pass);
 
-  centerTextFont("Click to show QR", 172, C_MUTED, &FreeSans9pt7b);
-  centerTextFont(ip.c_str(), 190, C_SOFT, &FreeSans9pt7b);
+  centerTextFont(ip.c_str(), 175, C_SOFT, &FreeSans9pt7b);
   tft.setFont();
 }
 
@@ -656,14 +669,14 @@ void TaskyUI::drawQRFull(String ssid, String pass) {
   int border = 1;
   int totalModules = size + (border * 2);
 
-  // Bigger QR - use more of the circular area
-  int scale = 160 / totalModules;
+  // QR fills entire screen
+  int scale = 220 / totalModules;  // Use almost full 240px
   if (scale < 1)
     scale = 1;
 
   int dimension = totalModules * scale;
   int startX = (W - dimension) / 2;
-  int startY = (H - dimension) / 2 - 10;  // Centered, slightly up for text
+  int startY = (H - dimension) / 2;  // Perfectly centered
 
   for (int y = -border; y < size + border; y++) {
     for (int x = -border; x < size + border; x++) {
@@ -673,71 +686,74 @@ void TaskyUI::drawQRFull(String ssid, String pass) {
           isBlack = true;
         }
       }
-      uint16_t color = isBlack ? 0x0000 : 0xFFFF;
+      uint16_t color = isBlack ? C_TEAL : 0xFFFF;  // Teal QR for branding
       tft.fillRect(startX + (x + border) * scale, startY + (y + border) * scale,
                    scale, scale, color);
     }
   }
-
-  // Text below QR
-  centerTextFont("Scan to Start", 210, 0x0000, &FreeSans9pt7b);
-  
-  // Nav dots with colors for white background
-  const int navOrder[] = {SCR_TIMER, SCR_TASKS, SCR_CALENDAR, SCR_STREAK, 
-                          SCR_STATS, SCR_SETTINGS, SCR_QR, SCR_WIFI_INFO};
-  const int numDots = 8;
-  int dotStartX = CX - (numDots - 1) * 12 / 2;
-  for (int i = 0; i < numDots; i++) {
-    int dx = dotStartX + i * 12;
-    uint16_t color = (navOrder[i] == SCR_QR) ? C_TEAL : 0xC618;  // Gray for white bg
-    tft.fillCircle(dx, 225, 3, color);
-  }
 }
 
 void TaskyUI::drawSplashTasky() {
-  // Elegant dark intro with expanding rings
+  // PSP-style intro: letters appear one by one with fade
   tft.fillScreen(C_BG);
   
-  // Animated expanding rings from center
-  for (int r = 10; r <= 110; r += 15) {
-    uint16_t ringColor = (r < 50) ? C_TEAL : C_LINE;
-    tft.drawCircle(120, 120, r, ringColor);
-    delay(30);
+  tft.setFont(&FreeSansBold24pt7b);
+  const char *letters = "Tasky";
+  
+  // Calculate total width for centering
+  int16_t x1, y1;
+  uint16_t totalW, h;
+  tft.getTextBounds(letters, 0, 0, &x1, &y1, &totalW, &h);
+  
+  // Get individual letter positions
+  int letterX[5];
+  int baseX = (W - totalW) / 2;
+  int cumX = baseX;
+  
+  for (int i = 0; i < 5; i++) {
+    letterX[i] = cumX;
+    char buf[2] = {letters[i], 0};
+    uint16_t lw;
+    tft.getTextBounds(buf, 0, 0, &x1, &y1, &lw, &h);
+    cumX += lw + 2;  // Letter spacing
   }
   
-  delay(150);
+  // Fade colors: dark to bright
+  uint16_t fadeSteps[] = {0x0841, 0x1082, 0x18C3, 0x2104, 0x3186, 0x4208, 0x52AA, 0x6B4D, 0x8410, 0xAD55, 0xD69A, 0xFFFF};
+  int numFades = 12;
   
-  // Quick fade - redraw background
-  tft.fillScreen(C_BG);
+  // Each letter appears with fade animation
+  for (int letterIdx = 0; letterIdx < 5; letterIdx++) {
+    char buf[2] = {letters[letterIdx], 0};
+    
+    // Fade in this letter
+    for (int f = 0; f < numFades; f++) {
+      tft.setTextColor(fadeSteps[f]);
+      tft.setCursor(letterX[letterIdx], 130);
+      tft.print(buf);
+      delay(15);  // Fast fade per step
+    }
+    
+    // Brief pause between letters
+    delay(80);
+  }
   
-  // Draw elegant frame
-  tft.drawCircle(120, 120, 105, C_LINE);
+  // Accent line under logo
+  delay(200);
+  for (int w = 0; w <= 60; w += 4) {
+    tft.drawFastHLine(120 - w/2, 145, w, C_TEAL);
+    delay(10);
+  }
   
-  // Calculate text position
-  tft.setFont(&FreeSansBold24pt7b);
-  const char *logo = "Tasky";
-  int16_t x1, y1;
-  uint16_t w, h;
-  tft.getTextBounds(logo, 0, 120, &x1, &y1, &w, &h);
-  int textX = (W - w) / 2;
-  
-  // Smooth fade-in text (simulated with color steps)
-  uint16_t fadeColors[] = {0x1082, 0x2104, 0x4208, 0x630C, 0x8410, C_TEXT};
-  for (int i = 0; i < 6; i++) {
-    tft.setTextColor(fadeColors[i]);
-    tft.setCursor(textX, 120);
-    tft.print(logo);
+  // Tagline fades in
+  delay(200);
+  uint16_t tagFades[] = {0x2104, 0x4208, 0x630C, C_MUTED};
+  for (int f = 0; f < 4; f++) {
+    centerTextFont("Focus. Flow. Finish.", 175, tagFades[f], &FreeSans9pt7b);
     delay(50);
   }
   
-  // Accent dot below logo
-  tft.fillCircle(120, 140, 3, C_TEAL);
-  
-  // Tagline fades in
-  delay(150);
-  centerTextFont("Focus. Flow. Finish.", 170, C_MUTED, &FreeSans9pt7b);
-  
-  delay(500);
+  delay(400);
 }
 
 void TaskyUI::centerTextFont(const char *s, int baselineY, uint16_t color,

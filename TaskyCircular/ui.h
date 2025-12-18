@@ -6,7 +6,7 @@
 #include <Arduino.h>
 
 // --- Compile time switch ---
-#define DISPLAY_CIRCULAR 1
+#define DISPLAY_CIRCULAR 0  // 0 = ST7789 square, 1 = GC9A01A circular
 // ---------------------------
 
 #if DISPLAY_CIRCULAR

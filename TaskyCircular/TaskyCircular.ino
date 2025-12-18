@@ -1,5 +1,5 @@
 #include "calendar_service.h"
-#include "github_service.h" // [NEW]
+#include "github_service.h"
 #include "model.h"
 #include "network_manager.h"
 #include "ui.h"
@@ -7,7 +7,7 @@
 #include <Arduino.h>
 #include <SPI.h>
 
-// -------------------- PINS --------------------
+// ==================== PINS ====================
 #define TFT_BL 2
 #define TFT_CS 3
 #define TFT_DC 4
@@ -23,92 +23,64 @@
 #define LED_PIN 9
 #define BUZZER_PIN 1
 
-// -------------------- MODULES --------------------
+// ==================== MODULES ====================
 enum EncClickType { ENC_NONE, ENC_SHORT, ENC_LONG };
+
 TaskyModel model;
 TaskyUI ui(&model, TFT_CS, TFT_DC, TFT_RST);
 TaskyNetManager net(&model);
-CalendarService calendar(&model); // [NEW]
-GithubService github(&model);     // [NEW]
-WiFiPortal portal(&model, &net); // [UPDATED] Order of init matters? net is used
-                                 // in portal, so net should exist.
-// C++ inits globals in order of definition usually. net defined before portal
-// now.
+CalendarService calendar(&model);
+GithubService github(&model);
+WiFiPortal portal(&model, &net);
 
-// -------------------- LOGIC STATE --------------------
+// ==================== STATE ====================
 Screen screen = SCR_TIMER;
-bool focusLock = true;
-bool finishRitualActive = false;
-uint8_t finishRitualStep = 0;
-uint32_t finishRitualAt = 0;
 
-// Encoder State
-uint32_t lastEncMoveAt = 0;
+// Input state
 bool lastEncBtn = HIGH;
 uint32_t encBtnDownAt = 0;
-const uint32_t ENC_LONGPRESS_MS = 900;
-uint32_t lastEncStepAt = 0;
-
-// Buttons
 bool lastModeBtn = HIGH;
 uint32_t lastModeAt = 0;
+const uint32_t ENC_LONGPRESS_MS = 900;
 
-// Alarm
+// Timer alarm state
 uint32_t lastAnimAt = 0;
 uint32_t lastBeepAt = 0;
+uint32_t lastUiBeepAt = 0;
 bool alarmFlip = false;
 
-// Audio/LED globals for UI
-uint32_t lastUiBeepAt = 0;
+// Audio
 uint32_t uiBeepOffAt = 0;
 
-// -------------------- HARDWARE HELPERS --------------------
+// ==================== HARDWARE HELPERS ====================
 void setLed(uint8_t v) { ledcWrite(LED_PIN, v); }
 void buzzerOff() { ledcWriteTone(BUZZER_PIN, 0); }
 void buzzerTone(uint16_t hz) { ledcWriteTone(BUZZER_PIN, hz); }
 void setBacklight(uint8_t v) { ledcWrite(TFT_BL, v); }
-
-void uiHaptic() {
-  // Only sound, no LED
-  uint32_t now = millis();
-  if (model.cfg.soundOn && (now - lastUiBeepAt > 60)) {
-    lastUiBeepAt = now;
-    buzzerTone(2200);
-    uiBeepOffAt = now + 10;
-  }
-}
 
 void alarmStop() {
   buzzerOff();
   setLed(0);
 }
 
-void enterScreen(Screen s) {
-  if (model.st.finished && s != SCR_TIMER)
-    alarmStop();
+// ==================== INPUT FUNCTIONS ====================
 
-  // Only start WiFi when needed, don't stop it during navigation
-  // This prevents SPI conflicts that cause display issues
-  if (s == SCR_WIFI_INFO || s == SCR_QR) {
-    if (!portal.wifiOn)
-      portal.begin();
-  }
-  // Note: We don't call portal.stop() here anymore to avoid display issues
-
-  screen = s;
-  ui.baseDrawn = false;  // Force redraw on screen change
+// Simple encoder - detect falling edge of CLK
+int encoderStep() {
+  static int lastClk = HIGH;
   
-  // Reset editing states
-  ui.settingsEditing = false;
-  ui.streakEditing = false;
-
-  // Theme & Redraw
-  ui.applyTheme();
-  ui.goToScreen(s);
+  int clk = digitalRead(ENCODER_CLK);
+  int dt = digitalRead(ENCODER_DT);
+  
+  if (clk != lastClk && clk == LOW) {
+    lastClk = clk;
+    return (dt == HIGH) ? +1 : -1;
+  }
+  lastClk = clk;
+  return 0;
 }
 
-// -------------------- INPUT --------------------
-
+// Encoder button with debounce
 EncClickType encoderClickType() {
   static uint32_t lastClickAt = 0;
   bool b = digitalRead(ENCODER_SW);
@@ -121,8 +93,7 @@ EncClickType encoderClickType() {
     uint32_t press = now - encBtnDownAt;
     lastEncBtn = b;
     
-    // Ignore if too short (noise) or too soon after last click
-    if (press < 150 || (now - lastClickAt) < 300)
+    if (press < 80 || (now - lastClickAt) < 200)
       return ENC_NONE;
     
     lastClickAt = now;
@@ -132,40 +103,13 @@ EncClickType encoderClickType() {
   return ENC_NONE;
 }
 
-int encoderStep() {
-  static uint8_t lastAB = 3;
-  static int8_t count = 0;
-  
-  uint8_t a = digitalRead(ENCODER_CLK);
-  uint8_t b = digitalRead(ENCODER_DT);
-  uint8_t ab = (a << 1) | b;
-  
-  if (ab == lastAB) return 0;
-  
-  // Gray code transitions - clockwise
-  if ((lastAB == 3 && ab == 1) || (lastAB == 1 && ab == 0) ||
-      (lastAB == 0 && ab == 2) || (lastAB == 2 && ab == 3)) {
-    count++;
-  }
-  // Gray code transitions - counter-clockwise  
-  else if ((lastAB == 3 && ab == 2) || (lastAB == 2 && ab == 0) ||
-           (lastAB == 0 && ab == 1) || (lastAB == 1 && ab == 3)) {
-    count--;
-  }
-  
-  lastAB = ab;
-  
-  // 4 transitions = 1 physical detent
-  if (count >= 4) { count = 0; return +1; }
-  if (count <= -4) { count = 0; return -1; }
-  return 0;
-}
-
+// Mode button with debounce
 bool modeClick() {
   bool b = digitalRead(MODO_BTN);
   bool clicked = false;
+  
   if (b == LOW && lastModeBtn == HIGH) {
-    if (millis() - lastModeAt > 250) {
+    if (millis() - lastModeAt > 200) {
       clicked = true;
       lastModeAt = millis();
     }
@@ -174,359 +118,68 @@ bool modeClick() {
   return clicked;
 }
 
-// -------------------- SETUP --------------------
-void setup() {
-  delay(500); // Wait for power stabilization
-  Serial.begin(115200);
+// ==================== NAVIGATION ====================
 
-  pinMode(TFT_BL, OUTPUT);
-  digitalWrite(TFT_BL, HIGH);
-
-  pinMode(ENCODER_CLK, INPUT_PULLUP);
-  pinMode(ENCODER_DT, INPUT_PULLUP);
-  pinMode(ENCODER_SW, INPUT_PULLUP);
-  pinMode(MODO_BTN, INPUT_PULLUP);
-
-  // PWM Init
-  // ledcAttach(TFT_BL, 5000, 8); // DEBUG: Disabled PWM
-  ledcAttach(LED_PIN, 5000, 8);
-  ledcAttach(BUZZER_PIN, 2000, 8);
-
-  SPI.begin(TFT_SCK, -1, TFT_MOSI, TFT_CS);
-
-  model.begin();
-  ui.init();
-
-  // setBacklight(model.cfg.screenBright);
-  digitalWrite(TFT_BL, HIGH); // Force ON
-  setLed(0);
-  buzzerOff();
-
-  model.clockSetAtMs = millis();
-
-  ui.drawSplashTasky();
-  delay(1300);
-
-  // Start Network
-  net.begin();
-  calendar.begin(); // [NEW]
-  github.begin();   // [NEW]
-
-  // Timer is the main screen - Tasky is a Pomodoro first
-  enterScreen(SCR_TIMER);
+void navigateNext() {
+  Screen next;
+  switch (screen) {
+    case SCR_TIMER:    next = SCR_TASKS; break;
+    case SCR_TASKS:    next = SCR_CALENDAR; break;
+    case SCR_CALENDAR: next = SCR_STREAK; break;
+    case SCR_STREAK:   next = SCR_STATS; break;
+    case SCR_STATS:    next = SCR_SETTINGS; break;
+    case SCR_SETTINGS: next = SCR_QR; break;
+    case SCR_QR:       next = SCR_WIFI_INFO; break;
+    case SCR_WIFI_INFO: next = SCR_TIMER; break;
+    default:           next = SCR_TIMER; break;
+  }
+  
+  // Start WiFi only when needed
+  if (next == SCR_WIFI_INFO || next == SCR_QR) {
+    if (!portal.wifiOn) portal.begin();
+  }
+  
+  // Stop alarm if leaving timer
+  if (model.st.finished && next != SCR_TIMER) {
+    alarmStop();
+  }
+  
+  screen = next;
+  ui.baseDrawn = false;
+  ui.settingsEditing = false;
+  ui.streakEditing = false;
+  ui.applyTheme();
 }
 
-// -------------------- LOOP --------------------
-void loop() {
-  portal.loop();   // Handle web server
-  net.loop();      // Handle wifi connection
-  calendar.loop(); // [NEW]
-  github.loop();   // [NEW]
+// ==================== SCREEN HANDLERS ====================
 
-  // Audio Tick
+void handleTimer(int step, EncClickType click) {
   uint32_t now = millis();
-  if (uiBeepOffAt && now >= uiBeepOffAt) {
-    buzzerOff();
-  }
-
-  // --- Mode Button ---
-  // Navigation cycle: Timer -> Tasks -> Calendar -> Streak -> Stats -> Settings -> QR -> Timer
-  if (modeClick()) {
-    if (screen == SCR_TIMER)
-      enterScreen(SCR_TASKS);
-    else if (screen == SCR_TASKS)
-      enterScreen(SCR_CALENDAR);
-    else if (screen == SCR_CALENDAR)
-      enterScreen(SCR_STREAK);
-    else if (screen == SCR_STREAK)
-      enterScreen(SCR_STATS);
-    else if (screen == SCR_STATS)
-      enterScreen(SCR_SETTINGS);
-    else if (screen == SCR_SETTINGS)
-      enterScreen(SCR_QR);
-    else if (screen == SCR_QR)
-      enterScreen(SCR_WIFI_INFO);
-    else if (screen == SCR_WIFI_INFO)
-      enterScreen(SCR_TIMER);
-    else
-      enterScreen(SCR_TIMER);
-    return;
-  }
   
-  // Ensure Timer is drawn before focusLock can block
-  if (screen == SCR_TIMER && !ui.baseDrawn) {
+  // Draw if needed
+  if (!ui.baseDrawn) {
     ui.drawTimerBase();
     ui.baseDrawn = true;
   }
   
-  if (focusLock && screen == SCR_TIMER && model.st.running) {
-    // Timer is running - only allow viewing, no navigation
-    // But still update the display
-    uint32_t rem = model.remainingMs();
-    int mm = rem / 60000;
-    int ss = (rem % 60000) / 1000;
-    if (mm != ui.lastShownMin || ss != ui.lastShownSec) {
-      ui.drawTimerTime(mm, ss);
-      ui.lastShownMin = mm;
-      ui.lastShownSec = ss;
-    }
-    return;
-  }
-
-  // --- Encoder ---
-  int step = encoderStep();
-  EncClickType ctype = encoderClickType();
-  bool shortClick = (ctype == ENC_SHORT);
-
-  // --- Screens ---
-
-if (screen == SCR_QR) {
-  if (!ui.baseDrawn) {
-    // Ensure AP is on so QR is valid? Or just show static info?
-    // User wants to scan to create tasks.
-    // We'll rely on global portal.begin() if needed, or just assume it's up.
-    // Ideally, ensure WiFi is ON here.
-    if (!portal.wifiOn)
-      portal.begin();
-
-    ui.drawQRFull(portal.apSSID, portal.apPass);
-    ui.baseDrawn = true;
-  }
-  if (shortClick) {
-    ui.uiTick(true);
-    // Next screen in cycle is TASKS manually or let loop handle mode button?
-    // User said "first screen... then timer". Navigation button handles
-    // cycle. But maybe click also advances? "crea tasks con el qr... para que
-    // sepa que tiene que escanear" Let's allow click to go to TASKS for
-    // convenience
-    enterScreen(SCR_TIMER); // Actually Loop order says TIMER is next... wait.
-    // Switch says QR -> TASKS.
-    // Let's stick to MODE button for main nav, but click here can act as
-    // "Done"
-    enterScreen(SCR_TIMER); // Flow: QR -> Timer -> Tasks
-  }
-  return;
-}
-
-if (screen == SCR_WIFI_INFO) {
-  if (!ui.baseDrawn) {
-    if (!portal.wifiOn)
-      portal.begin();
-
-    // Show real IP if connected, or AP IP
-    String ip = net.isConnected() ? net.getIP() : WiFi.softAPIP().toString();
-    if (ip == "0.0.0.0")
-      ip = WiFi.softAPIP().toString();
-
-    String status = net.getStatusString();
-    // We might want to pass status to UI, for now just append to SSID?
-    // Or modify drawWifi interface.
-    // For now, let's just pass status as "ssid" supplement or update drawWifi
-    // later. Hack: append status to SSID string for display?
-    String ssidDisplay = "Status: " + status;
-
-    ui.drawWifi(portal.wifiOn, ssidDisplay, portal.apPass, ip);
-    ui.baseDrawn = true;
-  }
-
-  // Refresh periodically if status changes?
-  static String lastStatus = "";
-  if (net.getStatusString() != lastStatus) {
-    lastStatus = net.getStatusString();
-    ui.baseDrawn = false; // Trigger redraw
-  }
-
-  if (shortClick) {
-    ui.uiTick(true);
-    enterScreen(SCR_QR); // Back to QR
-  }
-  return;
-}
-
-if (screen == SCR_CALENDAR) {
-  if (!ui.baseDrawn) {
-    ui.drawCalendar();
-    ui.baseDrawn = true;
-  }
-  // Refresh periodically if we had logic
-  if (shortClick) {
-    ui.uiTick(true);
-    // Force refresh? Or just wait.
-    // Maybe go to next screen or just refresh
-    // Let's make it refresh just in case
-    // calendar.update(); // TODO
-  }
-  return;
-}
-
-if (screen == SCR_STREAK) {
-  if (!ui.baseDrawn) {
-    ui.drawStreak();
-    ui.baseDrawn = true;
-  }
-
-  if (ui.streakEditing) {
-    // In edit mode - encoder moves cursor
-    if (step != 0) {
-      model.streakCursor += step;
-      if (model.streakCursor < 0)
-        model.streakCursor = 0;
-      if (model.streakCursor >= STREAK_N)
-        model.streakCursor = STREAK_N - 1;
-      ui.uiTick(false);
-      ui.drawStreak();
-    }
-
-    // Click changes value and exits edit mode
-    if (shortClick) {
-      ui.uiTick(true);
-      uint8_t v = model.streak[model.streakCursor];
-      v++;
-      if (v > 3)
-        v = 0;
-      model.streak[model.streakCursor] = v;
-      ui.anim.triggerInk(model.streakCursor);
-      model.save();
-      ui.streakEditing = false;
-      ui.drawStreak();
-    }
-  } else {
-    // Not editing - click enters edit mode
-    if (shortClick) {
-      ui.uiTick(true);
-      ui.streakEditing = true;
-      ui.drawStreak();
-    }
-  }
-  return;
-}
-
-if (screen == SCR_STATS) {
-  if (!ui.baseDrawn) {
-    ui.drawStats();
-    ui.baseDrawn = true;
-  }
-  // Stats are static - only update when entering screen or completing pomodoro
-  // No constant refresh needed
-  return;
-}
-
-if (screen == SCR_SETTINGS) {
-  if (!ui.baseDrawn) {
-    ui.drawSettings();
-    ui.baseDrawn = true;
-  }
-
-  if (!ui.settingsEditing) {
-    // Navegación - encoder mueve selector
-    if (step != 0) {
-      ui.settingsSel += step;
-      if (ui.settingsSel < 0) ui.settingsSel = 5;
-      if (ui.settingsSel > 5) ui.settingsSel = 0;
-      ui.drawSettings();
-    }
-    // Click entra en modo edición
-    if (shortClick) {
-      ui.uiTick(true);
-      ui.settingsEditing = true;
-      ui.drawSettings();
-    }
-  } else {
-    // Editando - encoder cambia valor
-    if (step != 0) {
-      uiHaptic();
-      if (ui.settingsSel == 0)
-        model.cfg.workMin = ui.model->clampU8(model.cfg.workMin + step * 5, 5, 90);
-      else if (ui.settingsSel == 1)
-        model.cfg.breakMin = ui.model->clampU8(model.cfg.breakMin + step * 5, 1, 30);
-      else if (ui.settingsSel == 2)
-        model.cfg.soundOn = !model.cfg.soundOn;
-      else if (ui.settingsSel == 3) {
-        model.cfg.screenBright = ui.model->clampU8(model.cfg.screenBright + step * 25, 20, 255);
-        setBacklight(model.cfg.screenBright);
-      }
-      else if (ui.settingsSel == 4)
-        model.cfg.ledBright = ui.model->clampU8(model.cfg.ledBright + step * 25, 0, 255);
-      else if (ui.settingsSel == 5) {
-        model.cfg.darkMode = !model.cfg.darkMode;
-        ui.applyTheme();
-      }
-      ui.drawSettings();
-    }
-    // Click guarda y sale
-    if (shortClick) {
-      ui.settingsEditing = false;
-      model.save();
-      ui.uiTick(true);
-      ui.drawSettings();
-    }
-  }
-  return;
-}
-
-if (screen == SCR_TASKS) {
-  if (!ui.baseDrawn) {
-    ui.drawTasks();
-    ui.baseDrawn = true;
-  }
-
-  static bool showingDetail = false;
-  if (showingDetail) {
-    if (shortClick || ctype == ENC_LONG) {
-      showingDetail = false;
-      ui.drawTasks(); // Redraw main list
-    }
-    return;
-  }
-
-  if (step != 0) {
-    ui.tasksSel += step;
-    if (ui.tasksSel < 0)
-      ui.tasksSel = 2;
-    if (ui.tasksSel > 2)
-      ui.tasksSel = 0;
-    ui.drawTasks();
-  }
-
-  if (shortClick) {
-    model.taskDone[ui.tasksSel] = !model.taskDone[ui.tasksSel];
-    ui.uiTick(true);
-    if (model.taskDone[ui.tasksSel])
-      model.streakAddCompletion();
-    model.save();
-    ui.drawTasks();
-  }
-
-  if (ctype == ENC_LONG) {
-    showingDetail = true;
-    ui.uiTick(true);
-    ui.drawTaskDetail(ui.tasksSel);
-  }
-  return;
-}
-
-if (screen == SCR_TIMER) {
-  if (!ui.baseDrawn) {
-    ui.drawTimerBase();
-    ui.baseDrawn = true;
-  }
-
-  // Finished logic
+  // Timer finished - alarm mode
   if (model.st.finished) {
-    if (shortClick) {
+    // Click: next phase
+    if (click == ENC_SHORT) {
       ui.uiTick(true);
       alarmStop();
       model.nextPhase();
       ui.drawTimerBase();
     }
-    if (ctype == ENC_LONG) {
+    // Long press: reset
+    if (click == ENC_LONG) {
       ui.uiTick(true);
       alarmStop();
       model.resetTimer();
       ui.drawTimerBase();
     }
-
-    // Alarm blink
+    
+    // Alarm animation
     if (now - lastAnimAt >= 150) {
       lastAnimAt = now;
       alarmFlip = !alarmFlip;
@@ -540,13 +193,10 @@ if (screen == SCR_TIMER) {
     ui.drawFlashIfNeeded();
     return;
   }
-
-  // SIMPLE TIMER LOGIC:
-  // - Click: start/pause
-  // - Encoder: change time by 5 min (only when NOT running)
-  // - Long press: reset
-
-  if (shortClick) {
+  
+  // Normal timer mode
+  // Click: start/pause
+  if (click == ENC_SHORT) {
     ui.uiTick(true);
     if (!model.st.running) {
       model.save();
@@ -557,41 +207,37 @@ if (screen == SCR_TIMER) {
     ui.lastShownMin = -1;
   }
   
-  // Encoder changes time only when timer is stopped
+  // Encoder: change time (only when stopped)
   if (step != 0 && !model.st.running) {
     int delta = step * 5;
     if (model.phase == PHASE_WORK) {
       int v = model.cfg.workMin + delta;
-      if (v < 5) v = 5;
-      if (v > 90) v = 90;
-      model.cfg.workMin = v;
+      model.cfg.workMin = constrain(v, 5, 90);
     } else {
       int v = model.cfg.breakMin + delta;
-      if (v < 1) v = 1;
-      if (v > 30) v = 30;
-      model.cfg.breakMin = v;
+      model.cfg.breakMin = constrain(v, 1, 30);
     }
     model.resetTimer();
-    ui.baseDrawn = false;  // Force redraw on next loop iteration
+    ui.drawTimerBase();
   }
   
-  // Long press resets
-  if (ctype == ENC_LONG) {
+  // Long press: reset
+  if (click == ENC_LONG) {
     ui.uiTick(true);
     model.resetTimer();
     ui.drawTimerBase();
   }
-
-  // Check if finished
+  
+  // Check if timer finished
   if (model.st.running && model.remainingMs() == 0) {
     model.finishTimer();
     ui.drawFinishScreen("WELL DONE");
     ui.uiTick(true);
   }
-
-  // Update display
+  
+  // Update time display
   static uint32_t lastTextAt = 0;
-  if (now - lastTextAt >= 120) {
+  if (now - lastTextAt >= 100) {
     lastTextAt = now;
     uint32_t rem = model.remainingMs();
     int mm = rem / 60000;
@@ -602,12 +248,283 @@ if (screen == SCR_TIMER) {
       ui.lastShownSec = ss;
     }
   }
-  return;
 }
 
-// Safety: ensure Timer always draws if it's the current screen
-if (screen == SCR_TIMER && !ui.baseDrawn) {
-  ui.drawTimerBase();
-  ui.baseDrawn = true;
+void handleTasks(int step, EncClickType click) {
+  static bool showingDetail = false;
+  
+  // Draw if needed
+  if (!ui.baseDrawn) {
+    ui.drawTasks();
+    ui.baseDrawn = true;
+    showingDetail = false;
+  }
+  
+  // Detail view mode
+  if (showingDetail) {
+    if (click == ENC_SHORT || click == ENC_LONG) {
+      showingDetail = false;
+      ui.drawTasks();
+    }
+    return;
+  }
+  
+  // Encoder: select task
+  if (step != 0) {
+    ui.tasksSel += step;
+    if (ui.tasksSel < 0) ui.tasksSel = 2;
+    if (ui.tasksSel > 2) ui.tasksSel = 0;
+    ui.drawTasks();
+  }
+  
+  // Click: toggle done
+  if (click == ENC_SHORT) {
+    model.taskDone[ui.tasksSel] = !model.taskDone[ui.tasksSel];
+    ui.uiTick(true);
+    if (model.taskDone[ui.tasksSel]) {
+      model.streakAddCompletion();
+    }
+    model.save();
+    ui.drawTasks();
+  }
+  
+  // Long press: show detail
+  if (click == ENC_LONG) {
+    showingDetail = true;
+    ui.uiTick(true);
+    ui.drawTaskDetail(ui.tasksSel);
+  }
 }
+
+void handleCalendar(int step, EncClickType click) {
+  // Draw if needed
+  if (!ui.baseDrawn) {
+    ui.drawCalendar();
+    ui.baseDrawn = true;
+  }
+  // Calendar is view-only for now
+}
+
+void handleStreak(int step, EncClickType click) {
+  // Draw if needed
+  if (!ui.baseDrawn) {
+    ui.drawStreak();
+    ui.baseDrawn = true;
+  }
+  
+  // Encoder moves cursor by days (simple navigation)
+  if (step != 0) {
+    model.streakCursor += step;
+    model.streakCursor = constrain(model.streakCursor, 0, STREAK_N - 1);
+    ui.uiTick(false);
+    ui.drawStreak();
+  }
+  
+  // Click: toggle value directly (0 -> 1 -> 2 -> 3 -> 0)
+  if (click == ENC_SHORT) {
+    ui.uiTick(true);
+    uint8_t v = model.streak[model.streakCursor];
+    v = (v + 1) % 4;
+    model.streak[model.streakCursor] = v;
+    model.save();
+    ui.drawStreak();
+  }
+}
+
+void handleStats(int step, EncClickType click) {
+  // Draw if needed
+  if (!ui.baseDrawn) {
+    ui.drawStats();
+    ui.baseDrawn = true;
+  }
+  // Stats is view-only
+}
+
+void handleSettings(int step, EncClickType click) {
+  // Draw if needed
+  if (!ui.baseDrawn) {
+    ui.drawSettings();
+    ui.baseDrawn = true;
+  }
+  
+  if (ui.settingsEditing) {
+    // Editing mode - encoder changes value
+    if (step != 0) {
+      switch (ui.settingsSel) {
+        case 0: // Work time
+          model.cfg.workMin = constrain(model.cfg.workMin + step * 5, 5, 90);
+          break;
+        case 1: // Break time
+          model.cfg.breakMin = constrain(model.cfg.breakMin + step * 5, 1, 30);
+          break;
+        case 2: // Sound
+          model.cfg.soundOn = !model.cfg.soundOn;
+          break;
+        case 3: // Brightness
+          model.cfg.screenBright = constrain(model.cfg.screenBright + step * 25, 20, 255);
+          setBacklight(model.cfg.screenBright);
+          break;
+        case 4: // LED
+          model.cfg.ledBright = constrain(model.cfg.ledBright + step * 25, 0, 255);
+          break;
+        case 5: // Theme
+          model.cfg.darkMode = !model.cfg.darkMode;
+          ui.applyTheme();
+          break;
+      }
+      ui.drawSettings();
+    }
+    
+    // Click: save and exit edit mode
+    if (click == ENC_SHORT) {
+      model.save();
+      ui.settingsEditing = false;
+      ui.uiTick(true);
+      ui.drawSettings();
+    }
+  } else {
+    // Navigation mode - encoder moves selector
+    if (step != 0) {
+      ui.settingsSel += step;
+      if (ui.settingsSel < 0) ui.settingsSel = 5;
+      if (ui.settingsSel > 5) ui.settingsSel = 0;
+      ui.drawSettings();
+    }
+    
+    // Click: enter edit mode
+    if (click == ENC_SHORT) {
+      ui.uiTick(true);
+      ui.settingsEditing = true;
+      ui.drawSettings();
+    }
+  }
+}
+
+void handleQR(int step, EncClickType click) {
+  // Draw if needed
+  if (!ui.baseDrawn) {
+    if (!portal.wifiOn) portal.begin();
+    ui.drawQRFull(portal.apSSID, portal.apPass);
+    ui.baseDrawn = true;
+  }
+  
+  // Click: go to Timer
+  if (click == ENC_SHORT) {
+    ui.uiTick(true);
+    screen = SCR_TIMER;
+    ui.baseDrawn = false;
+  }
+}
+
+void handleWifi(int step, EncClickType click) {
+  // Draw if needed
+  if (!ui.baseDrawn) {
+    if (!portal.wifiOn) portal.begin();
+    
+    String ip = net.isConnected() ? net.getIP() : WiFi.softAPIP().toString();
+    if (ip == "0.0.0.0") ip = WiFi.softAPIP().toString();
+    
+    String status = "Status: " + net.getStatusString();
+    ui.drawWifi(portal.wifiOn, status, portal.apPass, ip);
+    ui.baseDrawn = true;
+  }
+  
+  // Refresh if status changed
+  static String lastStatus = "";
+  if (net.getStatusString() != lastStatus) {
+    lastStatus = net.getStatusString();
+    ui.baseDrawn = false;
+  }
+  
+  // Click: go to QR
+  if (click == ENC_SHORT) {
+    ui.uiTick(true);
+    screen = SCR_QR;
+    ui.baseDrawn = false;
+  }
+}
+
+// ==================== SETUP ====================
+void setup() {
+  delay(500);
+  Serial.begin(115200);
+
+  // Display backlight
+  pinMode(TFT_BL, OUTPUT);
+  digitalWrite(TFT_BL, HIGH);
+
+  // Input pins
+  pinMode(ENCODER_CLK, INPUT_PULLUP);
+  pinMode(ENCODER_DT, INPUT_PULLUP);
+  pinMode(ENCODER_SW, INPUT_PULLUP);
+  pinMode(MODO_BTN, INPUT_PULLUP);
+
+  // PWM for LED and buzzer
+  ledcAttach(LED_PIN, 5000, 8);
+  ledcAttach(BUZZER_PIN, 2000, 8);
+
+  // SPI for display
+  SPI.begin(TFT_SCK, -1, TFT_MOSI, TFT_CS);
+
+  // Initialize model and UI
+  model.begin();
+  ui.init();
+  
+  digitalWrite(TFT_BL, HIGH);
+  setLed(0);
+  buzzerOff();
+
+  model.clockSetAtMs = millis();
+
+  // Splash screen
+  ui.drawSplashTasky();
+  delay(1300);
+
+  // Start network services
+  net.begin();
+  calendar.begin();
+  github.begin();
+
+  // Start on Timer screen
+  screen = SCR_TIMER;
+  ui.baseDrawn = false;
+  ui.applyTheme();
+}
+
+// ==================== MAIN LOOP ====================
+void loop() {
+  // 1. Network services
+  portal.loop();
+  net.loop();
+  calendar.loop();
+  github.loop();
+
+  // 2. Audio tick
+  if (uiBeepOffAt && millis() >= uiBeepOffAt) {
+    buzzerOff();
+    uiBeepOffAt = 0;
+  }
+
+  // 3. Read inputs ONCE
+  bool modePressed = modeClick();
+  int step = encoderStep();
+  EncClickType click = encoderClickType();
+
+  // 4. MODE button: navigate to next screen
+  if (modePressed) {
+    navigateNext();
+    return;
+  }
+
+  // 5. Handle current screen
+  switch (screen) {
+    case SCR_TIMER:    handleTimer(step, click); break;
+    case SCR_TASKS:    handleTasks(step, click); break;
+    case SCR_CALENDAR: handleCalendar(step, click); break;
+    case SCR_STREAK:   handleStreak(step, click); break;
+    case SCR_STATS:    handleStats(step, click); break;
+    case SCR_SETTINGS: handleSettings(step, click); break;
+    case SCR_QR:       handleQR(step, click); break;
+    case SCR_WIFI_INFO: handleWifi(step, click); break;
+  }
 }
