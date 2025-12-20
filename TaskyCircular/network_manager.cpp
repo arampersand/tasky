@@ -104,6 +104,12 @@ String TaskyNetManager::getIP() {
   return WiFi.localIP().toString();
 }
 
+String TaskyNetManager::getConnectedSSID() {
+  if (!isConnected())
+    return "";
+  return WiFi.SSID();
+}
+
 void TaskyNetManager::setState(NetworkState s) { state = s; }
 
 String TaskyNetManager::getStatusString() {

@@ -86,6 +86,19 @@ String WiFiPortal::htmlPage() {
     s += "<textarea name='td" + String(i) + "' maxlength='200' placeholder='Description (optional)' style='height:60px;resize:vertical'>" +
          model->taskDescription[i] + "</textarea>";
   }
+
+  // Current task status display
+  s += "<hr><h3>Task Status</h3>";
+  s += "<div style='background:#111;padding:12px;border-radius:4px'>";
+  for (int i = 0; i < 3; i++) {
+    String taskName = model->tasks[i];
+    if (taskName == "Empty") taskName = "---";
+    String checkmark = model->taskDone[i] ? "&#10003; " : "&#9744; ";
+    String color = model->taskDone[i] ? "#00e5cc" : "#888";
+    s += "<div style='color:" + color + ";padding:6px 0'>" + checkmark + taskName + "</div>";
+  }
+  s += "</div>";
+
   s += "<label>Pomodoro Minutes</label>";
   s += "<input name='work' value='" + String(model->cfg.workMin) + "'>";
   s += "<hr><label>Home WiFi SSID</label>";

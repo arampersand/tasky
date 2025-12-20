@@ -66,6 +66,7 @@ public:
   // Calendar navigation
   int calendarSelDay = 0;  // 0 = no selection, 1-31 = selected day
   bool calendarLoading = false;  // Show loading indicator
+  bool showingDayTasks = false;  // Showing day's tasks overlay
 
   // Quotes / Screensaver
   int quoteIndex = 0;
@@ -91,6 +92,7 @@ public:
   void drawTasks();
   void drawTaskDetail(int index);
   void drawCalendar(); // [NEW]
+  void drawDayTasks(int day);  // Show tasks for a specific calendar day
   void drawStreak();
   void drawStats();
   void drawWifi(bool wifiOn, String ssid, String pass, String ip);

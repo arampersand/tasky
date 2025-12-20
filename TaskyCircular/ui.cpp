@@ -29,12 +29,14 @@ void TaskyUI::init() {
 
 #if DISPLAY_CIRCULAR
   // GC9A01A circular display init
+  tft.init(240, 240);
+
   tft.begin();
   tft.setRotation(0);
   tft.invertDisplay(true); // Fix for washed out colors on some GC9A01
 #else
   // ST7789 square display init (240x240)
-  tft.init(240, 240);
+ // tft.init(240, 240);
   tft.setRotation(2);
   tft.invertDisplay(true); // Most ST7789 need inversion
 #endif
@@ -475,7 +477,7 @@ void TaskyUI::drawCalendar() {
   int cellW = 32;
   int cellH = 24;
   int gridX = (240 - 7 * cellW) / 2;
-  int gridY = 46;
+  int gridY = 55;  // Lowered for better aesthetics
 
   tft.setFont(&FreeSans9pt7b);
   tft.setTextColor(C_MUTED);
@@ -570,6 +572,62 @@ void TaskyUI::drawCalendar() {
     snprintf(footerBuf, sizeof(footerBuf), "Day %d - No events", calendarSelDay);
     centerTextFont(footerBuf, 225, C_MUTED, &FreeSans9pt7b);
   }
+}
+
+void TaskyUI::drawDayTasks(int day) {
+  tft.fillScreen(C_BG);
+
+  // Header with day number
+  char headerBuf[16];
+  snprintf(headerBuf, sizeof(headerBuf), "DAY %d TASKS", day);
+  centerTextFont(headerBuf, 34, C_TEXT, &FreeSansBold12pt7b);
+  tft.drawFastHLine(30, 46, 180, C_LINE);
+
+  // Show all 3 tasks
+  int yBase = 80;
+  int rowH = 45;
+
+  bool hasAnyTask = false;
+  for (int i = 0; i < 3; i++) {
+    if (model->tasks[i].length() > 0 && model->tasks[i] != "Empty") {
+      hasAnyTask = true;
+    }
+  }
+
+  if (!hasAnyTask) {
+    centerTextFont("No tasks", 120, C_MUTED, &FreeSans12pt7b);
+    centerTextFont("Add tasks via", 150, C_MUTED, &FreeSans9pt7b);
+    centerTextFont("web portal", 170, C_MUTED, &FreeSans9pt7b);
+  } else {
+    for (int i = 0; i < 3; i++) {
+      int baseline = yBase + i * rowH;
+
+      // Checkbox
+      uint16_t boxC = model->taskDone[i] ? C_GREEN : C_MUTED;
+      tft.drawRoundRect(28, baseline - 10, 18, 18, 3, boxC);
+      if (model->taskDone[i]) {
+        tft.drawLine(32, baseline - 2, 35, baseline + 2, C_GREEN);
+        tft.drawLine(33, baseline - 2, 36, baseline + 2, C_GREEN);
+        tft.drawLine(35, baseline + 2, 42, baseline - 6, C_GREEN);
+        tft.drawLine(36, baseline + 2, 43, baseline - 6, C_GREEN);
+      }
+
+      // Task text
+      String t = model->tasks[i];
+      if (t == "Empty") t = "---";
+      if (t.length() > 14) t = t.substring(0, 14) + "..";
+
+      uint16_t textColor = model->taskDone[i] ? C_MUTED : C_TEXT;
+      tft.setTextColor(textColor);
+      tft.setFont(&FreeSans12pt7b);
+      tft.setCursor(52, baseline);
+      tft.print(t);
+      tft.setFont();
+    }
+  }
+
+  // Footer hint
+  centerTextFont("Press to close", 220, C_MUTED, &FreeSans9pt7b);
 }
 
 void TaskyUI::drawTaskDetail(int index) {
@@ -741,22 +799,32 @@ void TaskyUI::drawStats() {
   char buf[32];
   snprintf(buf, sizeof(buf), "%dh %02dm", hours, m);
 
-  centerTextFont(buf, 100, C_TEXT, &FreeSansBold18pt7b);
-  centerTextFont("Total Focus Time", 126, C_MUTED, &FreeSans9pt7b);
+  centerTextFont(buf, 95, C_TEXT, &FreeSansBold18pt7b);
+  centerTextFont("Total Focus Time", 118, C_MUTED, &FreeSans9pt7b);
 
   // Sessions completed today (calculated from streak)
   int todaySessions = model->streak[model->currentDayIndex];
   snprintf(buf, sizeof(buf), "%d sessions today", todaySessions);
-  centerTextFont(buf, 165, C_TEAL, &FreeSans12pt7b);
+  centerTextFont(buf, 150, C_TEAL, &FreeSans12pt7b);
 
   // Motivational message
   if (todaySessions == 0) {
-    centerTextFont("Start a session!", 188, C_MUTED, &FreeSans9pt7b);
+    centerTextFont("Start a session!", 173, C_MUTED, &FreeSans9pt7b);
   } else if (todaySessions >= 3) {
-    centerTextFont("Great work!", 188, C_GREEN, &FreeSans9pt7b);
+    centerTextFont("Great work!", 173, C_GREEN, &FreeSans9pt7b);
   } else {
-    centerTextFont("Keep going!", 188, C_MUTED, &FreeSans9pt7b);
+    centerTextFont("Keep going!", 173, C_MUTED, &FreeSans9pt7b);
   }
+
+  // Uptime indicator
+  uint32_t uptimeMs = millis();
+  uint32_t uptimeSec = uptimeMs / 1000;
+  uint32_t uptimeMin = uptimeSec / 60;
+  uint32_t uptimeHour = uptimeMin / 60;
+  uptimeMin = uptimeMin % 60;
+
+  snprintf(buf, sizeof(buf), "Uptime: %dh %02dm", (int)uptimeHour, (int)uptimeMin);
+  centerTextFont(buf, 210, C_MUTED, &FreeSans9pt7b);
 }
 
 void TaskyUI::drawWifi(bool wifiOn, String ssid, String pass, String ip) {
@@ -766,29 +834,56 @@ void TaskyUI::drawWifi(bool wifiOn, String ssid, String pass, String ip) {
   centerTextFont("WIFI", 34, C_TEXT, &FreeSansBold12pt7b);
   tft.drawFastHLine(40, 46, 160, C_LINE);
 
+  // Connection status indicator
+  if (wifiOn && ip != "192.168.4.1" && ip != "0.0.0.0") {
+    // Connected to external network
+    centerTextFont("Connected", 68, C_GREEN, &FreeSans12pt7b);
+
+    // Show connected network info
+    tft.setTextColor(C_MUTED);
+    tft.setFont(&FreeSans9pt7b);
+    tft.setCursor(25, 95);
+    tft.print("Network:");
+
+    // Get connected SSID from model (stored config)
+    tft.setTextColor(C_TEAL);
+    tft.setFont(&FreeSans12pt7b);
+    String connectedSSID = model->cfg.wifiSSID;
+    if (connectedSSID.length() > 16) connectedSSID = connectedSSID.substring(0, 16) + "..";
+    tft.setCursor(25, 117);
+    tft.print(connectedSSID);
+
+    // IP address
+    centerTextFont(ip.c_str(), 150, C_TEAL, &FreeSans12pt7b);
+  } else {
+    // Not connected or AP mode only
+    centerTextFont("Disconnected", 68, C_RED, &FreeSans12pt7b);
+    centerTextFont("Scan QR to configure", 95, C_MUTED, &FreeSans9pt7b);
+  }
+
+  // AP Info section (always show for configuration)
+  tft.drawFastHLine(30, 165, 180, C_LINE);
+  centerTextFont("Configuration Portal", 182, C_MUTED, &FreeSans9pt7b);
+
   // SSID row
   tft.setTextColor(C_MUTED);
   tft.setFont(&FreeSans9pt7b);
-  tft.setCursor(25, 75);
-  tft.print("SSID");
-  
-  tft.setTextColor(C_TEAL);
-  tft.setFont(&FreeSans12pt7b);
-  tft.setCursor(25, 97);
+  tft.setCursor(25, 202);
+  tft.print("AP:");
+
+  tft.setTextColor(C_SOFT);
+  tft.setCursor(55, 202);
   tft.print(ssid);
 
-  // PASS row
+  // Password
   tft.setTextColor(C_MUTED);
-  tft.setFont(&FreeSans9pt7b);
-  tft.setCursor(25, 122);
-  tft.print("PASS");
-  
-  tft.setTextColor(C_TEAL);
-  tft.setFont(&FreeSans12pt7b);
-  tft.setCursor(25, 144);
+  tft.setCursor(25, 222);
+  tft.print("Pass:");
+
+  tft.setTextColor(C_SOFT);
+  tft.setCursor(75, 222);
   tft.print(pass);
 
-  centerTextFont(ip.c_str(), 175, C_SOFT, &FreeSans9pt7b);
   tft.setFont();
 }
 

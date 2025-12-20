@@ -26,6 +26,7 @@ public:
 
   bool isConnected();
   String getIP();
+  String getConnectedSSID();
   String getStatusString();
 
   void syncTime(); // Trigger NTP time sync (non-blocking)

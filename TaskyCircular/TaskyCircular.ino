@@ -312,6 +312,16 @@ void handleTasks(int step, EncClickType click) {
 }
 
 void handleCalendar(int step, EncClickType click) {
+  // If showing day tasks overlay
+  if (ui.showingDayTasks) {
+    // Any click exits the overlay
+    if (click == ENC_SHORT || click == ENC_LONG) {
+      ui.showingDayTasks = false;
+      ui.baseDrawn = false;  // Force calendar redraw
+    }
+    return;
+  }
+
   // Draw if needed
   if (!ui.baseDrawn) {
     ui.drawCalendar();
@@ -342,10 +352,16 @@ void handleCalendar(int step, EncClickType click) {
     ui.drawCalendar();
   }
 
-  // Click: could show day details in the future
+  // Short click: visual feedback
   if (click == ENC_SHORT) {
     ui.uiTick(false);
-    // For now, just visual feedback - could expand to show events
+  }
+
+  // Long press: show tasks for the selected day
+  if (click == ENC_LONG && ui.calendarSelDay > 0) {
+    ui.showingDayTasks = true;
+    ui.uiTick(true);
+    ui.drawDayTasks(ui.calendarSelDay);
   }
 }
 
@@ -565,6 +581,39 @@ void loop() {
   ModeClickType modeClick = modeClickType();
   int step = encoderStep();
   EncClickType click = encoderClickType();
+
+  // 3.1 Factory reset: both buttons held for 3 seconds
+  static uint32_t bothBtnDownAt = 0;
+  bool encDown = digitalRead(ENCODER_SW) == LOW;
+  bool modeDown = digitalRead(MODO_BTN) == LOW;
+
+  if (encDown && modeDown) {
+    if (bothBtnDownAt == 0) {
+      bothBtnDownAt = millis();
+    } else if (millis() - bothBtnDownAt >= 3000) {
+      // Show reset message
+      ui.tft.fillScreen(0x0000);
+      ui.tft.setTextColor(0xF800);  // Red
+      ui.tft.setFont(&FreeSansBold12pt7b);
+      ui.tft.setCursor(70, 110);
+      ui.tft.print("RESET");
+      ui.tft.setCursor(50, 140);
+      ui.tft.print("Erasing...");
+      ui.tft.setFont();
+      delay(500);
+
+      // Clear all preferences
+      Preferences pref;
+      pref.begin("tasky", false);
+      pref.clear();
+      pref.end();
+
+      delay(500);
+      ESP.restart();
+    }
+  } else {
+    bothBtnDownAt = 0;
+  }
 
   // 3.5. Long-press MODE = enter screensaver
   if (modeClick == MODE_LONG && !screensaverActive) {
