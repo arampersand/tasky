@@ -1,5 +1,10 @@
 #pragma once
 
+// ==================== TASKY MODE ====================
+// 0 = User mode: interfaz simplificada, sin API keys (par usuario promedio)
+// 1 = Dev mode: configuracion completa, API keys visibles (ramas dev)
+#define TASKY_MODE_DEV 0
+
 // ==================== FEATURE FLAGS (for firmware size reduction) ====================
 // Set to 1 to enable, 0 to disable. Disabled features are excluded from compilation.
 // Config: Huge APP (3MB) - features esenciales para asistente de productividad.

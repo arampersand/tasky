@@ -163,6 +163,9 @@ String WiFiPortal::htmlPage() {
 
   // ===== HEADER =====
   s += "<h2>&#128337; Tasky</h2>";
+#if TASKY_MODE_DEV
+  s += "<div style='font-size:10px;color:#666;margin-bottom:12px;padding:6px;background:#1a1a1a;border-radius:4px'>&#128295; Modo desarrollador - API keys visibles</div>";
+#endif
 
   // ===== STATUS BAR =====
   s += "<div class='status-bar'>";
@@ -185,8 +188,8 @@ String WiFiPortal::htmlPage() {
   // ===== SETUP GUIDES (Collapsible) =====
   s += "<h3>&#128218; Guias de Configuracion</h3>";
 
-#if FEATURE_NOTION
-  // Notion Guide
+#if FEATURE_NOTION && TASKY_MODE_DEV
+  // Notion Guide (solo modo dev)
   s += "<details class='guide'>";
   s += "<summary>&#128221; Como configurar Notion</summary>";
   s += "<div class='content'>";
@@ -217,8 +220,8 @@ String WiFiPortal::htmlPage() {
   s += "</div></details>";
 #endif
 
-#if FEATURE_GITHUB
-  // GitHub Guide
+#if FEATURE_GITHUB && TASKY_MODE_DEV
+  // GitHub Guide (solo modo dev)
   s += "<details class='guide'>";
   s += "<summary>&#128025; Configurar GitHub</summary>";
   s += "<div class='content'>";
@@ -290,8 +293,8 @@ String WiFiPortal::htmlPage() {
   s += "</div>";
 #endif
 
-#if FEATURE_NOTION
-  // Notion
+#if FEATURE_NOTION && TASKY_MODE_DEV
+  // Notion (solo modo dev - requiere API key)
   s += "<div class='section'>";
   s += "<label>&#128221; Notion API Key</label>";
   s += "<input name='nkey' type='password' value='" + model->cfg.notionApiKey + "' placeholder='secret_...'>";
@@ -370,8 +373,8 @@ String WiFiPortal::htmlPage() {
   s += "</div>";
 #endif
 
-#if FEATURE_WEATHER
-  // ===== WEATHER WIDGET =====
+#if FEATURE_WEATHER && TASKY_MODE_DEV
+  // ===== WEATHER WIDGET (solo modo dev - requiere API key) =====
   s += "<hr><h3>&#9728; Weather Widget</h3>";
   s += "<p style='font-size:10px;color:#666;margin-bottom:8px'>Muestra el clima actual en una pantalla dedicada</p>";
 
@@ -404,10 +407,11 @@ String WiFiPortal::htmlPage() {
 
 #if FEATURE_SPOTIFY
   // ===== SPOTIFY / MUSIC =====
-  s += "<hr><h3>&#127925; Now Playing (Spotify)</h3>";
-  s += "<p style='font-size:10px;color:#666;margin-bottom:8px'>Muestra y controla la musica que estas escuchando</p>";
+  s += "<hr><h3>&#127925; Now Playing</h3>";
+#if TASKY_MODE_DEV
+  s += "<p style='font-size:10px;color:#666;margin-bottom:8px'>Muestra y controla la musica via Spotify API (requiere Client ID/Secret)</p>";
 
-  // Spotify Guide
+  // Spotify Guide (solo modo dev)
   s += "<details class='guide'>";
   s += "<summary>&#128218; Como configurar Spotify</summary>";
   s += "<div class='content'>";
@@ -438,6 +442,13 @@ String WiFiPortal::htmlPage() {
     s += "</div>";
   }
   s += "</div>";
+#else
+  // Modo usuario: mensaje sin API keys
+  s += "<p style='font-size:11px;color:#999;padding:12px;background:#0a0a0a;border-radius:6px;border-left:3px solid #00e5cc'>";
+  s += "&#128276; Conecta tu telefono por Bluetooth para ver la musica que reproduces (Spotify, YouTube Music, etc.) sin configurar nada. ";
+  s += "Usa la rama <strong>dev</strong> del firmware si quieres configurar Spotify con API keys.";
+  s += "</p>";
+#endif
 #endif
 
   // ===== SUBMIT =====
