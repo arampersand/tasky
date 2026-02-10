@@ -1,3 +1,5 @@
+#include "config_features.h"
+#if FEATURE_CALENDAR
 #include "calendar_service.h"
 #include <Arduino.h>
 #include <cstring>
@@ -40,6 +42,9 @@ void CalendarService::forceUpdate() {
     model->calendarEvents[i] = 0;
   }
 
+  // Clear today's events
+  model->clearTodayEvents();
+
   // Initialize parser state
   ICalParseState state;
   memset(&state, 0, sizeof(state));
@@ -48,6 +53,7 @@ void CalendarService::forceUpdate() {
   state.currentMonth = now.tm_mon + 1;  // 0-11 -> 1-12
   state.currentDay = now.tm_mday;
   state.inEvent = false;
+  state.inDescription = false;
   state.eventsFound = 0;
   state.minDaysDiff = 2147483647;
   strcpy(state.nextSummary, "No Events");
@@ -80,20 +86,26 @@ bool CalendarService::parseICalLine(const char* line, void* userData) {
   // Check for BEGIN:VEVENT
   if (strncmp(line, "BEGIN:VEVENT", 12) == 0) {
     state->inEvent = true;
+    state->inDescription = false;
     // Reset current event data
     state->eventYear = 0;
     state->eventMonth = 0;
     state->eventDay = 0;
     state->eventHour = -1;
     state->eventMinute = -1;
+    state->eventEndHour = -1;
+    state->eventEndMinute = -1;
     state->eventSummary[0] = '\0';
+    state->eventDescription[0] = '\0';
     state->hasDate = false;
     state->hasTime = false;
+    state->hasEndTime = false;
     return true;
   }
 
   // Check for END:VEVENT
   if (strncmp(line, "END:VEVENT", 10) == 0) {
+    state->inDescription = false;
     if (state->inEvent && state->hasDate) {
       // Process the completed event
 
@@ -107,6 +119,38 @@ bool CalendarService::parseICalLine(const char* line, void* userData) {
             state->model->calendarEvents[idx]++;
           }
           state->eventsFound++;
+
+          // Store today's events for detailed display
+          if (state->eventDay == state->currentDay &&
+              state->model->todayEventCount < MAX_TODAY_EVENTS) {
+            CalendarEventItem& item = state->model->todayEvents[state->model->todayEventCount];
+
+            // Copy title
+            strncpy(item.title, state->eventSummary, 32);
+            item.title[32] = '\0';
+
+            // Copy description
+            strncpy(item.description, state->eventDescription, 64);
+            item.description[64] = '\0';
+
+            // Set times
+            if (state->hasTime && state->eventHour >= 0) {
+              snprintf(item.startTime, 6, "%02d:%02d", state->eventHour, state->eventMinute);
+              item.isAllDay = false;
+            } else {
+              strcpy(item.startTime, "--:--");
+              item.isAllDay = true;
+            }
+
+            if (state->hasEndTime && state->eventEndHour >= 0) {
+              snprintf(item.endTime, 6, "%02d:%02d", state->eventEndHour, state->eventEndMinute);
+            } else {
+              strcpy(item.endTime, "--:--");
+            }
+
+            item.day = state->eventDay;
+            state->model->todayEventCount++;
+          }
         }
       }
 
@@ -179,11 +223,53 @@ bool CalendarService::parseICalLine(const char* line, void* userData) {
 
   // Parse SUMMARY line
   if (strncmp(line, "SUMMARY:", 8) == 0) {
+    state->inDescription = false;
     const char* summary = line + 8;
     strncpy(state->eventSummary, summary, 63);
     state->eventSummary[63] = '\0';
     return true;
   }
 
+  // Parse DESCRIPTION line
+  if (strncmp(line, "DESCRIPTION:", 12) == 0) {
+    const char* desc = line + 12;
+    strncpy(state->eventDescription, desc, 64);
+    state->eventDescription[64] = '\0';
+    state->inDescription = true;
+    return true;
+  }
+
+  // Handle line folding (continuation lines start with space or tab)
+  if (state->inDescription && (line[0] == ' ' || line[0] == '\t')) {
+    // Append to description (with length check)
+    size_t current = strlen(state->eventDescription);
+    if (current < 63) {
+      strncat(state->eventDescription, line + 1, 63 - current);
+      state->eventDescription[64] = '\0';
+    }
+    return true;
+  } else if (line[0] != ' ' && line[0] != '\t') {
+    // New property, stop description continuation
+    state->inDescription = false;
+  }
+
+  // Parse DTEND line (similar to DTSTART)
+  if (strncmp(line, "DTEND", 5) == 0) {
+    const char* dateStart = strrchr(line, ':');
+    if (dateStart && strlen(dateStart) >= 9) {
+      dateStart++;
+      // Check for time (T follows date at position 8)
+      if (strlen(dateStart) >= 13 && dateStart[8] == 'T') {
+        char hourStr[3] = {dateStart[9], dateStart[10], '\0'};
+        char minStr[3] = {dateStart[11], dateStart[12], '\0'};
+        state->eventEndHour = atoi(hourStr);
+        state->eventEndMinute = atoi(minStr);
+        state->hasEndTime = true;
+      }
+    }
+    return true;
+  }
+
   return true;  // Continue processing
 }
+#endif

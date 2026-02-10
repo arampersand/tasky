@@ -1,3 +1,5 @@
+#include "config_features.h"
+#if FEATURE_CALENDAR || FEATURE_GITHUB || FEATURE_NOTION || FEATURE_WEATHER || FEATURE_FIREBASE
 #include "api_client.h"
 #include <WiFi.h>
 
@@ -163,3 +165,52 @@ bool ApiClient::getStreaming(const String& url, LineCallback callback, void* use
   http.end();
   return success;
 }
+
+String ApiClient::post(const String& url, const String& body, const String& token,
+                       const String& contentType, const String& extraHeader,
+                       const String& extraHeaderValue) {
+  if (WiFi.status() != WL_CONNECTED) {
+    return "";
+  }
+
+  HTTPClient http;
+
+  Serial.print("[API] POST ");
+  Serial.println(url);
+
+  http.begin(client, url);
+
+  // Set content type
+  http.addHeader("Content-Type", contentType);
+
+  // Set authorization if provided
+  if (token.length() > 0) {
+    http.addHeader("Authorization", "Bearer " + token);
+  }
+
+  // Set extra header if provided (e.g., Notion-Version)
+  if (extraHeader.length() > 0 && extraHeaderValue.length() > 0) {
+    http.addHeader(extraHeader, extraHeaderValue);
+  }
+
+  http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
+  http.setTimeout(10000);
+
+  int code = http.POST(body);
+  String payload = "";
+
+  if (code > 0) {
+    Serial.printf("[API] POST Code: %d\n", code);
+    if (code == HTTP_CODE_OK || code == HTTP_CODE_CREATED) {
+      payload = http.getString();
+    } else {
+      Serial.printf("[API] POST Error response: %s\n", http.getString().c_str());
+    }
+  } else {
+    Serial.printf("[API] POST Error: %s\n", http.errorToString(code).c_str());
+  }
+
+  http.end();
+  return payload;
+}
+#endif

@@ -1,0 +1,104 @@
+#include "ota_service.h"
+
+const char* OtaService::FIRMWARE_VERSION = "2.2.0";
+
+OtaService::OtaService(TaskyModel *m) : model(m) {}
+
+void OtaService::begin() {
+  state = OTA_IDLE;
+  progress = 0;
+  errorMsg = "";
+}
+
+void OtaService::loop() {
+  // OTA is driven by WiFiPortal callbacks, nothing to do here
+}
+
+bool OtaService::startUpdate(size_t totalSize) {
+  if (state != OTA_IDLE) {
+    errorMsg = "Update already in progress";
+    return false;
+  }
+
+  totalBytes = totalSize;
+  writtenBytes = 0;
+  progress = 0;
+  state = OTA_RECEIVING;
+  errorMsg = "";
+
+  Serial.printf("[OTA] Starting update, size: %d bytes\n", totalSize);
+
+  // Begin the update process
+  if (!Update.begin(totalSize)) {
+    errorMsg = "Not enough space for update";
+    state = OTA_ERROR;
+    Update.printError(Serial);
+    return false;
+  }
+
+  state = OTA_WRITING;
+  return true;
+}
+
+bool OtaService::writeChunk(uint8_t *data, size_t len) {
+  if (state != OTA_WRITING) {
+    errorMsg = "Not in writing state";
+    return false;
+  }
+
+  size_t written = Update.write(data, len);
+  if (written != len) {
+    errorMsg = "Write error";
+    state = OTA_ERROR;
+    Update.printError(Serial);
+    return false;
+  }
+
+  writtenBytes += written;
+  progress = (writtenBytes * 100) / totalBytes;
+
+  // Print progress every 10%
+  static int lastReportedProgress = -10;
+  if (progress - lastReportedProgress >= 10) {
+    Serial.printf("[OTA] Progress: %d%%\n", progress);
+    lastReportedProgress = progress;
+  }
+
+  return true;
+}
+
+bool OtaService::finishUpdate() {
+  if (state != OTA_WRITING) {
+    errorMsg = "Not in writing state";
+    return false;
+  }
+
+  if (!Update.end(true)) {
+    errorMsg = "Update failed to finalize";
+    state = OTA_ERROR;
+    Update.printError(Serial);
+    return false;
+  }
+
+  state = OTA_SUCCESS;
+  progress = 100;
+  Serial.println("[OTA] Update successful!");
+  return true;
+}
+
+void OtaService::abortUpdate() {
+  if (state == OTA_WRITING || state == OTA_RECEIVING) {
+    Update.abort();
+  }
+  state = OTA_IDLE;
+  progress = 0;
+  writtenBytes = 0;
+  errorMsg = "Update aborted";
+  Serial.println("[OTA] Update aborted");
+}
+
+void OtaService::rebootDevice() {
+  Serial.println("[OTA] Rebooting...");
+  delay(500);
+  ESP.restart();
+}

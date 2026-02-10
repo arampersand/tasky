@@ -1,3 +1,5 @@
+#include "config_features.h"
+#if FEATURE_GITHUB
 #include "github_service.h"
 #include <Arduino.h>
 
@@ -22,9 +24,9 @@ void GithubService::forceUpdate() {
   Serial.println("[GH] Updating...");
   lastUpdate = millis();
 
-  // Optimization: Fetch only 1 event to check "Last Activity"
+  // Fetch more events to count today's contributions
   String url = "https://api.github.com/users/" + model->cfg.githubUser +
-               "/events?per_page=1";
+               "/events?per_page=30";
 
   // Note: Public events don't strictly need a token, but rate limits are higher
   // with one. We'll use the token if provided.
@@ -38,35 +40,43 @@ void GithubService::forceUpdate() {
 }
 
 void GithubService::parseContribs(String data) {
-  // Goal: Check if the latest event is "Today".
-  // JSON format: [ { "created_at": "YYYY-MM-DDThh:mm:ssZ", ... } ]
+  // Count all events from today
+  // JSON format: [ { "created_at": "YYYY-MM-DDThh:mm:ssZ", ... }, ... ]
 
-  int createdIdx = data.indexOf("\"created_at\":\"");
-  if (createdIdx > 0) {
-    String dateStr =
-        data.substring(createdIdx + 14, createdIdx + 24); // YYYY-MM-DD
-    Serial.println("[GH] Last Event: " + dateStr);
-
-    // Non-blocking time check using time() instead of getLocalTime()
-    time_t nowTime = time(nullptr);
-    if (nowTime > 1577836800) {  // Valid time (after year 2020)
-      struct tm now;
-      localtime_r(&nowTime, &now);  // Non-blocking
-
-      char buf[12];
-      snprintf(buf, sizeof(buf), "%04d-%02d-%02d", now.tm_year + 1900,
-               now.tm_mon + 1, now.tm_mday);
-      String today = String(buf);
-
-      bool activeToday = (dateStr == today);
-
-      Serial.println(activeToday ? "[GH] Active Today!"
-                                 : "[GH] No activity yet today");
-
-      // Update streak visual if active today
-      if (activeToday) {
-        model->streak[model->currentDayIndex] = 3;
-      }
-    }
+  // Get today's date string
+  time_t nowTime = time(nullptr);
+  if (nowTime < 1577836800) {
+    // No valid time yet - NTP hasn't synced
+    return;
   }
+
+  struct tm now;
+  localtime_r(&nowTime, &now);
+
+  char buf[12];
+  snprintf(buf, sizeof(buf), "%04d-%02d-%02d", now.tm_year + 1900,
+           now.tm_mon + 1, now.tm_mday);
+  String today = String(buf);
+
+  // Count events from today
+  int count = 0;
+  int searchStart = 0;
+
+  while (true) {
+    int idx = data.indexOf("\"created_at\":\"", searchStart);
+    if (idx < 0) break;
+
+    String dateStr = data.substring(idx + 14, idx + 24);  // YYYY-MM-DD
+    if (dateStr == today) {
+      count++;
+    }
+    searchStart = idx + 24;
+  }
+
+  // Store the count and update streak
+  model->cfg.githubContribCount = count;
+  model->updateStreakIntensity();
+
+  Serial.printf("[GH] Today's contributions: %d\n", count);
 }
+#endif

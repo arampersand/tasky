@@ -28,6 +28,35 @@ void TaskyModel::load() {
   cfg.githubToken = pref.getString("ght", "");
   cfg.calendarUrl = pref.getString("cal", "");
 
+  // Notion Integration
+  cfg.notionApiKey = pref.getString("nkey", "");
+  cfg.notionDatabaseId = pref.getString("ndb", "");
+
+  // Focus Mode
+  cfg.focusAutoMode = pref.getBool("fAuto", true);
+  cfg.focusManualMode = pref.getBool("fMan", false);
+
+  // Streak Settings
+  cfg.streakSource = (StreakSource)pref.getUChar("sks", STREAK_BOTH);
+  cfg.dailyPomodoroCount = pref.getUChar("dpc", 0);
+  cfg.githubContribCount = pref.getUChar("ghc", 0);
+
+  // Firebase Cloud Sync
+  cfg.firebaseUrl = pref.getString("fbUrl", "");
+  cfg.firebaseSecret = pref.getString("fbKey", "");
+  cfg.firebaseEnabled = pref.getBool("fbOn", false);
+
+  // Weather Widget
+  cfg.weatherApiKey = pref.getString("wKey", "");
+  cfg.weatherCity = pref.getString("wCity", "");
+  cfg.weatherCelsius = pref.getBool("wCel", true);
+
+  // Spotify Integration
+  cfg.spotifyClientId = pref.getString("spId", "");
+  cfg.spotifySecret = pref.getString("spSec", "");
+  cfg.spotifyToken = pref.getString("spTok", "");
+  cfg.spotifyRefresh = pref.getString("spRef", "");
+
   for (int i = 0; i < 3; i++) {
     String key = "t" + String(i);
     tasks[i] = pref.getString(key.c_str(), "Empty");
@@ -41,6 +70,11 @@ void TaskyModel::load() {
   for (int i = 0; i < 31; i++) {
     calendarEvents[i] = 0;
   }
+
+  // Clear today's events and Notion tasks (will be populated by services)
+  clearTodayEvents();
+  notionTaskCount = 0;
+  memset(notionTasks, 0, sizeof(notionTasks));
 
   for (int i = 0; i < STREAK_N; i++) {
     String k = "s" + String(i);
@@ -85,6 +119,35 @@ void TaskyModel::save() {
   pref.putString("ghu", cfg.githubUser);
   pref.putString("ght", cfg.githubToken);
   pref.putString("cal", cfg.calendarUrl);
+
+  // Notion Integration
+  pref.putString("nkey", cfg.notionApiKey);
+  pref.putString("ndb", cfg.notionDatabaseId);
+
+  // Focus Mode
+  pref.putBool("fAuto", cfg.focusAutoMode);
+  pref.putBool("fMan", cfg.focusManualMode);
+
+  // Streak Settings
+  pref.putUChar("sks", (uint8_t)cfg.streakSource);
+  pref.putUChar("dpc", cfg.dailyPomodoroCount);
+  pref.putUChar("ghc", cfg.githubContribCount);
+
+  // Firebase Cloud Sync
+  pref.putString("fbUrl", cfg.firebaseUrl);
+  pref.putString("fbKey", cfg.firebaseSecret);
+  pref.putBool("fbOn", cfg.firebaseEnabled);
+
+  // Weather Widget
+  pref.putString("wKey", cfg.weatherApiKey);
+  pref.putString("wCity", cfg.weatherCity);
+  pref.putBool("wCel", cfg.weatherCelsius);
+
+  // Spotify Integration
+  pref.putString("spId", cfg.spotifyClientId);
+  pref.putString("spSec", cfg.spotifySecret);
+  pref.putString("spTok", cfg.spotifyToken);
+  pref.putString("spRef", cfg.spotifyRefresh);
 
   for (int i = 0; i < 3; i++) {
     String key = "t" + String(i);
@@ -132,6 +195,8 @@ void TaskyModel::finishTimer() {
 
   if (phase == PHASE_WORK) {
     cfg.totalFocusMin += cfg.workMin;
+    cfg.dailyPomodoroCount++;  // Track daily sessions
+    updateStreakIntensity();    // Update streak based on source
     save();
   }
 }
@@ -239,14 +304,65 @@ void TaskyModel::checkDayChange() {
     currentDayIndex = (currentDayIndex + 1) % STREAK_N;
     streak[currentDayIndex] = 0;  // Reset new day to 0
 
+    // Reset daily counters
+    cfg.dailyPomodoroCount = 0;
+    cfg.githubContribCount = 0;
+
     // Clear calendar events for refresh
     for (int i = 0; i < 31; i++) {
       calendarEvents[i] = 0;
     }
+
+    // Clear today's events
+    clearTodayEvents();
 
     lastKnownDay = today;
     save();
 
     Serial.println("[Model] Day changed, streak index advanced to " + String(currentDayIndex));
   }
+}
+
+bool TaskyModel::isFocusModeActive() {
+  // Manual override always wins
+  if (cfg.focusManualMode) return true;
+
+  // Auto mode: active during work phase when timer running
+  if (cfg.focusAutoMode && st.running && phase == PHASE_WORK) {
+    return true;
+  }
+
+  return false;
+}
+
+void TaskyModel::updateStreakIntensity() {
+  // Calculate Tasky intensity based on Pomodoro sessions
+  uint8_t taskyIntensity = 0;
+  if (cfg.dailyPomodoroCount >= 5) taskyIntensity = 3;
+  else if (cfg.dailyPomodoroCount >= 3) taskyIntensity = 2;
+  else if (cfg.dailyPomodoroCount >= 1) taskyIntensity = 1;
+
+  // Calculate GitHub intensity based on contributions
+  uint8_t githubIntensity = 0;
+  if (cfg.githubContribCount >= 8) githubIntensity = 3;
+  else if (cfg.githubContribCount >= 4) githubIntensity = 2;
+  else if (cfg.githubContribCount >= 1) githubIntensity = 1;
+
+  // Apply based on source setting
+  switch (cfg.streakSource) {
+    case STREAK_GITHUB:
+      streak[currentDayIndex] = githubIntensity;
+      break;
+    case STREAK_TASKY:
+      streak[currentDayIndex] = taskyIntensity;
+      break;
+    case STREAK_BOTH:
+      streak[currentDayIndex] = max(githubIntensity, taskyIntensity);
+      break;
+  }
+}
+
+void TaskyModel::clearTodayEvents() {
+  todayEventCount = 0;
+  memset(todayEvents, 0, sizeof(todayEvents));
 }

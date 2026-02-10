@@ -22,6 +22,12 @@ public:
   // Returns true if completed successfully
   bool getStreaming(const String& url, LineCallback callback, void* userData, const String& token = "");
 
+  // POST request with JSON body (for APIs like Notion)
+  // Returns payload or empty string on failure
+  String post(const String& url, const String& body, const String& token = "",
+              const String& contentType = "application/json",
+              const String& extraHeader = "", const String& extraHeaderValue = "");
+
   void setInsecure(); // Call this to skip cert validation (easier for prototype)
 
 private:

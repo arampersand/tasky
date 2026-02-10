@@ -19,9 +19,13 @@ struct ICalParseState {
   // Current event data (temporary, small buffers)
   int eventYear, eventMonth, eventDay;
   int eventHour, eventMinute;
+  int eventEndHour, eventEndMinute;  // DTEND time
   char eventSummary[64];  // Max 63 chars + null
+  char eventDescription[65];  // DESCRIPTION (64 chars + null)
   bool hasDate;
   bool hasTime;
+  bool hasEndTime;
+  bool inDescription;  // For multi-line DESCRIPTION handling
 
   // Next event tracking
   long minDaysDiff;

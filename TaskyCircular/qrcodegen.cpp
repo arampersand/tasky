@@ -1,3 +1,5 @@
+#include "config_features.h"
+#if FEATURE_QR_CODE
 /*
  * QR Code generator library (C++)
  *
@@ -839,3 +841,4 @@ void BitBuffer::appendBits(std::uint32_t val, int len) {
 }
 
 } // namespace qrcodegen
+#endif

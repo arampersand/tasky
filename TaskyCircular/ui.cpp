@@ -1,5 +1,7 @@
 #include "ui.h"
-#include <time.h>  // For getLocalTime()
+#include "config_hardware.h"
+#include "config_features.h"
+#include <time.h> // For getLocalTime()
 
 // Buzzer constants
 extern uint32_t lastUiBeepAt;
@@ -20,25 +22,33 @@ TaskyUI::TaskyUI(TaskyModel *m, int8_t cs, int8_t dc, int8_t rst)
     : model(m), tft(cs, dc, rst), _rst(rst) {}
 
 void TaskyUI::init() {
-  // Explicitly reset the display using the stored pin
+  // Reset secuencia completa para estabilidad
   pinMode(_rst, OUTPUT);
-  digitalWrite(_rst, LOW);
-  delay(10);
   digitalWrite(_rst, HIGH);
-  delay(150);
+  delay(50);
+  digitalWrite(_rst, LOW);
+  delay(100);
+  digitalWrite(_rst, HIGH);
+  delay(250);  // Esperar a que el display este listo
 
 #if DISPLAY_CIRCULAR
-  // GC9A01A circular display init
-  tft.init(240, 240);
-
   tft.begin();
   tft.setRotation(0);
-  tft.invertDisplay(true); // Fix for washed out colors on some GC9A01
+  tft.invertDisplay(true);
 #else
-  // ST7789 square display init (240x240)
- // tft.init(240, 240);
+  // ST7789 240x240 - init estable, SPI lento para evitar corrupcion
+  tft.init(SCREEN_WIDTH, SCREEN_HEIGHT);
+  tft.setSPISpeed(10000000);  // 10MHz - mas estable que 32MHz por defecto
   tft.setRotation(2);
-  tft.invertDisplay(true); // Most ST7789 need inversion
+  tft.invertDisplay(true);
+  tft.setOffsets(COL_OFFSET, ROW_OFFSET);
+  // Triple limpieza para eliminar artefactos en las primeras filas
+  tft.fillScreen(0x0000);
+  delay(30);
+  tft.fillScreen(0x0000);
+  delay(30);
+  tft.fillScreen(0x0000);
+  delay(30);
 #endif
 
   applyTheme();
@@ -79,23 +89,32 @@ void TaskyUI::drawFrame() {
 
 // Navigation dots indicator
 void TaskyUI::drawNavDots(Screen current) {
-  // Navigation order: Timer, Tasks, Calendar, Streak, Stats, Settings, QR, WiFi
-  const int navOrder[] = {SCR_TIMER, SCR_TASKS, SCR_CALENDAR, SCR_STREAK, 
-                          SCR_STATS, SCR_SETTINGS, SCR_QR, SCR_WIFI_INFO};
-  const int numDots = 8;
+  // Navigation order: only include enabled screens
+  const int navOrder[] = {
+    SCR_TIMER, SCR_FOCUS, SCR_TASKS, SCR_AGENDA, SCR_CALENDAR,
+    SCR_STREAK, SCR_STATS,
+#if FEATURE_WEATHER
+    SCR_WEATHER,
+#endif
+#if FEATURE_SPOTIFY
+    SCR_SPOTIFY,
+#endif
+    SCR_SETTINGS, SCR_QR, SCR_WIFI_INFO
+  };
+  const int numDots = sizeof(navOrder) / sizeof(navOrder[0]);
   const int dotRadius = 3;
   const int dotSpacing = 12;
-  
+
   // Center the dots horizontally
   int totalWidth = (numDots - 1) * dotSpacing;
   int startX = CX - totalWidth / 2;
-  
+
 #if DISPLAY_CIRCULAR
-  int y = 225;  // Near bottom of circular display
+  int y = 225; // Near bottom of circular display
 #else
-  int y = 210;  // Above progress dots on square display
+  int y = 210; // Above progress dots on square display
 #endif
-  
+
   for (int i = 0; i < numDots; i++) {
     int x = startX + i * dotSpacing;
     uint16_t color = (navOrder[i] == current) ? C_TEAL : C_LINE;
@@ -110,7 +129,7 @@ void TaskyUI::uiTick(bool strong) {
     buzzerTone(strong ? 2600 : 2200);
     uiBeepOffAt = now + 10;
   }
-  
+
   // Trigger click animation for visual feedback
   if (strong) {
     anim.triggerClick();
@@ -192,14 +211,15 @@ void TaskyUI::drawProgressSegments() {
       tft.fillCircle(x, y, 1, C_LINE);
 
     // Yield every 20 dots to keep system responsive
-    if (i % 20 == 0) yield();
+    if (i % 20 == 0)
+      yield();
   }
 }
 
 void TaskyUI::drawTimerBase() {
   tft.fillScreen(C_BG);
   flashOn = false;
-  
+
   drawFrame();
 
   // Phase indicator
@@ -290,7 +310,7 @@ void TaskyUI::drawSettings() {
   values[5] = model->cfg.darkMode ? "DARK" : "LIGHT";
 
   int yStart = 72;
-  int rowH = 28;  // Bigger rows
+  int rowH = 28; // Bigger rows
 
   // Draw all items
   for (int i = 0; i < 6; i++) {
@@ -311,14 +331,13 @@ void TaskyUI::drawSettings() {
     // Text color - always visible
     uint16_t labelColor = sel ? C_TEAL : C_TEXT;
     uint16_t valueColor = sel ? C_TEAL : C_MUTED;
-    
+
     tft.setTextColor(labelColor);
-    tft.setFont(&FreeSans12pt7b);  // Bigger font
+    tft.setFont(&FreeSans12pt7b); // Bigger font
     tft.setCursor(28, baseline);
     tft.print(labels[i]);
     rightTextFont(values[i], 212, baseline, valueColor, &FreeSans12pt7b);
   }
-
 }
 
 void TaskyUI::drawTasks() {
@@ -351,13 +370,14 @@ void TaskyUI::drawTasks() {
     return;
   }
 
-  // Tasks layout - vertically centered in available space (after header ~50px to ~220px)
-  // Available height: 170px, 3 tasks with spacing
+  // Tasks layout - vertically centered in available space (after header ~50px
+  // to ~220px) Available height: 170px, 3 tasks with spacing
   const int contentTop = 60;
   const int contentBottom = 220;
   const int rowH = 45;
   const int totalHeight = 3 * rowH;
-  const int yBase = contentTop + (contentBottom - contentTop - totalHeight) / 2 + 25;
+  const int yBase =
+      contentTop + (contentBottom - contentTop - totalHeight) / 2 + 25;
 
   const int checkboxX = 28;
   const int textStartX = 52;
@@ -367,19 +387,25 @@ void TaskyUI::drawTasks() {
     bool isSelected = (i == tasksSel);
 
     // Checkbox
-    uint16_t boxC = model->taskDone[i] ? C_GREEN : (isSelected ? C_TEAL : C_MUTED);
+    uint16_t boxC =
+        model->taskDone[i] ? C_GREEN : (isSelected ? C_TEAL : C_MUTED);
     tft.drawRoundRect(checkboxX, baseline - 10, 18, 18, 3, boxC);
     if (model->taskDone[i]) {
       // Checkmark
-      tft.drawLine(checkboxX + 4, baseline - 2, checkboxX + 7, baseline + 2, C_GREEN);
-      tft.drawLine(checkboxX + 5, baseline - 2, checkboxX + 8, baseline + 2, C_GREEN);
-      tft.drawLine(checkboxX + 7, baseline + 2, checkboxX + 14, baseline - 6, C_GREEN);
-      tft.drawLine(checkboxX + 8, baseline + 2, checkboxX + 15, baseline - 6, C_GREEN);
+      tft.drawLine(checkboxX + 4, baseline - 2, checkboxX + 7, baseline + 2,
+                   C_GREEN);
+      tft.drawLine(checkboxX + 5, baseline - 2, checkboxX + 8, baseline + 2,
+                   C_GREEN);
+      tft.drawLine(checkboxX + 7, baseline + 2, checkboxX + 14, baseline - 6,
+                   C_GREEN);
+      tft.drawLine(checkboxX + 8, baseline + 2, checkboxX + 15, baseline - 6,
+                   C_GREEN);
     }
 
     // Task text - aligned LEFT, color based on selection
     String t = model->tasks[i];
-    if (t == "Empty") t = "---";
+    if (t == "Empty")
+      t = "---";
     if (t.length() > 15)
       t = t.substring(0, 15) + "..";
 
@@ -400,7 +426,8 @@ void TaskyUI::drawTasks() {
 
     // Selection indicator - small arrow or dot on the left
     if (isSelected) {
-      tft.fillTriangle(18, baseline - 4, 18, baseline + 4, 24, baseline, C_TEAL);
+      tft.fillTriangle(18, baseline - 4, 18, baseline + 4, 24, baseline,
+                       C_TEAL);
     }
 
     tft.setFont();
@@ -428,7 +455,7 @@ static int getFirstDayOfWeek(int month, int year) {
   int k = year % 100;
   int j = year / 100;
   int h = (1 + (13 * (month + 1)) / 5 + k + k / 4 + j / 4 - 2 * j) % 7;
-  return (h + 6) % 7;  // Convert to Sunday=0
+  return (h + 6) % 7; // Convert to Sunday=0
 }
 
 void TaskyUI::drawCalendar() {
@@ -446,13 +473,13 @@ void TaskyUI::drawCalendar() {
   // Get current date (non-blocking)
   time_t nowTime = time(nullptr);
   struct tm now;
-  bool hasTime = (nowTime > 1577836800);  // Valid if after 2020
+  bool hasTime = (nowTime > 1577836800); // Valid if after 2020
 
   int currentDay, currentMonth, currentYear;
   if (hasTime) {
     localtime_r(&nowTime, &now);
     currentDay = now.tm_mday;
-    currentMonth = now.tm_mon;      // 0-11
+    currentMonth = now.tm_mon; // 0-11
     currentYear = now.tm_year + 1900;
   } else {
     currentDay = 1;
@@ -466,18 +493,19 @@ void TaskyUI::drawCalendar() {
   }
 
   // Month/Year header
-  const char* monthNames[] = {"JAN", "FEB", "MAR", "APR", "MAY", "JUN",
+  const char *monthNames[] = {"JAN", "FEB", "MAR", "APR", "MAY", "JUN",
                               "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"};
   char headerBuf[16];
-  snprintf(headerBuf, sizeof(headerBuf), "%s %d", monthNames[currentMonth], currentYear);
+  snprintf(headerBuf, sizeof(headerBuf), "%s %d", monthNames[currentMonth],
+           currentYear);
   centerTextFont(headerBuf, 28, C_TEXT, &FreeSansBold12pt7b);
 
   // Day headers
-  const char* dayHeaders[] = {"S", "M", "T", "W", "T", "F", "S"};
+  const char *dayHeaders[] = {"S", "M", "T", "W", "T", "F", "S"};
   int cellW = 32;
   int cellH = 24;
   int gridX = (240 - 7 * cellW) / 2;
-  int gridY = 55;  // Lowered for better aesthetics
+  int gridY = 55; // Lowered for better aesthetics
 
   tft.setFont(&FreeSans9pt7b);
   tft.setTextColor(C_MUTED);
@@ -495,7 +523,8 @@ void TaskyUI::drawCalendar() {
   int daysInMonth = getDaysInMonth(currentMonth, currentYear);
 
   // Clamp selection
-  if (calendarSelDay > daysInMonth) calendarSelDay = daysInMonth;
+  if (calendarSelDay > daysInMonth)
+    calendarSelDay = daysInMonth;
 
   // Draw day numbers
   int day = 1;
@@ -532,12 +561,13 @@ void TaskyUI::drawCalendar() {
       uint16_t tw, th;
       tft.getTextBounds(dayStr, 0, 0, &tx1, &ty1, &tw, &th);
 
-      // Color based on state
+      // Color based on state and busyness
       uint16_t textColor;
+      uint8_t eventsOnThisDay = model->calendarEvents[day - 1];
       if (isSelected) {
-        textColor = C_BG;  // Dark text on teal background
+        textColor = C_BG; // Dark text on teal background
       } else if (hasEvent) {
-        textColor = C_TEAL;
+        textColor = calendarDayColor(eventsOnThisDay);  // Color by busyness
       } else {
         textColor = C_TEXT;
       }
@@ -547,9 +577,10 @@ void TaskyUI::drawCalendar() {
       tft.setCursor(textX, y);
       tft.print(dayStr);
 
-      // Event indicator dot (if not selected)
+      // Event indicator dot (if not selected) - color by busyness
       if (hasEvent && !isSelected) {
-        tft.fillCircle(x + cellW / 2, y + 5, 2, C_TEAL);
+        uint16_t dotColor = calendarDayColor(eventsOnThisDay);
+        tft.fillCircle(x + cellW / 2, y + 5, 2, dotColor);
       }
 
       day++;
@@ -562,14 +593,15 @@ void TaskyUI::drawCalendar() {
   int eventsOnDay = model->calendarEvents[calendarSelDay - 1];
   if (eventsOnDay > 0) {
     char footerBuf[24];
-    snprintf(footerBuf, sizeof(footerBuf), "%d event%s on day %d",
-             eventsOnDay, eventsOnDay > 1 ? "s" : "", calendarSelDay);
+    snprintf(footerBuf, sizeof(footerBuf), "%d event%s on day %d", eventsOnDay,
+             eventsOnDay > 1 ? "s" : "", calendarSelDay);
     centerTextFont(footerBuf, 225, C_TEAL, &FreeSans9pt7b);
   } else if (model->cfg.calendarUrl.length() == 0) {
     centerTextFont("No calendar linked", 225, C_MUTED, &FreeSans9pt7b);
   } else {
     char footerBuf[24];
-    snprintf(footerBuf, sizeof(footerBuf), "Day %d - No events", calendarSelDay);
+    snprintf(footerBuf, sizeof(footerBuf), "Day %d - No events",
+             calendarSelDay);
     centerTextFont(footerBuf, 225, C_MUTED, &FreeSans9pt7b);
   }
 }
@@ -577,57 +609,86 @@ void TaskyUI::drawCalendar() {
 void TaskyUI::drawDayTasks(int day) {
   tft.fillScreen(C_BG);
 
+  // Check if viewing today
+  time_t nowTime = time(nullptr);
+  struct tm now;
+  bool hasTime = (nowTime > 1577836800);
+  int currentDay = hasTime ? (localtime_r(&nowTime, &now), now.tm_mday) : 1;
+  bool isToday = (day == currentDay);
+
   // Header with day number
-  char headerBuf[16];
-  snprintf(headerBuf, sizeof(headerBuf), "DAY %d TASKS", day);
+  char headerBuf[24];
+  if (isToday) {
+    snprintf(headerBuf, sizeof(headerBuf), "TODAY - DAY %d", day);
+  } else {
+    snprintf(headerBuf, sizeof(headerBuf), "DAY %d EVENTS", day);
+  }
   centerTextFont(headerBuf, 34, C_TEXT, &FreeSansBold12pt7b);
   tft.drawFastHLine(30, 46, 180, C_LINE);
 
-  // Show all 3 tasks
-  int yBase = 80;
-  int rowH = 45;
+  int yPos = 70;
+  int eventsOnDay = model->calendarEvents[day - 1];
 
-  bool hasAnyTask = false;
-  for (int i = 0; i < 3; i++) {
-    if (model->tasks[i].length() > 0 && model->tasks[i] != "Empty") {
-      hasAnyTask = true;
-    }
-  }
+  // Show today's detailed events if available
+  if (isToday && model->todayEventCount > 0) {
+    for (int i = 0; i < model->todayEventCount && yPos < 200; i++) {
+      CalendarEventItem& evt = model->todayEvents[i];
 
-  if (!hasAnyTask) {
-    centerTextFont("No tasks", 120, C_MUTED, &FreeSans12pt7b);
-    centerTextFont("Add tasks via", 150, C_MUTED, &FreeSans9pt7b);
-    centerTextFont("web portal", 170, C_MUTED, &FreeSans9pt7b);
-  } else {
-    for (int i = 0; i < 3; i++) {
-      int baseline = yBase + i * rowH;
-
-      // Checkbox
-      uint16_t boxC = model->taskDone[i] ? C_GREEN : C_MUTED;
-      tft.drawRoundRect(28, baseline - 10, 18, 18, 3, boxC);
-      if (model->taskDone[i]) {
-        tft.drawLine(32, baseline - 2, 35, baseline + 2, C_GREEN);
-        tft.drawLine(33, baseline - 2, 36, baseline + 2, C_GREEN);
-        tft.drawLine(35, baseline + 2, 42, baseline - 6, C_GREEN);
-        tft.drawLine(36, baseline + 2, 43, baseline - 6, C_GREEN);
+      // Time
+      tft.setTextColor(C_TEAL);
+      tft.setFont(&FreeSans9pt7b);
+      tft.setCursor(20, yPos);
+      if (evt.isAllDay) {
+        tft.print("All day");
+      } else {
+        tft.print(evt.startTime);
+        if (strcmp(evt.endTime, "--:--") != 0) {
+          tft.print("-");
+          tft.print(evt.endTime);
+        }
       }
 
-      // Task text
-      String t = model->tasks[i];
-      if (t == "Empty") t = "---";
-      if (t.length() > 14) t = t.substring(0, 14) + "..";
-
-      uint16_t textColor = model->taskDone[i] ? C_MUTED : C_TEXT;
-      tft.setTextColor(textColor);
+      // Title
+      yPos += 18;
+      tft.setTextColor(C_TEXT);
       tft.setFont(&FreeSans12pt7b);
-      tft.setCursor(52, baseline);
-      tft.print(t);
-      tft.setFont();
+      String title = String(evt.title);
+      if (title.length() > 18) title = title.substring(0, 18) + "..";
+      tft.setCursor(20, yPos);
+      tft.print(title);
+
+      // Description (if available, truncated)
+      if (strlen(evt.description) > 0) {
+        yPos += 14;
+        tft.setTextColor(C_MUTED);
+        tft.setFont(&FreeSans9pt7b);
+        String desc = String(evt.description);
+        if (desc.length() > 28) desc = desc.substring(0, 28) + "..";
+        tft.setCursor(20, yPos);
+        tft.print(desc);
+      }
+
+      yPos += 22;
+    }
+  } else if (eventsOnDay > 0) {
+    // Not today or no detailed events - show count
+    char msgBuf[32];
+    snprintf(msgBuf, sizeof(msgBuf), "%d event%s", eventsOnDay,
+             eventsOnDay > 1 ? "s" : "");
+    centerTextFont(msgBuf, 100, C_TEAL, &FreeSans12pt7b);
+    centerTextFont("Details for today only", 130, C_MUTED, &FreeSans9pt7b);
+  } else {
+    // No events
+    centerTextFont("No events", 100, C_MUTED, &FreeSans12pt7b);
+    if (model->cfg.calendarUrl.length() == 0) {
+      centerTextFont("Link calendar in", 130, C_MUTED, &FreeSans9pt7b);
+      centerTextFont("web portal", 150, C_MUTED, &FreeSans9pt7b);
     }
   }
 
   // Footer hint
   centerTextFont("Press to close", 220, C_MUTED, &FreeSans9pt7b);
+  tft.setFont();
 }
 
 void TaskyUI::drawTaskDetail(int index) {
@@ -659,8 +720,10 @@ void TaskyUI::drawTaskDetail(int index) {
     String line = remaining;
     if (line.length() > 16) {
       int sp = line.lastIndexOf(' ', 16);
-      if (sp > 0) line = line.substring(0, sp);
-      else line = line.substring(0, 16);
+      if (sp > 0)
+        line = line.substring(0, sp);
+      else
+        line = line.substring(0, 16);
     }
 
     int16_t x1, y1;
@@ -697,8 +760,10 @@ void TaskyUI::drawTaskDetail(int index) {
       String line = remaining;
       if (line.length() > 22) {
         int sp = line.lastIndexOf(' ', 22);
-        if (sp > 0) line = line.substring(0, sp);
-        else line = line.substring(0, 22);
+        if (sp > 0)
+          line = line.substring(0, sp);
+        else
+          line = line.substring(0, 22);
       }
       tft.setCursor(30, descY);
       tft.print(line);
@@ -765,7 +830,8 @@ void TaskyUI::drawStreak() {
   centerTextFont(statBuf, 168, C_TEAL, &FreeSans12pt7b);
 
   // Total active days and best record
-  snprintf(statBuf, sizeof(statBuf), "Total: %d  Best: %d", totalActive, bestStreak);
+  snprintf(statBuf, sizeof(statBuf), "Total: %d  Best: %d", totalActive,
+           bestStreak);
   centerTextFont(statBuf, 190, C_MUTED, &FreeSans9pt7b);
 
   // Progress indicator (how full is the streak grid)
@@ -782,6 +848,212 @@ uint16_t TaskyUI::streakColor(uint8_t v) {
   if (v == 2)
     return 0x2E47; // Med Blue
   return C_GREEN;
+}
+
+uint16_t TaskyUI::calendarDayColor(uint8_t eventCount) {
+  if (eventCount == 0)
+    return C_TEXT;   // Normal text color
+  if (eventCount == 1)
+    return C_GREEN;  // Light day
+  if (eventCount <= 3)
+    return C_ORANGE; // Moderate
+  return C_RED;      // Busy day (4+)
+}
+
+void TaskyUI::drawFocus() {
+  // Immersive focus mode - minimal distractions
+  tft.fillScreen(C_BG);
+
+  // Phase indicator at top
+  uint16_t phaseColor = (model->phase == PHASE_WORK) ? C_TEAL : C_ORANGE;
+  tft.fillCircle(CX, 20, 4, phaseColor);
+
+  // Large centered timer
+  uint32_t rem = model->remainingMs();
+  int mm = rem / 60000;
+  int ss = (rem % 60000) / 1000;
+
+  char buf[8];
+  snprintf(buf, sizeof(buf), "%02d:%02d", mm, ss);
+
+  tft.setTextColor(C_TEXT);
+  tft.setFont(&FreeSansBold24pt7b);
+
+  int16_t x1, y1;
+  uint16_t w, h;
+  tft.getTextBounds(buf, 0, 0, &x1, &y1, &w, &h);
+
+  int cx = (W - w) / 2 - x1;
+  int cy = CY + h / 2 - 10;
+
+  tft.setCursor(cx, cy);
+  tft.print(buf);
+  tft.setFont();
+
+  // Session counter below timer
+  char sessionBuf[24];
+  int todaySessions = model->streak[model->currentDayIndex];
+  snprintf(sessionBuf, sizeof(sessionBuf), "Session %d", todaySessions + 1);
+  centerTextFont(sessionBuf, 170, C_MUTED, &FreeSans9pt7b);
+
+  // Phase label
+  const char* phaseLabel = (model->phase == PHASE_WORK) ? "FOCUS" : "BREAK";
+  centerTextFont(phaseLabel, 195, phaseColor, &FreeSans12pt7b);
+
+  // Focus mode indicator (if blocking active)
+  if (model->isFocusModeActive()) {
+    drawFocusIndicator(true);
+  }
+
+  // Status
+  if (model->st.finished) {
+    centerTextFont("DONE", 220, C_GREEN, &FreeSans9pt7b);
+  } else if (!model->st.running) {
+    centerTextFont("PAUSED", 220, C_MUTED, &FreeSans9pt7b);
+  }
+}
+
+void TaskyUI::drawAgenda() {
+  tft.fillScreen(C_BG);
+
+  centerTextFont("AGENDA", 28, C_TEXT, &FreeSansBold12pt7b);
+  tft.drawFastHLine(40, 38, 160, C_LINE);
+
+  int yPos = 55;
+
+  // Calendar Events Section
+  if (model->todayEventCount > 0) {
+    tft.setTextColor(C_TEAL);
+    tft.setFont(&FreeSans9pt7b);
+    tft.setCursor(20, yPos);
+    tft.print("CALENDAR");
+    yPos += 5;
+
+    // Show up to 3 calendar events
+    int maxCalEvents = min(3, model->todayEventCount);
+    for (int i = 0; i < maxCalEvents; i++) {
+      CalendarEventItem& evt = model->todayEvents[i];
+      yPos += 18;
+
+      // Time
+      tft.setTextColor(C_MUTED);
+      tft.setFont(&FreeSans9pt7b);
+      tft.setCursor(20, yPos);
+      if (evt.isAllDay) {
+        tft.print("All day");
+      } else {
+        tft.print(evt.startTime);
+      }
+
+      // Title (truncated)
+      tft.setTextColor(C_TEXT);
+      String title = String(evt.title);
+      if (title.length() > 14) title = title.substring(0, 14) + "..";
+      tft.setCursor(75, yPos);
+      tft.print(title);
+    }
+
+    if (model->todayEventCount > 3) {
+      yPos += 14;
+      char moreBuf[16];
+      snprintf(moreBuf, sizeof(moreBuf), "+%d more", model->todayEventCount - 3);
+      tft.setTextColor(C_MUTED);
+      tft.setCursor(20, yPos);
+      tft.print(moreBuf);
+    }
+  } else {
+    tft.setTextColor(C_MUTED);
+    tft.setFont(&FreeSans9pt7b);
+    tft.setCursor(20, yPos);
+    tft.print("CALENDAR");
+    yPos += 18;
+    tft.setCursor(20, yPos);
+    tft.setTextColor(C_LINE);
+    tft.print("No events today");
+  }
+
+#if FEATURE_NOTION
+  // Divider
+  yPos += 15;
+  tft.drawFastHLine(20, yPos, 200, C_LINE);
+  yPos += 15;
+
+  // Notion Tasks Section
+  if (model->notionTaskCount > 0) {
+    tft.setTextColor(C_ORANGE);
+    tft.setFont(&FreeSans9pt7b);
+    tft.setCursor(20, yPos);
+    tft.print("NOTION");
+    yPos += 5;
+
+    // Show up to 3 Notion tasks
+    int maxNotionTasks = min(3, model->notionTaskCount);
+    for (int i = 0; i < maxNotionTasks; i++) {
+      NotionTaskItem& task = model->notionTasks[i];
+      yPos += 18;
+
+      // Checkbox
+      uint16_t boxColor = task.done ? C_GREEN : C_MUTED;
+      tft.drawRoundRect(20, yPos - 10, 14, 14, 2, boxColor);
+      if (task.done) {
+        tft.drawLine(23, yPos - 4, 25, yPos - 2, C_GREEN);
+        tft.drawLine(25, yPos - 2, 31, yPos - 8, C_GREEN);
+      }
+
+      // Title
+      tft.setTextColor(task.done ? C_MUTED : C_TEXT);
+      tft.setFont(&FreeSans9pt7b);
+      String title = String(task.title);
+      if (title.length() > 16) title = title.substring(0, 16) + "..";
+      tft.setCursor(40, yPos);
+      tft.print(title);
+    }
+
+    if (model->notionTaskCount > 3) {
+      yPos += 14;
+      char moreBuf[16];
+      snprintf(moreBuf, sizeof(moreBuf), "+%d more", model->notionTaskCount - 3);
+      tft.setTextColor(C_MUTED);
+      tft.setCursor(20, yPos);
+      tft.print(moreBuf);
+    }
+  } else {
+    tft.setTextColor(C_MUTED);
+    tft.setFont(&FreeSans9pt7b);
+    tft.setCursor(20, yPos);
+    tft.print("NOTION");
+    yPos += 18;
+    tft.setTextColor(C_LINE);
+    tft.setCursor(20, yPos);
+    if (model->cfg.notionApiKey.length() == 0) {
+      tft.print("Not configured");
+    } else {
+      tft.print("No tasks");
+    }
+  }
+#endif
+
+  tft.setFont();
+}
+
+void TaskyUI::drawFocusIndicator(bool active) {
+  // Shield icon in top right corner indicating blocking is active
+  if (!active) return;
+
+  int x = 200;
+  int y = 18;
+
+  // Simple shield shape
+  uint16_t color = C_RED;
+
+  // Shield outline (pentagon-like shape)
+  tft.fillTriangle(x, y - 8, x - 10, y - 4, x + 10, y - 4, color);
+  tft.fillRect(x - 10, y - 4, 21, 10, color);
+  tft.fillTriangle(x - 10, y + 6, x + 10, y + 6, x, y + 14, color);
+
+  // Inner shield detail (optional - darker center)
+  uint16_t innerColor = 0x7800; // Darker red
+  tft.fillCircle(x, y, 3, innerColor);
 }
 
 void TaskyUI::drawStats() {
@@ -823,9 +1095,267 @@ void TaskyUI::drawStats() {
   uint32_t uptimeHour = uptimeMin / 60;
   uptimeMin = uptimeMin % 60;
 
-  snprintf(buf, sizeof(buf), "Uptime: %dh %02dm", (int)uptimeHour, (int)uptimeMin);
+  snprintf(buf, sizeof(buf), "Uptime: %dh %02dm", (int)uptimeHour,
+           (int)uptimeMin);
   centerTextFont(buf, 210, C_MUTED, &FreeSans9pt7b);
 }
+
+#if FEATURE_SPOTIFY
+void TaskyUI::drawSpotify(const char* track, const char* artist, uint32_t progressMs,
+                          uint32_t durationMs, bool isPlaying, int volume, bool isActive) {
+  tft.fillScreen(C_BG);
+
+  // Header
+  centerTextFont("NOW PLAYING", 28, C_TEXT, &FreeSansBold12pt7b);
+  tft.drawFastHLine(40, 38, 160, C_LINE);
+
+  // Check if there's active playback
+  if (!isActive || track == nullptr || strlen(track) == 0) {
+    // No active playback state
+    centerTextFont("No active playback", 100, C_MUTED, &FreeSans12pt7b);
+    centerTextFont("Start playing music", 130, C_MUTED, &FreeSans9pt7b);
+    centerTextFont("on any device", 150, C_MUTED, &FreeSans9pt7b);
+
+    // Music icon placeholder
+    int iconX = CX;
+    int iconY = 190;
+    tft.drawCircle(iconX, iconY, 20, C_LINE);
+    // Music note symbol
+    tft.fillCircle(iconX - 5, iconY + 5, 4, C_LINE);
+    tft.drawLine(iconX - 5, iconY + 5, iconX - 5, iconY - 10, C_LINE);
+    tft.drawLine(iconX - 5, iconY - 10, iconX + 5, iconY - 13, C_LINE);
+    tft.fillCircle(iconX + 5, iconY + 2, 4, C_LINE);
+    tft.drawLine(iconX + 5, iconY + 2, iconX + 5, iconY - 13, C_LINE);
+    return;
+  }
+
+  // Track name - large and prominent
+  String trackStr = String(track);
+  if (trackStr.length() > 20) trackStr = trackStr.substring(0, 20) + "..";
+  centerTextFont(trackStr.c_str(), 75, C_TEXT, &FreeSansBold12pt7b);
+
+  // Artist name
+  if (artist && strlen(artist) > 0) {
+    String artistStr = String(artist);
+    if (artistStr.length() > 24) artistStr = artistStr.substring(0, 24) + "..";
+    centerTextFont(artistStr.c_str(), 100, C_TEAL, &FreeSans12pt7b);
+  }
+
+  // Progress bar
+  int barX = 30;
+  int barY = 125;
+  int barW = 180;
+  int barH = 6;
+
+  // Background bar
+  tft.fillRoundRect(barX, barY, barW, barH, 3, C_LINE);
+
+  // Progress fill
+  if (durationMs > 0) {
+    int progressW = (int)((float)progressMs / (float)durationMs * barW);
+    if (progressW > 0) {
+      tft.fillRoundRect(barX, barY, progressW, barH, 3, C_GREEN);
+    }
+  }
+
+  // Time indicators
+  int progressSec = progressMs / 1000;
+  int durationSec = durationMs / 1000;
+  char timeBuf[16];
+
+  // Current time
+  snprintf(timeBuf, sizeof(timeBuf), "%d:%02d", progressSec / 60, progressSec % 60);
+  tft.setFont(&FreeSans9pt7b);
+  tft.setTextColor(C_MUTED);
+  tft.setCursor(barX, barY + 20);
+  tft.print(timeBuf);
+
+  // Total time
+  snprintf(timeBuf, sizeof(timeBuf), "%d:%02d", durationSec / 60, durationSec % 60);
+  int16_t x1, y1;
+  uint16_t w, h;
+  tft.getTextBounds(timeBuf, 0, 0, &x1, &y1, &w, &h);
+  tft.setCursor(barX + barW - w, barY + 20);
+  tft.print(timeBuf);
+
+  // Play/Pause indicator with controls hint
+  int controlY = 170;
+
+  // Play/Pause icon in center
+  if (isPlaying) {
+    // Pause icon (two bars)
+    tft.fillRect(CX - 12, controlY - 10, 8, 20, C_GREEN);
+    tft.fillRect(CX + 4, controlY - 10, 8, 20, C_GREEN);
+  } else {
+    // Play icon (triangle)
+    tft.fillTriangle(CX - 10, controlY - 12, CX - 10, controlY + 12, CX + 14, controlY, C_GREEN);
+  }
+
+  // Previous/Next hints
+  tft.fillTriangle(CX - 50, controlY, CX - 35, controlY - 8, CX - 35, controlY + 8, C_MUTED);
+  tft.fillRect(CX - 55, controlY - 8, 4, 16, C_MUTED);
+
+  tft.fillTriangle(CX + 50, controlY, CX + 35, controlY - 8, CX + 35, controlY + 8, C_MUTED);
+  tft.fillRect(CX + 51, controlY - 8, 4, 16, C_MUTED);
+
+  // Volume bar at bottom
+  int volBarY = 205;
+  int volBarW = 100;
+  int volBarH = 4;
+  int volBarX = CX - volBarW / 2;
+
+  // Volume icon
+  tft.fillTriangle(volBarX - 20, volBarY + 2, volBarX - 12, volBarY - 4, volBarX - 12, volBarY + 8, C_MUTED);
+  tft.fillRect(volBarX - 25, volBarY - 2, 6, 8, C_MUTED);
+
+  // Volume bar background
+  tft.fillRoundRect(volBarX, volBarY, volBarW, volBarH, 2, C_LINE);
+
+  // Volume fill
+  int volFillW = (volume * volBarW) / 100;
+  if (volFillW > 0) {
+    tft.fillRoundRect(volBarX, volBarY, volFillW, volBarH, 2, C_TEAL);
+  }
+
+  // Volume percentage
+  snprintf(timeBuf, sizeof(timeBuf), "%d%%", volume);
+  tft.setFont(&FreeSans9pt7b);
+  tft.setTextColor(C_MUTED);
+  tft.setCursor(volBarX + volBarW + 8, volBarY + 6);
+  tft.print(timeBuf);
+
+  // Footer - control hints
+  centerTextFont("Turn: Vol | Click: Play/Pause", 230, C_LINE, &FreeSans9pt7b);
+  tft.setFont();
+}
+#endif
+
+#if FEATURE_WEATHER
+void TaskyUI::drawWeather(float temp, float feelsLike, uint8_t humidity,
+                          uint8_t icon, const char* desc, const char* city, bool celsius) {
+  tft.fillScreen(C_BG);
+
+  // Header
+  centerTextFont("WEATHER", 28, C_TEXT, &FreeSansBold12pt7b);
+  tft.drawFastHLine(40, 38, 160, C_LINE);
+
+  // Check if we have valid data
+  if (city == nullptr || strlen(city) == 0) {
+    centerTextFont("Not configured", 100, C_MUTED, &FreeSans12pt7b);
+    centerTextFont("Add API key in", 130, C_MUTED, &FreeSans9pt7b);
+    centerTextFont("web portal", 150, C_MUTED, &FreeSans9pt7b);
+    return;
+  }
+
+  // Weather icon (simple shapes based on icon type)
+  // 0=clear_day, 1=clear_night, 2=cloudy, 3=rain, 4=thunder, 5=snow, 6=mist, 7=unknown
+  int iconX = 60;
+  int iconY = 75;
+
+  switch (icon) {
+    case 0: // Clear day - sun
+      tft.fillCircle(iconX, iconY, 18, C_ORANGE);
+      // Sun rays
+      for (int i = 0; i < 8; i++) {
+        float angle = i * 45.0 * 3.14159 / 180.0;
+        int x1 = iconX + (int)(cos(angle) * 24);
+        int y1 = iconY + (int)(sin(angle) * 24);
+        int x2 = iconX + (int)(cos(angle) * 32);
+        int y2 = iconY + (int)(sin(angle) * 32);
+        tft.drawLine(x1, y1, x2, y2, C_ORANGE);
+      }
+      break;
+    case 1: // Clear night - moon
+      tft.fillCircle(iconX, iconY, 18, 0xFFE0); // Yellow
+      tft.fillCircle(iconX + 8, iconY - 5, 14, C_BG); // Cut out for crescent
+      break;
+    case 2: // Cloudy
+      tft.fillCircle(iconX - 10, iconY + 5, 14, C_MUTED);
+      tft.fillCircle(iconX + 5, iconY, 16, C_MUTED);
+      tft.fillCircle(iconX + 18, iconY + 5, 12, C_MUTED);
+      break;
+    case 3: // Rain
+      tft.fillCircle(iconX - 8, iconY - 5, 12, C_MUTED);
+      tft.fillCircle(iconX + 8, iconY - 5, 14, C_MUTED);
+      // Rain drops
+      for (int i = 0; i < 3; i++) {
+        int dx = iconX - 12 + i * 12;
+        tft.drawLine(dx, iconY + 10, dx - 3, iconY + 20, C_TEAL);
+        tft.drawLine(dx + 1, iconY + 10, dx - 2, iconY + 20, C_TEAL);
+      }
+      break;
+    case 4: // Thunder
+      tft.fillCircle(iconX - 5, iconY - 5, 14, C_MUTED);
+      tft.fillCircle(iconX + 10, iconY - 5, 12, C_MUTED);
+      // Lightning bolt
+      tft.fillTriangle(iconX, iconY + 5, iconX + 8, iconY + 5, iconX + 2, iconY + 18, 0xFFE0);
+      tft.fillTriangle(iconX + 2, iconY + 12, iconX + 10, iconY + 12, iconX + 5, iconY + 25, 0xFFE0);
+      break;
+    case 5: // Snow
+      tft.fillCircle(iconX - 8, iconY - 5, 12, C_MUTED);
+      tft.fillCircle(iconX + 8, iconY - 5, 14, C_MUTED);
+      // Snowflakes
+      for (int i = 0; i < 3; i++) {
+        int dx = iconX - 10 + i * 10;
+        tft.fillCircle(dx, iconY + 15, 3, 0xFFFF);
+      }
+      break;
+    case 6: // Mist
+      for (int i = 0; i < 4; i++) {
+        int ly = iconY - 15 + i * 10;
+        tft.drawFastHLine(iconX - 20, ly, 40, C_MUTED);
+      }
+      break;
+    default: // Unknown
+      tft.drawCircle(iconX, iconY, 18, C_MUTED);
+      tft.setCursor(iconX - 5, iconY + 5);
+      tft.setTextColor(C_MUTED);
+      tft.print("?");
+      break;
+  }
+
+  // Temperature - large display on right side
+  char tempBuf[16];
+  snprintf(tempBuf, sizeof(tempBuf), "%.0f%c", temp, celsius ? 'C' : 'F');
+
+  tft.setFont(&FreeSansBold24pt7b);
+  tft.setTextColor(C_TEXT);
+  int16_t x1, y1;
+  uint16_t w, h;
+  tft.getTextBounds(tempBuf, 0, 0, &x1, &y1, &w, &h);
+  tft.setCursor(240 - w - 20, 90);
+  tft.print(tempBuf);
+  tft.setFont();
+
+  // Feels like
+  snprintf(tempBuf, sizeof(tempBuf), "Feels %.0f%c", feelsLike, celsius ? 'C' : 'F');
+  tft.setFont(&FreeSans9pt7b);
+  tft.setTextColor(C_MUTED);
+  tft.setCursor(130, 110);
+  tft.print(tempBuf);
+
+  // Description - centered below icon/temp area
+  if (desc && strlen(desc) > 0) {
+    String descStr = String(desc);
+    if (descStr.length() > 20) descStr = descStr.substring(0, 20) + "..";
+    centerTextFont(descStr.c_str(), 145, C_TEAL, &FreeSans12pt7b);
+  }
+
+  // City name
+  if (city && strlen(city) > 0) {
+    String cityStr = String(city);
+    if (cityStr.length() > 18) cityStr = cityStr.substring(0, 18) + "..";
+    centerTextFont(cityStr.c_str(), 170, C_MUTED, &FreeSans9pt7b);
+  }
+
+  // Humidity
+  snprintf(tempBuf, sizeof(tempBuf), "Humidity: %d%%", humidity);
+  centerTextFont(tempBuf, 195, C_MUTED, &FreeSans9pt7b);
+
+  // Last updated hint
+  centerTextFont("Updates every 30 min", 220, C_LINE, &FreeSans9pt7b);
+}
+#endif
 
 void TaskyUI::drawWifi(bool wifiOn, String ssid, String pass, String ip) {
   tft.fillScreen(C_BG);
@@ -849,7 +1379,8 @@ void TaskyUI::drawWifi(bool wifiOn, String ssid, String pass, String ip) {
     tft.setTextColor(C_TEAL);
     tft.setFont(&FreeSans12pt7b);
     String connectedSSID = model->cfg.wifiSSID;
-    if (connectedSSID.length() > 16) connectedSSID = connectedSSID.substring(0, 16) + "..";
+    if (connectedSSID.length() > 16)
+      connectedSSID = connectedSSID.substring(0, 16) + "..";
     tft.setCursor(25, 117);
     tft.print(connectedSSID);
 
@@ -890,6 +1421,7 @@ void TaskyUI::drawWifi(bool wifiOn, String ssid, String pass, String ip) {
 void TaskyUI::drawQRFull(String ssid, String pass) {
   tft.fillScreen(0xFFFF);
 
+#if FEATURE_QR_CODE
   String payload = "WIFI:S:" + ssid + ";T:WPA;P:" + pass + ";;";
   qrcodegen::QrCode qr =
       qrcodegen::QrCode::encodeText(payload.c_str(), ECC_LOW);
@@ -899,13 +1431,13 @@ void TaskyUI::drawQRFull(String ssid, String pass) {
   int totalModules = size + (border * 2);
 
   // QR fills entire screen
-  int scale = 220 / totalModules;  // Use almost full 240px
+  int scale = 220 / totalModules; // Use almost full 240px
   if (scale < 1)
     scale = 1;
 
   int dimension = totalModules * scale;
   int startX = (W - dimension) / 2;
-  int startY = (H - dimension) / 2;  // Perfectly centered
+  int startY = (H - dimension) / 2; // Perfectly centered
 
   for (int y = -border; y < size + border; y++) {
     for (int x = -border; x < size + border; x++) {
@@ -915,73 +1447,94 @@ void TaskyUI::drawQRFull(String ssid, String pass) {
           isBlack = true;
         }
       }
-      uint16_t color = isBlack ? 0x0000 : 0xFFFF;  // Black QR for better scanning
+      uint16_t color =
+          isBlack ? 0x0000 : 0xFFFF; // Black QR for better scanning
       tft.fillRect(startX + (x + border) * scale, startY + (y + border) * scale,
                    scale, scale, color);
     }
   }
+#else
+  // Text-only fallback when QR disabled to save ~35-50 KB
+  centerTextFont("WiFi Setup", 50, 0x0000, &FreeSansBold12pt7b);
+  tft.drawFastHLine(40, 65, 160, 0x3186);
+  centerTextFont("Use web portal to scan QR", 100, 0x3186, &FreeSans9pt7b);
+  tft.setFont(&FreeSans9pt7b);
+  tft.setTextColor(0x0000);
+  tft.setCursor(30, 140);
+  tft.print("SSID: ");
+  tft.print(ssid);
+  tft.setCursor(30, 170);
+  tft.print("Pass: ");
+  tft.print(pass);
+  tft.setFont();
+#endif
 }
 
 void TaskyUI::drawSplashTasky() {
   // PSP-style intro: letters appear one by one with fade
   tft.fillScreen(C_BG);
-  
+
   tft.setFont(&FreeSansBold24pt7b);
   const char *letters = "Tasky";
-  
+
   // Calculate total width for centering
   int16_t x1, y1;
   uint16_t totalW, h;
   tft.getTextBounds(letters, 0, 0, &x1, &y1, &totalW, &h);
-  
+
   // Get individual letter positions
   int letterX[5];
   int baseX = (W - totalW) / 2;
   int cumX = baseX;
-  
+
   for (int i = 0; i < 5; i++) {
     letterX[i] = cumX;
     char buf[2] = {letters[i], 0};
     uint16_t lw;
     tft.getTextBounds(buf, 0, 0, &x1, &y1, &lw, &h);
-    cumX += lw + 2;  // Letter spacing
+    cumX += lw + 2; // Letter spacing
   }
-  
+
   // Fade colors: dark to bright
-  uint16_t fadeSteps[] = {0x0841, 0x1082, 0x18C3, 0x2104, 0x3186, 0x4208, 0x52AA, 0x6B4D, 0x8410, 0xAD55, 0xD69A, 0xFFFF};
+  uint16_t fadeSteps[] = {0x0841, 0x1082, 0x18C3, 0x2104, 0x3186, 0x4208,
+                          0x52AA, 0x6B4D, 0x8410, 0xAD55, 0xD69A, 0xFFFF};
   int numFades = 12;
-  
+
   // Each letter appears with fade animation
   for (int letterIdx = 0; letterIdx < 5; letterIdx++) {
     char buf[2] = {letters[letterIdx], 0};
-    
+
     // Fade in this letter
     for (int f = 0; f < numFades; f++) {
       tft.setTextColor(fadeSteps[f]);
       tft.setCursor(letterX[letterIdx], 130);
       tft.print(buf);
       delay(15);  // Fast fade per step
+      yield();    // Prevent watchdog during splash
     }
-    
+
     // Brief pause between letters
     delay(80);
+    yield();
   }
-  
+
   // Accent line under logo
   delay(200);
   for (int w = 0; w <= 60; w += 4) {
-    tft.drawFastHLine(120 - w/2, 145, w, C_TEAL);
+    tft.drawFastHLine(120 - w / 2, 145, w, C_TEAL);
     delay(10);
+    yield();
   }
-  
+
   // Tagline fades in
   delay(200);
   uint16_t tagFades[] = {0x2104, 0x4208, 0x630C, C_MUTED};
   for (int f = 0; f < 4; f++) {
     centerTextFont("Focus. Flow. Finish.", 175, tagFades[f], &FreeSans9pt7b);
     delay(50);
+    yield();
   }
-  
+
   delay(400);
 }
 
@@ -990,47 +1543,57 @@ const char quote0[] PROGMEM = "Every second counts.";
 const char quote1[] PROGMEM = "Find a way.";
 const char quote2[] PROGMEM = "Stay hungry, stay foolish.|Steve Jobs";
 const char quote3[] PROGMEM = "Move fast and break things.|Mark Zuckerberg";
-const char quote4[] PROGMEM = "The only way to do great work is to love what you do.|Steve Jobs";
+const char quote4[] PROGMEM =
+    "The only way to do great work is to love what you do.|Steve Jobs";
 const char quote5[] PROGMEM = "Done is better than perfect.|Sheryl Sandberg";
 const char quote6[] PROGMEM = "Make something people want.|Paul Graham";
-const char quote7[] PROGMEM = "Ideas are easy. Execution is everything.|John Doerr";
-const char quote8[] PROGMEM = "The best way to predict the future is to invent it.|Alan Kay";
-const char quote9[] PROGMEM = "Simplicity is the ultimate sophistication.|Leonardo da Vinci";
-const char quote10[] PROGMEM = "First, solve the problem. Then, write the code.|John Johnson";
+const char quote7[] PROGMEM =
+    "Ideas are easy. Execution is everything.|John Doerr";
+const char quote8[] PROGMEM =
+    "The best way to predict the future is to invent it.|Alan Kay";
+const char quote9[] PROGMEM =
+    "Simplicity is the ultimate sophistication.|Leonardo da Vinci";
+const char quote10[] PROGMEM =
+    "First, solve the problem. Then, write the code.|John Johnson";
 const char quote11[] PROGMEM = "Code is poetry.";
 const char quote12[] PROGMEM = "Ship it.|Seth Godin";
 const char quote13[] PROGMEM = "Think different.|Apple";
-const char quote14[] PROGMEM = "What would you attempt if you knew you could not fail?|Robert Schuller";
+const char quote14[] PROGMEM =
+    "What would you attempt if you knew you could not fail?|Robert Schuller";
 const char quote15[] PROGMEM = "The obstacle is the way.|Marcus Aurelius";
 const char quote16[] PROGMEM = "Memento mori.";
 const char quote17[] PROGMEM = "Amor fati.|Nietzsche";
 const char quote18[] PROGMEM = "Per aspera ad astra.";
 const char quote19[] PROGMEM = "Cogito, ergo sum.|Descartes";
 const char quote20[] PROGMEM = "Knowledge is power.|Francis Bacon";
-const char quote21[] PROGMEM = "The unexamined life is not worth living.|Socrates";
+const char quote21[] PROGMEM =
+    "The unexamined life is not worth living.|Socrates";
 const char quote22[] PROGMEM = "Be the change you wish to see.|Gandhi";
-const char quote23[] PROGMEM = "Time is the most valuable thing a man can spend.|Theophrastus";
-const char quote24[] PROGMEM = "Action is the foundational key to all success.|Picasso";
+const char quote23[] PROGMEM =
+    "Time is the most valuable thing a man can spend.|Theophrastus";
+const char quote24[] PROGMEM =
+    "Action is the foundational key to all success.|Picasso";
 const char quote25[] PROGMEM = "Begin anywhere.|John Cage";
 const char quote26[] PROGMEM = "Less is more.|Mies van der Rohe";
 const char quote27[] PROGMEM = "Form follows function.|Louis Sullivan";
-const char quote28[] PROGMEM = "Make it work, make it right, make it fast.|Kent Beck";
+const char quote28[] PROGMEM =
+    "Make it work, make it right, make it fast.|Kent Beck";
 const char quote29[] PROGMEM = "Iteration is the mother of progress.";
 
-const char* const quotes[] PROGMEM = {
-  quote0, quote1, quote2, quote3, quote4, quote5, quote6, quote7, quote8, quote9,
-  quote10, quote11, quote12, quote13, quote14, quote15, quote16, quote17, quote18, quote19,
-  quote20, quote21, quote22, quote23, quote24, quote25, quote26, quote27, quote28, quote29
-};
+const char *const quotes[] PROGMEM = {
+    quote0,  quote1,  quote2,  quote3,  quote4,  quote5,  quote6,  quote7,
+    quote8,  quote9,  quote10, quote11, quote12, quote13, quote14, quote15,
+    quote16, quote17, quote18, quote19, quote20, quote21, quote22, quote23,
+    quote24, quote25, quote26, quote27, quote28, quote29};
 
 #define NUM_QUOTES 30
 
 void TaskyUI::drawQuotes() {
-  tft.fillScreen(0x0000);  // Pure black background
+  tft.fillScreen(0x0000); // Pure black background
 
   // Read quote from PROGMEM
   char buffer[128];
-  strcpy_P(buffer, (char*)pgm_read_ptr(&quotes[quoteIndex]));
+  strcpy_P(buffer, (char *)pgm_read_ptr(&quotes[quoteIndex]));
 
   String fullQuote = String(buffer);
 
@@ -1079,7 +1642,7 @@ void TaskyUI::drawQuotes() {
 
   // Draw quote lines - OP-1 style (white on black)
   tft.setFont(&FreeSansBold12pt7b);
-  tft.setTextColor(0xFFFF);  // Pure white
+  tft.setTextColor(0xFFFF); // Pure white
 
   for (int i = 0; i < numLines; i++) {
     int16_t x1, y1;
@@ -1094,7 +1657,7 @@ void TaskyUI::drawQuotes() {
   if (author.length() > 0) {
     int authorY = startY + numLines * lineHeight + 20;
     tft.setFont(&FreeSans9pt7b);
-    tft.setTextColor(0x7BEF);  // Muted gray
+    tft.setTextColor(0x7BEF); // Muted gray
 
     String authorLine = "- " + author;
     int16_t x1, y1;

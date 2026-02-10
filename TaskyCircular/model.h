@@ -8,7 +8,35 @@
 #define STREAK_COLS 14  // Reduced for circular display corners
 #define STREAK_N (STREAK_ROWS * STREAK_COLS)
 
+#define MAX_TODAY_EVENTS 5
+#define MAX_NOTION_TASKS 5
+
 enum Phase { PHASE_WORK, PHASE_BREAK };
+
+// Streak source selection
+enum StreakSource {
+  STREAK_GITHUB = 0,  // GitHub contributions only
+  STREAK_TASKY = 1,   // Tasky Pomodoro sessions only
+  STREAK_BOTH = 2     // Combined (maximum of both)
+};
+
+// Calendar event for display (today's events)
+struct CalendarEventItem {
+  char title[33];       // SUMMARY (32 chars + null)
+  char startTime[6];    // HH:MM + null
+  char endTime[6];      // HH:MM + null
+  char description[65]; // DESCRIPTION (64 chars + null)
+  uint8_t day;          // Day of month (1-31)
+  bool isAllDay;        // All-day event flag
+};
+
+// Notion task item
+struct NotionTaskItem {
+  char title[33];       // Task name (32 chars + null)
+  char description[65]; // Description (64 chars + null)
+  bool done;            // Checkbox status
+  char dueDate[11];     // YYYY-MM-DD + null (optional)
+};
 
 struct Config {
   uint8_t workMin = 25;
@@ -26,8 +54,36 @@ struct Config {
   String githubToken = "";
   String calendarUrl = "";
 
-  // Runtime Data (not saved to config necessarily, or maybe yes for offline
-  // cache)
+  // Notion Integration
+  String notionApiKey = "";
+  String notionDatabaseId = "";
+
+  // Focus Mode Settings
+  bool focusAutoMode = true;      // Auto-enable during work sessions
+  bool focusManualMode = false;   // Manual override (always block)
+
+  // Streak Settings
+  StreakSource streakSource = STREAK_BOTH;
+  uint8_t dailyPomodoroCount = 0;   // Pomodoro sessions completed today
+  uint8_t githubContribCount = 0;   // GitHub contributions today
+
+  // Firebase Cloud Sync
+  String firebaseUrl = "";          // project-id.firebaseio.com
+  String firebaseSecret = "";       // Database secret or API key
+  bool firebaseEnabled = false;
+
+  // Weather Widget
+  String weatherApiKey = "";        // OpenWeatherMap API key
+  String weatherCity = "";          // City name (e.g., "Mexico City")
+  bool weatherCelsius = true;       // true = Celsius, false = Fahrenheit
+
+  // Spotify Integration
+  String spotifyClientId = "";      // Spotify App Client ID
+  String spotifySecret = "";        // Spotify App Client Secret
+  String spotifyToken = "";         // Access token (refreshable)
+  String spotifyRefresh = "";       // Refresh token
+
+  // Runtime Data (not saved to config necessarily, or maybe yes for offline cache)
   String nextEventSummary = "No Events";
   String nextEventTime = "--:--";
 };
@@ -53,6 +109,14 @@ public:
 
   // Calendar events (for grid view)
   uint8_t calendarEvents[31];  // Events per day of month (0-3 intensity)
+
+  // Today's calendar events (detailed)
+  CalendarEventItem todayEvents[MAX_TODAY_EVENTS];
+  int todayEventCount = 0;
+
+  // Notion tasks
+  NotionTaskItem notionTasks[MAX_NOTION_TASKS];
+  int notionTaskCount = 0;
 
   // Streak
   uint8_t streak[STREAK_N];
@@ -86,6 +150,15 @@ public:
   int calculateCurrentStreak();    // Returns consecutive days with activity from current day
   int calculateTotalActiveDays();  // Returns total days with any activity (green squares)
   void checkDayChange();           // Check if day changed and advance streak index
+
+  // Focus mode
+  bool isFocusModeActive();        // Returns true if DNS blocking should be active
+
+  // Streak intensity
+  void updateStreakIntensity();    // Update streak based on source setting
+
+  // Clear today's events (for refresh)
+  void clearTodayEvents();
 
 private:
   int lastKnownDay = -1;  // For day change detection
