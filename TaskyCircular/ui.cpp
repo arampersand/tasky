@@ -145,18 +145,18 @@ void TaskyUI::uiTick(bool strong) {
   // only + flash. We will overload or change call sites for encoder.
 
   flashOn = true;
-  flashUntilMs = now + (strong ? 140 : 90);
+  flashUntilMs = now + (strong ? 80 : 50);  // Mas corto = menos parpadeo
 }
 
 void TaskyUI::drawFlashIfNeeded() {
   if (!flashOn)
     return;
   if (millis() > flashUntilMs) {
-    // Always circular for TE style
     tft.drawCircle(CX, CY, 119, C_LINE);
     flashOn = false;
     return;
   }
+  // Flash mas sutil - solo borde, duracion corta
   tft.drawCircle(CX, CY, 119, C_FLASH);
 }
 
@@ -267,28 +267,28 @@ void TaskyUI::drawTimerTime(int mm, int ss) {
   int cx = (W - w) / 2 - x1;     // x1 is usually 0 or small offset
   int cy = (H - h) / 2 + h - 10; // 10 is visual adjustment for baseline
 
-  // Clear previous text area strictly?
-  // circle is 120,120. text width ~150, height ~50.
-  // Rect: x=45, y=95, w=150, h=50
+  // Clear previous text area
   tft.fillRect(CX - 85, CY - 35, 170, 70, C_BG);
-
   tft.setCursor(cx, cy);
   tft.print(buf);
   tft.setFont();
 
   // Status (Paused/Done)
-  // Clear status area
   tft.fillRect(40, 160, 160, 30, C_BG);
-
   if (model->st.finished) {
     centerTextFont("DONE", 180, C_RED, &FreeSansBold12pt7b);
   } else if (!model->st.running) {
     centerTextFont("PAUSED", 180, C_MUTED, &FreeSansBold12pt7b);
   }
 
-  drawProgressSegments();
+  // Progress: solo redibujar cuando cambia el segmento (evita lentitud)
+  uint32_t dur = model->phaseDurationMs();
+  int segOn = (dur > 0) ? (int)((float)model->remainingMs() / dur * 60) : 0;
+  if (segOn != lastProgSegOn) {
+    lastProgSegOn = segOn;
+    drawProgressSegments();
+  }
 
-  // Small bottom dot
   tft.fillCircle(CX, 216, 2, C_LINE);
 }
 
@@ -860,57 +860,87 @@ uint16_t TaskyUI::calendarDayColor(uint8_t eventCount) {
   return C_RED;      // Busy day (4+)
 }
 
-void TaskyUI::drawFocus() {
-  // Immersive focus mode - minimal distractions
+void TaskyUI::drawFocusBase() {
+  // Base UI - solo se llama una vez, evita parpadeo
   tft.fillScreen(C_BG);
 
-  // Phase indicator at top
-  uint16_t phaseColor = (model->phase == PHASE_WORK) ? C_TEAL : C_ORANGE;
-  tft.fillCircle(CX, 20, 4, phaseColor);
+  // Header diferenciado: FOCUS MODE (no es solo pomodoro)
+  centerTextFont("FOCUS MODE", 22, C_TEAL, &FreeSansBold12pt7b);
+  tft.setFont(&FreeSans9pt7b);
+  tft.setTextColor(C_MUTED);
+  tft.setCursor(20, 42);
+  tft.print("Bloquea redes en tu");
+  tft.setCursor(20, 56);
+  tft.print("telefono al conectar");
+  tft.setCursor(20, 70);
+  tft.print("a la red Tasky");
+  tft.setFont();
 
-  // Large centered timer
-  uint32_t rem = model->remainingMs();
-  int mm = rem / 60000;
-  int ss = (rem % 60000) / 1000;
+  // Phase indicator
+  uint16_t phaseColor = (model->phase == PHASE_WORK) ? C_TEAL : C_ORANGE;
+  tft.fillCircle(CX, 95, 4, phaseColor);
+
+  lastFocusMin = -1;
+  lastFocusSec = -1;
+}
+
+void TaskyUI::drawFocusTime(int mm, int ss) {
+  // Solo actualiza tiempo y estados - SIN fillScreen, evita parpadeo
+  if (mm == lastFocusMin && ss == lastFocusSec)
+    return;
+  lastFocusMin = mm;
+  lastFocusSec = ss;
+
+  // Clear solo region del timer (evita flash de pantalla completa)
+  tft.fillRect(30, 100, 180, 90, C_BG);
 
   char buf[8];
   snprintf(buf, sizeof(buf), "%02d:%02d", mm, ss);
-
   tft.setTextColor(C_TEXT);
   tft.setFont(&FreeSansBold24pt7b);
-
   int16_t x1, y1;
   uint16_t w, h;
   tft.getTextBounds(buf, 0, 0, &x1, &y1, &w, &h);
-
   int cx = (W - w) / 2 - x1;
   int cy = CY + h / 2 - 10;
-
   tft.setCursor(cx, cy);
   tft.print(buf);
   tft.setFont();
 
-  // Session counter below timer
+  // Session counter
+  tft.fillRect(40, 168, 160, 25, C_BG);
   char sessionBuf[24];
   int todaySessions = model->streak[model->currentDayIndex];
   snprintf(sessionBuf, sizeof(sessionBuf), "Session %d", todaySessions + 1);
-  centerTextFont(sessionBuf, 170, C_MUTED, &FreeSans9pt7b);
+  centerTextFont(sessionBuf, 182, C_MUTED, &FreeSans9pt7b);
 
   // Phase label
+  uint16_t phaseColor = (model->phase == PHASE_WORK) ? C_TEAL : C_ORANGE;
   const char* phaseLabel = (model->phase == PHASE_WORK) ? "FOCUS" : "BREAK";
-  centerTextFont(phaseLabel, 195, phaseColor, &FreeSans12pt7b);
+  centerTextFont(phaseLabel, 198, phaseColor, &FreeSans12pt7b);
 
-  // Focus mode indicator (if blocking active)
+  // Focus indicator (shield) - limpiar antes por si cambio estado
+  tft.fillRect(185, 2, 50, 32, C_BG);
   if (model->isFocusModeActive()) {
     drawFocusIndicator(true);
   }
 
-  // Status
+  // Status (DONE/PAUSED)
+  tft.fillRect(40, 208, 160, 30, C_BG);
   if (model->st.finished) {
-    centerTextFont("DONE", 220, C_GREEN, &FreeSans9pt7b);
+    centerTextFont("DONE", 228, C_GREEN, &FreeSans9pt7b);
   } else if (!model->st.running) {
-    centerTextFont("PAUSED", 220, C_MUTED, &FreeSans9pt7b);
+    centerTextFont("PAUSED", 228, C_MUTED, &FreeSans9pt7b);
   }
+}
+
+void TaskyUI::drawFocus() {
+  // Llama base una vez, luego solo drawFocusTime
+  drawFocusBase();
+  uint32_t rem = model->remainingMs();
+  int mm = rem / 60000;
+  int ss = (rem % 60000) / 1000;
+  drawFocusTime(mm, ss);
 }
 
 void TaskyUI::drawAgenda() {
@@ -1111,10 +1141,16 @@ void TaskyUI::drawSpotify(const char* track, const char* artist, uint32_t progre
 
   // Check if there's active playback
   if (!isActive || track == nullptr || strlen(track) == 0) {
-    // No active playback state
+#if TASKY_MODE_DEV
     centerTextFont("No active playback", 100, C_MUTED, &FreeSans12pt7b);
     centerTextFont("Start playing music", 130, C_MUTED, &FreeSans9pt7b);
     centerTextFont("on any device", 150, C_MUTED, &FreeSans9pt7b);
+#else
+    centerTextFont("Reproduce tu musica", 95, C_TEXT, &FreeSansBold12pt7b);
+    centerTextFont("Spotify, YouTube, etc.", 125, C_MUTED, &FreeSans9pt7b);
+    centerTextFont("La app Tasky mostrara", 155, C_MUTED, &FreeSans9pt7b);
+    centerTextFont("la cancion (proximamente)", 175, C_MUTED, &FreeSans9pt7b);
+#endif
 
     // Music icon placeholder
     int iconX = CX;
@@ -1235,11 +1271,23 @@ void TaskyUI::drawWeather(float temp, float feelsLike, uint8_t humidity,
                           uint8_t icon, const char* desc, const char* city, bool celsius) {
   tft.fillScreen(C_BG);
 
+  // Sin API key: saludo por hora (no requiere config)
+#if !TASKY_MODE_DEV
+  if (city == nullptr || strlen(city) == 0) {
+    int h = model->clockH;
+    const char* greet = (h >= 5 && h < 12) ? "Buenos dias" : (h >= 12 && h < 19) ? "Buenas tardes" : "Buenas noches";
+    centerTextFont(greet, 80, C_TEXT, &FreeSansBold18pt7b);
+    centerTextFont("Have a productive day", 120, C_MUTED, &FreeSans9pt7b);
+    centerTextFont("EVERY SECOND COUNTS", 155, C_LINE, &FreeSans9pt7b);
+    return;
+  }
+#endif
+
   // Header
   centerTextFont("WEATHER", 28, C_TEXT, &FreeSansBold12pt7b);
   tft.drawFastHLine(40, 38, 160, C_LINE);
 
-  // Check if we have valid data
+  // Check if we have valid data (modo dev)
   if (city == nullptr || strlen(city) == 0) {
     centerTextFont("Not configured", 100, C_MUTED, &FreeSans12pt7b);
     centerTextFont("Add API key in", 130, C_MUTED, &FreeSans9pt7b);

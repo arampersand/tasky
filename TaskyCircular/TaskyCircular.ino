@@ -361,8 +361,9 @@ void handleTimer(int step, EncClickType click) {
     ui.drawFinishScreen("WELL DONE");
     ui.uiTick(true);
   }
+  // Actualizar display solo cuando cambia el segundo (reduce parpadeo y CPU)
   static uint32_t lastTextAt = 0;
-  if (now - lastTextAt >= 100) {
+  if (now - lastTextAt >= 250) {
     lastTextAt = now;
     int mm = model.remainingMs() / 60000;
     int ss = (model.remainingMs() % 60000) / 1000;
@@ -565,7 +566,12 @@ void handleFocus(int step, EncClickType click) {
     ui.baseDrawn = true;
   }
 
-  // Same timer controls as main timer
+  if (model.st.running && model.remainingMs() == 0) {
+    model.finishTimer();
+    ui.drawFinishScreen("WELL DONE");
+    ui.uiTick(true);
+  }
+
   if (model.st.finished) {
     if (click == ENC_SHORT) {
       ui.uiTick(true);
@@ -579,6 +585,18 @@ void handleFocus(int step, EncClickType click) {
       model.resetTimer();
       ui.baseDrawn = false;
     }
+    uint32_t now = millis();
+    if (now - lastAnimAt >= 150) {
+      lastAnimAt = now;
+      alarmFlip = !alarmFlip;
+      setLed(alarmFlip ? model.cfg.ledBright : 0);
+    }
+    if (model.cfg.soundOn && now - lastBeepAt >= 260) {
+      lastBeepAt = now;
+      if (alarmFlip) buzzerTone(2200);
+      else buzzerOff();
+    }
+    ui.drawFlashIfNeeded();
     return;
   }
 
@@ -599,11 +617,13 @@ void handleFocus(int step, EncClickType click) {
     ui.baseDrawn = false;
   }
 
-  // Update display periodically
-  static uint32_t lastFocusUpdate = 0;
-  if (millis() - lastFocusUpdate >= 500) {
-    lastFocusUpdate = millis();
-    ui.drawFocus();
+  // Solo actualizar tiempo cuando cambia (evita parpadeo cada 500ms)
+  static uint32_t lastFocusTick = 0;
+  if (millis() - lastFocusTick >= 200) {
+    lastFocusTick = millis();
+    int mm = model.remainingMs() / 60000;
+    int ss = (model.remainingMs() % 60000) / 1000;
+    ui.drawFocusTime(mm, ss);
   }
 }
 

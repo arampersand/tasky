@@ -76,6 +76,8 @@ public:
   int lastShownMin = -1;
   int lastShownSec = -1;
   int lastProgSegOn = -1;
+  int lastFocusMin = -1;
+  int lastFocusSec = -1;
 
   int settingsSel = 0;
   bool settingsEditing = false;
@@ -120,6 +122,8 @@ public:
   void drawCalendar();
   void drawDayTasks(int day); // Show tasks for a specific calendar day
   void drawFocus();           // Immersive focus mode screen
+  void drawFocusBase();       // Base (solo una vez)
+  void drawFocusTime(int mm, int ss);  // Solo actualiza tiempo (sin fillScreen)
   void drawAgenda();          // Today's calendar events + Notion tasks
   void drawFocusIndicator(bool active);  // Shield icon when blocking
   void drawStreak();
