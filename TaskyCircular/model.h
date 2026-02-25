@@ -9,6 +9,7 @@
 #define STREAK_N (STREAK_ROWS * STREAK_COLS)
 
 #define MAX_TODAY_EVENTS 5
+#define MAX_MONTH_EVENTS 20
 #define MAX_NOTION_TASKS 5
 
 enum Phase { PHASE_WORK, PHASE_BREAK };
@@ -72,16 +73,25 @@ struct Config {
   String firebaseSecret = "";       // Database secret or API key
   bool firebaseEnabled = false;
 
-  // Weather Widget
-  String weatherApiKey = "";        // OpenWeatherMap API key
+  // Weather Widget (Open-Meteo - no API key needed)
   String weatherCity = "";          // City name (e.g., "Mexico City")
   bool weatherCelsius = true;       // true = Celsius, false = Fahrenheit
+  float weatherLat = 0;             // Latitude (from geocoding or manual)
+  float weatherLon = 0;             // Longitude
 
   // Spotify Integration
   String spotifyClientId = "";      // Spotify App Client ID
   String spotifySecret = "";        // Spotify App Client Secret
   String spotifyToken = "";         // Access token (refreshable)
   String spotifyRefresh = "";       // Refresh token
+
+  // LLM Agent
+  String llmApiKey = "";            // API key (Anthropic or OpenAI)
+  uint8_t llmProvider = 0;          // 0=Anthropic, 1=OpenAI
+  int8_t llmModeOverride = -1;      // -1=auto (daily rotation), 0-6=manual mode
+  uint16_t llmDailyCount = 0;       // Requests today (for rate limiting)
+  uint16_t llmHourlyCount = 0;      // Requests this hour
+  uint32_t llmHourStart = 0;        // millis() when hourly count reset
 
   // Runtime Data (not saved to config necessarily, or maybe yes for offline cache)
   String nextEventSummary = "No Events";
@@ -110,9 +120,13 @@ public:
   // Calendar events (for grid view)
   uint8_t calendarEvents[31];  // Events per day of month (0-3 intensity)
 
-  // Today's calendar events (detailed)
+  // Today's calendar events (detailed, for agenda screen)
   CalendarEventItem todayEvents[MAX_TODAY_EVENTS];
   int todayEventCount = 0;
+
+  // Month calendar events (for day detail on any day)
+  CalendarEventItem monthEvents[MAX_MONTH_EVENTS];
+  int monthEventCount = 0;
 
   // Notion tasks
   NotionTaskItem notionTasks[MAX_NOTION_TASKS];
@@ -159,6 +173,7 @@ public:
 
   // Clear today's events (for refresh)
   void clearTodayEvents();
+  void clearMonthEvents();
 
 private:
   int lastKnownDay = -1;  // For day change detection

@@ -6,6 +6,9 @@
 #include <Adafruit_GFX.h>
 #include <Arduino.h>
 
+// Forward declaration
+class FocusDNS;
+
 // --- Compile time switch ---
 #define DISPLAY_CIRCULAR 0 // 0 = ST7789 square, 1 = GC9A01A circular
 // ---------------------------
@@ -51,6 +54,7 @@ enum Screen {
   SCR_STATS,
   SCR_WEATHER,    // Weather widget screen
   SCR_SPOTIFY,    // Spotify now playing + controls
+  SCR_AGENT,      // AI Agent - LLM assistant
   SCR_SETTINGS,
   SCR_QR,
   SCR_WIFI_INFO,
@@ -76,8 +80,6 @@ public:
   int lastShownMin = -1;
   int lastShownSec = -1;
   int lastProgSegOn = -1;
-  int lastFocusMin = -1;
-  int lastFocusSec = -1;
 
   int settingsSel = 0;
   bool settingsEditing = false;
@@ -91,6 +93,18 @@ public:
   int calendarSelDay = 0;       // 0 = no selection, 1-31 = selected day
   bool calendarLoading = false; // Show loading indicator
   bool showingDayTasks = false; // Showing day's tasks overlay
+
+  // Agent screen
+  bool agentShowingResponse = false;  // Showing LLM response
+  int agentScrollOffset = 0;   // Scroll offset for long responses
+  bool agentModeSelect = false;  // Mode selection overlay active
+  int agentModeSel = 0;          // Selected index (0=AUTO, 1-7=modes)
+
+  // Focus blocklist screen
+  int focusDomainScroll = 0;  // Scroll offset for domain list
+
+  // WiFi state (set from main loop)
+  bool wifiConnected = false;
 
   // Quotes / Screensaver
   int quoteIndex = 0;
@@ -121,9 +135,9 @@ public:
   void drawTaskDetail(int index);
   void drawCalendar();
   void drawDayTasks(int day); // Show tasks for a specific calendar day
-  void drawFocus();           // Immersive focus mode screen
-  void drawFocusBase();       // Base (solo una vez)
-  void drawFocusTime(int mm, int ss);  // Solo actualiza tiempo (sin fillScreen)
+  void drawFocus(FocusDNS* dns);  // Focus mode blocklist screen
+  void drawFocusBase(FocusDNS* dns);
+  void drawFocusList(FocusDNS* dns);  // Update domain list only
   void drawAgenda();          // Today's calendar events + Notion tasks
   void drawFocusIndicator(bool active);  // Shield icon when blocking
   void drawStreak();
@@ -135,6 +149,12 @@ public:
 #if FEATURE_SPOTIFY
   void drawSpotify(const char* track, const char* artist, uint32_t progressMs,
                    uint32_t durationMs, bool isPlaying, int volume, bool isActive);
+#endif
+#if FEATURE_LLM
+  void drawAgent(int state, const char* response, int responseLen,
+                 const char* errorMsg, const char* modeName, const char* modeDesc,
+                 bool showingResponse, int scrollOffset);
+  void drawAgentModeSelect(int selection, int8_t currentOverride);
 #endif
   void drawWifi(bool wifiOn, String ssid, String pass, String ip);
   void drawQRFull(String ssid, String pass);
@@ -150,7 +170,6 @@ public:
 
   void drawFrame(); // Implementation of the required abstraction
 
-  void drawNavDots(Screen current); // Navigation indicator dots
 
 private:
   void drawProgressSegments();

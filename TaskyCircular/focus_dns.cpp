@@ -72,7 +72,7 @@ bool FocusDNS::isFocusModeActive() const {
 void FocusDNS::loadDefaultBlockList() {
   clearBlockList();
 
-  // Social Media - Core domains
+  // Social Media - Core domains only
   addBlockedDomain("facebook.com");
   addBlockedDomain("instagram.com");
   addBlockedDomain("twitter.com");
@@ -81,12 +81,6 @@ void FocusDNS::loadDefaultBlockList() {
   addBlockedDomain("youtube.com");
   addBlockedDomain("reddit.com");
   addBlockedDomain("snapchat.com");
-
-  // CDN domains for blocking images/content
-  addBlockedDomain("fbcdn.net");
-  addBlockedDomain("twimg.com");
-  addBlockedDomain("ytimg.com");
-  addBlockedDomain("redditmedia.com");
 
   Serial.printf("[FocusDNS] Loaded %d blocked domains\n", blockedCount);
 }

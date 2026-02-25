@@ -1,4 +1,5 @@
 #include "model.h"
+#include "config_features.h"
 #include <time.h>  // For getLocalTime()
 
 void TaskyModel::begin() { load(); }
@@ -46,16 +47,22 @@ void TaskyModel::load() {
   cfg.firebaseSecret = pref.getString("fbKey", "");
   cfg.firebaseEnabled = pref.getBool("fbOn", false);
 
-  // Weather Widget
-  cfg.weatherApiKey = pref.getString("wKey", "");
+  // Weather Widget (Open-Meteo)
   cfg.weatherCity = pref.getString("wCity", "");
   cfg.weatherCelsius = pref.getBool("wCel", true);
+  cfg.weatherLat = pref.getFloat("wLat", 0);
+  cfg.weatherLon = pref.getFloat("wLon", 0);
 
   // Spotify Integration
   cfg.spotifyClientId = pref.getString("spId", "");
   cfg.spotifySecret = pref.getString("spSec", "");
   cfg.spotifyToken = pref.getString("spTok", "");
   cfg.spotifyRefresh = pref.getString("spRef", "");
+
+  // LLM Agent
+  cfg.llmApiKey = pref.getString("lKey", "");
+  cfg.llmProvider = pref.getUChar("lPrv", 0);
+  cfg.llmModeOverride = pref.getChar("lMod", -1);
 
   for (int i = 0; i < 3; i++) {
     String key = "t" + String(i);
@@ -71,8 +78,9 @@ void TaskyModel::load() {
     calendarEvents[i] = 0;
   }
 
-  // Clear today's events and Notion tasks (will be populated by services)
+  // Clear today's/month events and Notion tasks (will be populated by services)
   clearTodayEvents();
+  clearMonthEvents();
   notionTaskCount = 0;
   memset(notionTasks, 0, sizeof(notionTasks));
 
@@ -101,6 +109,42 @@ void TaskyModel::load() {
     clockM = 0;
   if (clockS < 0 || clockS > 59)
     clockS = 0;
+
+  // Apply compile-time defaults from config_secrets.h when NVS is empty
+  if (cfg.wifiSSID.length() == 0 && strlen(SECRET_WIFI_SSID) > 0)
+    cfg.wifiSSID = SECRET_WIFI_SSID;
+  if (cfg.wifiPass.length() == 0 && strlen(SECRET_WIFI_PASS) > 0)
+    cfg.wifiPass = SECRET_WIFI_PASS;
+  if (cfg.llmApiKey.length() == 0 && strlen(SECRET_LLM_API_KEY) > 0)
+    cfg.llmApiKey = SECRET_LLM_API_KEY;
+  if (cfg.llmProvider == 0 && strlen(SECRET_LLM_PROVIDER) > 0) {
+    String prov = SECRET_LLM_PROVIDER;
+    if (prov == "openai") cfg.llmProvider = 1;
+  }
+  if (cfg.weatherCity.length() == 0 && strlen(SECRET_WEATHER_CITY) > 0)
+    cfg.weatherCity = SECRET_WEATHER_CITY;
+  if (cfg.weatherLat == 0 && SECRET_WEATHER_LAT != 0)
+    cfg.weatherLat = SECRET_WEATHER_LAT;
+  if (cfg.weatherLon == 0 && SECRET_WEATHER_LON != 0)
+    cfg.weatherLon = SECRET_WEATHER_LON;
+  if (cfg.notionApiKey.length() == 0 && strlen(SECRET_NOTION_API_KEY) > 0)
+    cfg.notionApiKey = SECRET_NOTION_API_KEY;
+  if (cfg.notionDatabaseId.length() == 0 && strlen(SECRET_NOTION_DATABASE_ID) > 0)
+    cfg.notionDatabaseId = SECRET_NOTION_DATABASE_ID;
+  if (cfg.githubUser.length() == 0 && strlen(SECRET_GITHUB_USER) > 0)
+    cfg.githubUser = SECRET_GITHUB_USER;
+  if (cfg.githubToken.length() == 0 && strlen(SECRET_GITHUB_TOKEN) > 0)
+    cfg.githubToken = SECRET_GITHUB_TOKEN;
+  if (cfg.calendarUrl.length() == 0 && strlen(SECRET_CALENDAR_URL) > 0)
+    cfg.calendarUrl = SECRET_CALENDAR_URL;
+  if (cfg.firebaseUrl.length() == 0 && strlen(SECRET_FIREBASE_URL) > 0)
+    cfg.firebaseUrl = SECRET_FIREBASE_URL;
+  if (cfg.firebaseSecret.length() == 0 && strlen(SECRET_FIREBASE_SECRET) > 0)
+    cfg.firebaseSecret = SECRET_FIREBASE_SECRET;
+  if (cfg.spotifyClientId.length() == 0 && strlen(SECRET_SPOTIFY_CLIENT_ID) > 0)
+    cfg.spotifyClientId = SECRET_SPOTIFY_CLIENT_ID;
+  if (cfg.spotifySecret.length() == 0 && strlen(SECRET_SPOTIFY_SECRET) > 0)
+    cfg.spotifySecret = SECRET_SPOTIFY_SECRET;
 }
 
 void TaskyModel::save() {
@@ -138,16 +182,22 @@ void TaskyModel::save() {
   pref.putString("fbKey", cfg.firebaseSecret);
   pref.putBool("fbOn", cfg.firebaseEnabled);
 
-  // Weather Widget
-  pref.putString("wKey", cfg.weatherApiKey);
+  // Weather Widget (Open-Meteo)
   pref.putString("wCity", cfg.weatherCity);
   pref.putBool("wCel", cfg.weatherCelsius);
+  pref.putFloat("wLat", cfg.weatherLat);
+  pref.putFloat("wLon", cfg.weatherLon);
 
   // Spotify Integration
   pref.putString("spId", cfg.spotifyClientId);
   pref.putString("spSec", cfg.spotifySecret);
   pref.putString("spTok", cfg.spotifyToken);
   pref.putString("spRef", cfg.spotifyRefresh);
+
+  // LLM Agent
+  pref.putString("lKey", cfg.llmApiKey);
+  pref.putUChar("lPrv", cfg.llmProvider);
+  pref.putChar("lMod", cfg.llmModeOverride);
 
   for (int i = 0; i < 3; i++) {
     String key = "t" + String(i);
@@ -307,14 +357,17 @@ void TaskyModel::checkDayChange() {
     // Reset daily counters
     cfg.dailyPomodoroCount = 0;
     cfg.githubContribCount = 0;
+    cfg.llmDailyCount = 0;
+    cfg.llmHourlyCount = 0;
 
     // Clear calendar events for refresh
     for (int i = 0; i < 31; i++) {
       calendarEvents[i] = 0;
     }
 
-    // Clear today's events
+    // Clear today's events and month events
     clearTodayEvents();
+    clearMonthEvents();
 
     lastKnownDay = today;
     save();
@@ -365,4 +418,9 @@ void TaskyModel::updateStreakIntensity() {
 void TaskyModel::clearTodayEvents() {
   todayEventCount = 0;
   memset(todayEvents, 0, sizeof(todayEvents));
+}
+
+void TaskyModel::clearMonthEvents() {
+  monthEventCount = 0;
+  memset(monthEvents, 0, sizeof(monthEvents));
 }

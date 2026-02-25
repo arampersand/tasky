@@ -25,6 +25,9 @@
 #if FEATURE_WEATHER
 #include "weather_service.h"
 #endif
+#if FEATURE_LLM
+#include "llm_service.h"
+#endif
 #include <Adafruit_GFX.h>
 #include <Adafruit_ST7789.h>
 #include <Arduino.h>
@@ -54,6 +57,9 @@ WeatherService weather(&model);
 #endif
 #if FEATURE_SPOTIFY
 SpotifyService spotify(&model);
+#endif
+#if FEATURE_LLM
+LlmService llm(&model);
 #endif
 OtaService ota(&model);
 FocusDNS focusDns(&model);
@@ -128,7 +134,7 @@ int encoderStep() {
   int dt = digitalRead(ENCODER_DT);
   if (clk != lastClk && clk == LOW) {
     lastClk = clk;
-    return (dt == HIGH) ? +1 : -1;
+    return (dt == HIGH) ? -1 : +1;
   }
   lastClk = clk;
   return 0;
@@ -206,72 +212,79 @@ ModeClickType modeClickType() {
 
 // ==================== NAVIGATION & HANDLERS ====================
 static Screen getNextScreen(Screen s) {
+  // Order: Timer→Tasks→Calendar→Agenda→Agent→Focus→Streak→Weather→Stats→Spotify→QR→Settings
   switch (s) {
-  case SCR_TIMER: return SCR_FOCUS;
-  case SCR_FOCUS: return SCR_TASKS;
-  case SCR_TASKS: return SCR_AGENDA;
-  case SCR_AGENDA: return SCR_CALENDAR;
-  case SCR_CALENDAR: return SCR_STREAK;
-  case SCR_STREAK: return SCR_STATS;
-  case SCR_STATS:
+  case SCR_TIMER: return SCR_TASKS;
+  case SCR_TASKS: return SCR_CALENDAR;
+  case SCR_CALENDAR: return SCR_AGENDA;
+  case SCR_AGENDA:
+#if FEATURE_LLM
+    return SCR_AGENT;
+#else
+    return SCR_FOCUS;
+#endif
+  case SCR_AGENT: return SCR_FOCUS;
+  case SCR_FOCUS: return SCR_STREAK;
+  case SCR_STREAK:
 #if FEATURE_WEATHER
     return SCR_WEATHER;
-#elif FEATURE_SPOTIFY
-    return SCR_SPOTIFY;
 #else
-    return SCR_SETTINGS;
+    return SCR_STATS;
 #endif
-  case SCR_WEATHER:
+  case SCR_WEATHER: return SCR_STATS;
+  case SCR_STATS:
 #if FEATURE_SPOTIFY
     return SCR_SPOTIFY;
 #else
-    return SCR_SETTINGS;
+    return SCR_QR;
 #endif
-  case SCR_SPOTIFY: return SCR_SETTINGS;
-  case SCR_SETTINGS: return SCR_QR;
-  case SCR_QR: return SCR_WIFI_INFO;
-  case SCR_WIFI_INFO: return SCR_TIMER;
+  case SCR_SPOTIFY: return SCR_QR;
+  case SCR_QR: return SCR_SETTINGS;
+  case SCR_SETTINGS: return SCR_TIMER;
   default: return SCR_TIMER;
   }
 }
 
 static Screen getPrevScreen(Screen s) {
+  // Reverse of: Timer→Tasks→Calendar→Agenda→Agent→Focus→Streak→Weather→Stats→Spotify→QR→Settings
   switch (s) {
-  case SCR_TIMER: return SCR_WIFI_INFO;
-  case SCR_FOCUS: return SCR_TIMER;
-  case SCR_TASKS: return SCR_FOCUS;
-  case SCR_AGENDA: return SCR_TASKS;
-  case SCR_CALENDAR: return SCR_AGENDA;
-  case SCR_STREAK: return SCR_CALENDAR;
-  case SCR_STATS: return SCR_STREAK;
-  case SCR_WEATHER: return SCR_STATS;
-  case SCR_SPOTIFY:
+  case SCR_TIMER: return SCR_SETTINGS;
+  case SCR_TASKS: return SCR_TIMER;
+  case SCR_CALENDAR: return SCR_TASKS;
+  case SCR_AGENDA: return SCR_CALENDAR;
+  case SCR_AGENT: return SCR_AGENDA;
+  case SCR_FOCUS:
+#if FEATURE_LLM
+    return SCR_AGENT;
+#else
+    return SCR_AGENDA;
+#endif
+  case SCR_STREAK: return SCR_FOCUS;
+  case SCR_WEATHER: return SCR_STREAK;
+  case SCR_STATS:
 #if FEATURE_WEATHER
     return SCR_WEATHER;
 #else
-    return SCR_STATS;
+    return SCR_STREAK;
 #endif
-  case SCR_SETTINGS:
+  case SCR_SPOTIFY: return SCR_STATS;
+  case SCR_QR:
 #if FEATURE_SPOTIFY
     return SCR_SPOTIFY;
-#elif FEATURE_WEATHER
-    return SCR_WEATHER;
 #else
     return SCR_STATS;
 #endif
-  case SCR_QR: return SCR_SETTINGS;
-  case SCR_WIFI_INFO: return SCR_QR;
+  case SCR_SETTINGS: return SCR_QR;
   default: return SCR_TIMER;
   }
 }
 
 void navigateNext() {
   Screen next = getNextScreen(screen);
-  if (next == SCR_WIFI_INFO || next == SCR_QR) {
-    if (!portal.wifiOn)
-      portal.begin();
+  if (next == SCR_QR || next == SCR_WIFI_INFO) {
+    if (!portal.wifiOn) portal.begin();
   }
-  if (model.st.finished && next != SCR_TIMER && next != SCR_FOCUS) {
+  if (model.st.finished && next != SCR_TIMER) {
     alarmStop();
   }
   screen = next;
@@ -283,11 +296,10 @@ void navigateNext() {
 
 void navigatePrev() {
   Screen prev = getPrevScreen(screen);
-  if (prev == SCR_WIFI_INFO || prev == SCR_QR) {
-    if (!portal.wifiOn)
-      portal.begin();
+  if (prev == SCR_QR || prev == SCR_WIFI_INFO) {
+    if (!portal.wifiOn) portal.begin();
   }
-  if (model.st.finished && prev != SCR_TIMER && prev != SCR_FOCUS) {
+  if (model.st.finished && prev != SCR_TIMER) {
     alarmStop();
   }
   screen = prev;
@@ -433,9 +445,7 @@ void handleCalendar(int step, EncClickType click) {
       ui.calendarSelDay = 1;
     ui.drawCalendar();
   }
-  if (click == ENC_SHORT)
-    ui.uiTick(false);
-  if (click == ENC_LONG && ui.calendarSelDay > 0) {
+  if (click == ENC_SHORT && ui.calendarSelDay > 0) {
     ui.showingDayTasks = true;
     ui.uiTick(true);
     ui.drawDayTasks(ui.calendarSelDay);
@@ -469,6 +479,11 @@ void handleStats(int step, EncClickType click) {
 }
 
 void handleSettings(int step, EncClickType click) {
+  const int maxSettingsIdx = 5;  // 0-5 (6 items)
+
+  // Update WiFi status for display
+  ui.wifiConnected = net.isConnected();
+
   if (!ui.baseDrawn) {
     ui.drawSettings();
     ui.baseDrawn = true;
@@ -483,7 +498,7 @@ void handleSettings(int step, EncClickType click) {
         model.cfg.breakMin = constrain(model.cfg.breakMin + step * 5, 1, 30);
         break;
       case 2:
-        model.cfg.soundOn = !model.cfg.soundOn;
+        // WiFi - no editing, handled by click
         break;
       case 3:
         model.cfg.screenBright =
@@ -510,13 +525,20 @@ void handleSettings(int step, EncClickType click) {
     if (step != 0) {
       ui.settingsSel += step;
       if (ui.settingsSel < 0)
-        ui.settingsSel = 5;
-      if (ui.settingsSel > 5)
+        ui.settingsSel = maxSettingsIdx;
+      if (ui.settingsSel > maxSettingsIdx)
         ui.settingsSel = 0;
       ui.drawSettings();
     }
     if (click == ENC_SHORT) {
       ui.uiTick(true);
+      // WiFi item: navigate to WiFi screen instead of editing
+      if (ui.settingsSel == 2) {
+        if (!portal.wifiOn) portal.begin();
+        screen = SCR_WIFI_INFO;
+        ui.baseDrawn = false;
+        return;
+      }
       ui.settingsEditing = true;
       ui.drawSettings();
     }
@@ -555,75 +577,57 @@ void handleWifi(int step, EncClickType click) {
   }
   if (click == ENC_SHORT) {
     ui.uiTick(true);
+    // Go back to Settings
+    screen = SCR_SETTINGS;
     ui.baseDrawn = false;
   }
 }
 
 void handleFocus(int step, EncClickType click) {
-  // Focus mode - immersive timer view
+  // Focus mode - blocklist management screen
   if (!ui.baseDrawn) {
-    ui.drawFocus();
+    ui.drawFocus(&focusDns);
     ui.baseDrawn = true;
   }
 
-  if (model.st.running && model.remainingMs() == 0) {
-    model.finishTimer();
-    ui.drawFinishScreen("WELL DONE");
-    ui.uiTick(true);
+  // Encoder scroll through domain list
+  if (step != 0) {
+    int count = focusDns.getBlockedCount();
+    if (count > 0) {
+      ui.focusDomainScroll += step;
+      if (ui.focusDomainScroll < 0) ui.focusDomainScroll = 0;
+      if (ui.focusDomainScroll >= count) ui.focusDomainScroll = count - 1;
+      ui.drawFocusList(&focusDns);
+    }
   }
 
-  if (model.st.finished) {
-    if (click == ENC_SHORT) {
-      ui.uiTick(true);
-      alarmStop();
-      model.nextPhase();
-      ui.baseDrawn = false;
-    }
-    if (click == ENC_LONG) {
-      ui.uiTick(true);
-      alarmStop();
-      model.resetTimer();
-      ui.baseDrawn = false;
-    }
-    uint32_t now = millis();
-    if (now - lastAnimAt >= 150) {
-      lastAnimAt = now;
-      alarmFlip = !alarmFlip;
-      setLed(alarmFlip ? model.cfg.ledBright : 0);
-    }
-    if (model.cfg.soundOn && now - lastBeepAt >= 260) {
-      lastBeepAt = now;
-      if (alarmFlip) buzzerTone(2200);
-      else buzzerOff();
-    }
-    ui.drawFlashIfNeeded();
-    return;
-  }
-
+  // Short click: toggle focus mode ON/OFF
   if (click == ENC_SHORT) {
     ui.uiTick(true);
-    if (!model.st.running) {
-      model.save();
-      model.startTimer();
-    } else {
-      model.pauseTimer();
-    }
-    ui.baseDrawn = false;
+    bool newState = !focusDns.isFocusModeActive();
+    focusDns.setFocusMode(newState);
+    ui.baseDrawn = false;  // Redraw full screen to update status
   }
 
+  // Long click: remove selected domain, or reset to defaults if empty
   if (click == ENC_LONG) {
-    ui.uiTick(true);
-    model.resetTimer();
-    ui.baseDrawn = false;
-  }
-
-  // Solo actualizar tiempo cuando cambia (evita parpadeo cada 500ms)
-  static uint32_t lastFocusTick = 0;
-  if (millis() - lastFocusTick >= 200) {
-    lastFocusTick = millis();
-    int mm = model.remainingMs() / 60000;
-    int ss = (model.remainingMs() % 60000) / 1000;
-    ui.drawFocusTime(mm, ss);
+    int count = focusDns.getBlockedCount();
+    if (count == 0) {
+      // Reset to defaults
+      ui.uiTick(true);
+      focusDns.loadDefaultBlockList();
+      ui.focusDomainScroll = 0;
+      ui.baseDrawn = false;
+    } else if (ui.focusDomainScroll < count) {
+      ui.uiTick(true);
+      const char* domain = focusDns.getBlockedDomain(ui.focusDomainScroll);
+      focusDns.removeBlockedDomain(domain);
+      // Adjust scroll if needed
+      if (ui.focusDomainScroll >= focusDns.getBlockedCount() && ui.focusDomainScroll > 0) {
+        ui.focusDomainScroll--;
+      }
+      ui.baseDrawn = false;
+    }
   }
 }
 
@@ -637,7 +641,8 @@ void handleAgenda(int step, EncClickType click) {
   if (click == ENC_SHORT) {
     ui.uiTick(true);
 #if FEATURE_NOTION
-    notion.forceUpdate();
+    if (model.cfg.notionApiKey.length() > 0)
+      notion.forceUpdate();
 #endif
     ui.baseDrawn = false;
   }
@@ -724,6 +729,115 @@ void handleSpotify(int step, EncClickType click) {
     if (spotify.playback.progressMs > spotify.playback.durationMs) {
       spotify.playback.progressMs = spotify.playback.durationMs;
     }
+    ui.baseDrawn = false;
+  }
+}
+#endif
+
+#if FEATURE_LLM
+void handleAgent(int step, EncClickType click) {
+  // Mode selection overlay
+  if (ui.agentModeSelect) {
+    if (!ui.baseDrawn) {
+      ui.drawAgentModeSelect(ui.agentModeSel, model.cfg.llmModeOverride);
+      ui.baseDrawn = true;
+    }
+    if (step != 0) {
+      ui.agentModeSel += step;
+      if (ui.agentModeSel < 0) ui.agentModeSel = LLM_MODE_COUNT;
+      if (ui.agentModeSel > LLM_MODE_COUNT) ui.agentModeSel = 0;
+      ui.baseDrawn = false;
+    }
+    if (click == ENC_SHORT) {
+      ui.uiTick(true);
+      // Selection 0=AUTO (-1), 1-7=modes (0-6)
+      int8_t newMode = (ui.agentModeSel == 0) ? -1 : (int8_t)(ui.agentModeSel - 1);
+      model.cfg.llmModeOverride = newMode;
+      model.save();
+      ui.agentModeSelect = false;
+      ui.baseDrawn = false;
+    }
+    if (click == ENC_LONG) {
+      // Cancel, go back
+      ui.agentModeSelect = false;
+      ui.baseDrawn = false;
+    }
+    return;
+  }
+
+  AgentState agentState = llm.getState();
+  LlmMode mode = llm.getTodayMode();
+  const char* modeName = LlmService::getModeName(mode);
+  const char* modeDesc = LlmService::getModeDesc(mode);
+
+  if (!ui.baseDrawn) {
+    ui.drawAgent((int)agentState, llm.response, llm.responseLen,
+                 llm.errorMsg, modeName, modeDesc,
+                 ui.agentShowingResponse, ui.agentScrollOffset);
+    ui.baseDrawn = true;
+  }
+
+  // THINKING - refresh for animation, allow cancel
+  if (agentState == AGENT_SENDING || agentState == AGENT_THINKING) {
+    static uint32_t lastAgentDraw = 0;
+    if (millis() - lastAgentDraw >= 400) {
+      lastAgentDraw = millis();
+      ui.baseDrawn = false;
+    }
+    if (click == ENC_SHORT) {
+      llm.cancel();
+      ui.agentShowingResponse = false;
+      ui.baseDrawn = false;
+    }
+    return;
+  }
+
+  // DONE - scroll response, press to go back
+  if (agentState == AGENT_DONE && ui.agentShowingResponse) {
+    if (step != 0) {
+      ui.agentScrollOffset += step * 18;
+      if (ui.agentScrollOffset < 0) ui.agentScrollOffset = 0;
+      ui.baseDrawn = false;
+    }
+    if (click == ENC_SHORT || click == ENC_LONG) {
+      llm.reset();
+      ui.agentShowingResponse = false;
+      ui.agentScrollOffset = 0;
+      ui.baseDrawn = false;
+    }
+    return;
+  }
+
+  // ERROR - press to go back to idle
+  if (agentState == AGENT_ERROR) {
+    if (click == ENC_SHORT) {
+      llm.reset();
+      ui.baseDrawn = false;
+    }
+    return;
+  }
+
+  // IDLE - short press = get today's insight, long press = mode selector
+  if (click == ENC_SHORT) {
+    ui.uiTick(true);
+    ui.agentShowingResponse = true;
+    ui.agentScrollOffset = 0;
+
+    // Show thinking animation before calling LLM (even for cache hits)
+    LlmMode preMode = llm.getTodayMode();
+    const char* preModeName = LlmService::getModeName(preMode);
+    const char* preModeDesc = LlmService::getModeDesc(preMode);
+    ui.drawAgent(AGENT_THINKING, nullptr, 0, nullptr, preModeName, preModeDesc, false, 0);
+    delay(800);  // Brief animation so it feels like AI is processing
+
+    llm.sendDailyPrompt();
+    ui.baseDrawn = false;
+  }
+  if (click == ENC_LONG) {
+    ui.uiTick(true);
+    ui.agentModeSelect = true;
+    // Pre-select current mode
+    ui.agentModeSel = (model.cfg.llmModeOverride < 0) ? 0 : (model.cfg.llmModeOverride + 1);
     ui.baseDrawn = false;
   }
 }
@@ -859,6 +973,9 @@ void setup() {
 #if FEATURE_SPOTIFY
   spotify.begin();
 #endif
+#if FEATURE_LLM
+  llm.begin();
+#endif
   ota.begin();
   power.begin();
   focusDns.loadDefaultBlockList();
@@ -908,6 +1025,9 @@ void loop() {
 #endif
 #if FEATURE_SPOTIFY
     spotify.loop();
+#endif
+#if FEATURE_LLM
+    llm.loop();
 #endif
     model.checkDayChange();
 
@@ -1018,6 +1138,11 @@ void loop() {
 #if FEATURE_SPOTIFY
   case SCR_SPOTIFY:
     handleSpotify(step, click);
+    break;
+#endif
+#if FEATURE_LLM
+  case SCR_AGENT:
+    handleAgent(step, click);
     break;
 #endif
   case SCR_SETTINGS:

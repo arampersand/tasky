@@ -373,29 +373,19 @@ String WiFiPortal::htmlPage() {
   s += "</div>";
 #endif
 
-#if FEATURE_WEATHER && TASKY_MODE_DEV
-  // ===== WEATHER WIDGET (solo modo dev - requiere API key) =====
+#if FEATURE_WEATHER
+  // ===== WEATHER WIDGET (Open-Meteo - no API key needed) =====
   s += "<hr><h3>&#9728; Weather Widget</h3>";
-  s += "<p style='font-size:10px;color:#666;margin-bottom:8px'>Muestra el clima actual en una pantalla dedicada</p>";
-
-  // Weather Guide
-  s += "<details class='guide'>";
-  s += "<summary>&#128218; Como obtener API Key</summary>";
-  s += "<div class='content'>";
-  s += "<ol>";
-  s += "<li>Ir a <a href='https://openweathermap.org/api' target='_blank'>OpenWeatherMap</a><div class='link'>openweathermap.org/api</div></li>";
-  s += "<li>Click <strong>\"Sign Up\"</strong> y crear cuenta gratis</li>";
-  s += "<li>Ir a <strong>API Keys</strong> en tu perfil</li>";
-  s += "<li>Copiar tu <strong>API Key</strong> (se activa en ~2 horas)</li>";
-  s += "</ol>";
-  s += "<p style='color:#888;margin-top:8px'>Gratis: 1000 llamadas/dia - Tasky actualiza cada 30 min</p>";
-  s += "</div></details>";
+  s += "<p style='font-size:10px;color:#666;margin-bottom:8px'>Muestra el clima actual via Open-Meteo (gratis, sin API key)</p>";
 
   s += "<div class='section'>";
-  s += "<label>OpenWeatherMap API Key</label>";
-  s += "<input name='wKey' type='password' value='" + model->cfg.weatherApiKey + "' placeholder='abc123def456...'>";
   s += "<label>Ciudad</label>";
-  s += "<input name='wCity' value='" + model->cfg.weatherCity + "' placeholder='Mexico City, Monterrey, etc.'>";
+  s += "<input name='wCity' value='" + model->cfg.weatherCity + "' placeholder='Chihuahua, Monterrey, etc.'>";
+  s += "<label>Latitud (opcional - se autocompleta por ciudad)</label>";
+  s += "<input name='wLat' type='number' step='0.0001' value='" + String(model->cfg.weatherLat, 4) + "' placeholder='28.6353'>";
+  s += "<label>Longitud (opcional - se autocompleta por ciudad)</label>";
+  s += "<input name='wLon' type='number' step='0.0001' value='" + String(model->cfg.weatherLon, 4) + "' placeholder='-106.0889'>";
+  s += "<p style='font-size:10px;color:#666;margin-top:4px'>Deja lat/lon en 0 para geocodificacion automatica por ciudad</p>";
   s += "<label>Unidades de Temperatura</label>";
   s += "<select name='wCel'>";
   s += model->cfg.weatherCelsius ?
@@ -449,6 +439,48 @@ String WiFiPortal::htmlPage() {
   s += "Usa la rama <strong>dev</strong> del firmware si quieres configurar Spotify con API keys.";
   s += "</p>";
 #endif
+#endif
+
+#if FEATURE_LLM
+  // ===== AI AGENT =====
+  s += "<hr><h3>&#129302; AI Agent</h3>";
+  s += "<p style='font-size:10px;color:#666;margin-bottom:8px'>Asistente de productividad con IA (Claude o GPT)</p>";
+
+  // AI Guide
+  s += "<details class='guide'>";
+  s += "<summary>&#128218; Como configurar el AI Agent</summary>";
+  s += "<div class='content'>";
+  s += "<p><strong>Opcion A - Anthropic (Claude):</strong></p>";
+  s += "<ol>";
+  s += "<li>Ir a <a href='https://console.anthropic.com/settings/keys' target='_blank'>Anthropic Console</a><div class='link'>console.anthropic.com/settings/keys</div></li>";
+  s += "<li>Click <strong>\"Create Key\"</strong></li>";
+  s += "<li>Copiar la API key (empieza con sk-ant-...)</li>";
+  s += "</ol>";
+  s += "<p style='margin-top:8px'><strong>Opcion B - OpenAI (GPT):</strong></p>";
+  s += "<ol>";
+  s += "<li>Ir a <a href='https://platform.openai.com/api-keys' target='_blank'>OpenAI Platform</a><div class='link'>platform.openai.com/api-keys</div></li>";
+  s += "<li>Click <strong>\"Create new secret key\"</strong></li>";
+  s += "<li>Copiar la API key (empieza con sk-...)</li>";
+  s += "</ol>";
+  s += "<p style='color:#888;margin-top:8px'>Costo estimado: ~$0.01-0.03 por consulta con modelos economicos</p>";
+  s += "</div></details>";
+
+  s += "<div class='section'>";
+  s += "<label>Proveedor de IA</label>";
+  s += "<select name='lPrv'>";
+  s += "<option value='0'" + String(model->cfg.llmProvider == 0 ? " selected" : "") + ">Anthropic (Claude)</option>";
+  s += "<option value='1'" + String(model->cfg.llmProvider == 1 ? " selected" : "") + ">OpenAI (GPT)</option>";
+  s += "</select>";
+  s += "<label>API Key</label>";
+  s += "<input name='lKey' type='password' value='" + model->cfg.llmApiKey + "' placeholder='sk-ant-... o sk-...'>";
+
+  // Status indicator
+  if (model->cfg.llmApiKey.length() > 10) {
+    s += "<div style='margin:8px 0;padding:10px;background:#143d1a;border-radius:4px;color:#0f0'>";
+    s += "&#10003; API key configurada";
+    s += "</div>";
+  }
+  s += "</div>";
 #endif
 
   // ===== SUBMIT =====
@@ -690,13 +722,23 @@ void WiFiPortal::handleSave() {
 #endif
 
 #if FEATURE_WEATHER
-  // Weather Widget
-  if (server.hasArg("wKey"))
-    model->cfg.weatherApiKey = server.arg("wKey");
-  if (server.hasArg("wCity"))
-    model->cfg.weatherCity = server.arg("wCity");
-  if (server.hasArg("wCel"))
-    model->cfg.weatherCelsius = server.arg("wCel") == "1";
+  // Weather Widget (Open-Meteo)
+  {
+    String oldCity = model->cfg.weatherCity;
+    if (server.hasArg("wCity"))
+      model->cfg.weatherCity = server.arg("wCity");
+    if (server.hasArg("wLat"))
+      model->cfg.weatherLat = server.arg("wLat").toFloat();
+    if (server.hasArg("wLon"))
+      model->cfg.weatherLon = server.arg("wLon").toFloat();
+    if (server.hasArg("wCel"))
+      model->cfg.weatherCelsius = server.arg("wCel") == "1";
+    // Reset lat/lon if city changed (force re-geocode)
+    if (oldCity != model->cfg.weatherCity && model->cfg.weatherCity.length() > 0) {
+      model->cfg.weatherLat = 0;
+      model->cfg.weatherLon = 0;
+    }
+  }
 #endif
 
 #if FEATURE_SPOTIFY
@@ -705,6 +747,17 @@ void WiFiPortal::handleSave() {
     model->cfg.spotifyClientId = server.arg("spId");
   if (server.hasArg("spSec"))
     model->cfg.spotifySecret = server.arg("spSec");
+#endif
+
+#if FEATURE_LLM
+  // LLM Agent
+  if (server.hasArg("lKey"))
+    model->cfg.llmApiKey = server.arg("lKey");
+  if (server.hasArg("lPrv")) {
+    int v = server.arg("lPrv").toInt();
+    if (v >= 0 && v <= 1)
+      model->cfg.llmProvider = (uint8_t)v;
+  }
 #endif
 
   model->save();

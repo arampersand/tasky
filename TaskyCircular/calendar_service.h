@@ -11,6 +11,7 @@ struct ICalParseState {
   int currentYear;
   int currentMonth;
   int currentDay;
+  int8_t tzOffset;  // UTC offset in hours (from model->cfg.timezone)
 
   // Parser state machine
   bool inEvent;          // Inside VEVENT block
@@ -25,7 +26,16 @@ struct ICalParseState {
   bool hasDate;
   bool hasTime;
   bool hasEndTime;
+  bool isUtc;       // DTSTART has 'Z' suffix (needs timezone conversion)
   bool inDescription;  // For multi-line DESCRIPTION handling
+
+  // RRULE data (basic recurrence support)
+  bool hasRRule;
+  char rruleFreq;    // 'D'=daily, 'W'=weekly, 'M'=monthly, 0=none
+  int rruleInterval;  // Interval (default 1)
+  int rruleCount;     // COUNT limit (-1 = no limit)
+  bool rruleUntilSet;
+  int rruleUntilYear, rruleUntilMonth, rruleUntilDay;
 
   // Next event tracking
   long minDaysDiff;

@@ -25,6 +25,7 @@ public:
   void forceUpdate();
 
   bool isConfigured() const;
+  bool needsGeocode() const;
   bool hasData() const;
 
   // Current weather data
@@ -44,6 +45,7 @@ private:
 
   static const uint32_t UPDATE_INTERVAL_MS = 30 * 60 * 1000;  // 30 minutes
 
+  void geocodeCity();              // City name → lat/lon via Open-Meteo geocoding
   void parseResponse(const String &json);
-  WeatherIcon mapConditionCode(int code, bool isNight);
+  WeatherIcon mapWmoCode(int code, bool isDay);
 };

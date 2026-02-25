@@ -1,0 +1,19 @@
+# Secrets - NEVER commit API keys
+TaskyCircular/config_secrets.h
+
+# macOS
+.DS_Store
+
+# Build artifacts
+build/
+.pio/
+*.o
+*.elf
+*.bin
+*.hex
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
