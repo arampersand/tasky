@@ -858,7 +858,7 @@ uint16_t TaskyUI::calendarDayColor(uint8_t eventCount) {
   if (eventCount == 1)
     return C_GREEN;  // Light day
   if (eventCount <= 3)
-    return C_PURPLE; // Moderate
+    return C_ORANGE; // Moderate
   return C_RED;      // Busy day (4+)
 }
 
@@ -1004,6 +1004,9 @@ void TaskyUI::drawAgenda() {
   const int daysPerMonth[] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
   if (tomorrowDay > daysPerMonth[currentMonth]) tomorrowDay = 1;
 
+  Serial.printf("[Agenda] monthEventCount=%d, currentDay=%d, tomorrowDay=%d\n",
+                model->monthEventCount, currentDay, tomorrowDay);
+
   // === TODAY section ===
   tft.setTextColor(C_TEAL);
   tft.setFont(&FreeSansBold12pt7b);
@@ -1016,6 +1019,7 @@ void TaskyUI::drawAgenda() {
   for (int i = 0; i < model->monthEventCount; i++) {
     if (model->monthEvents[i].day == currentDay) todayCount++;
   }
+  Serial.printf("[Agenda] todayCount=%d\n", todayCount);
 
   if (todayCount > 0) {
     int shown = 0;
@@ -1380,7 +1384,7 @@ void TaskyUI::drawWeather(float temp, float feelsLike, uint8_t humidity,
 
   switch (icon) {
     case 0: // Clear day - sun
-      tft.fillCircle(iconX, iconY, 18, C_PURPLE);
+      tft.fillCircle(iconX, iconY, 18, C_ORANGE);
       // Sun rays
       for (int i = 0; i < 8; i++) {
         float angle = i * 45.0 * 3.14159 / 180.0;
@@ -1388,7 +1392,7 @@ void TaskyUI::drawWeather(float temp, float feelsLike, uint8_t humidity,
         int y1 = iconY + (int)(sin(angle) * 24);
         int x2 = iconX + (int)(cos(angle) * 32);
         int y2 = iconY + (int)(sin(angle) * 32);
-        tft.drawLine(x1, y1, x2, y2, C_PURPLE);
+        tft.drawLine(x1, y1, x2, y2, C_ORANGE);
       }
       break;
     case 1: // Clear night - moon

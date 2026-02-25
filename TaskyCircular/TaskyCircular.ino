@@ -354,7 +354,7 @@ void handleTimer(int step, EncClickType click) {
     ui.lastShownMin = -1;
   }
   if (step != 0 && !model.st.running) {
-    int delta = step * 5;
+    int delta = -step * 5;
     if (model.phase == PHASE_WORK) {
       model.cfg.workMin = constrain(model.cfg.workMin + delta, 5, 90);
     } else {
@@ -642,14 +642,27 @@ void handleFocus(int step, EncClickType click) {
 }
 
 void handleAgenda(int step, EncClickType click) {
+  static int lastEventCount = -1;
+
   if (!ui.baseDrawn) {
     ui.drawAgenda();
     ui.baseDrawn = true;
+    lastEventCount = model.monthEventCount;
   }
 
-  // Refresh on click
+  // Auto-refresh when calendar data arrives (was 0, now has events)
+  if (model.monthEventCount != lastEventCount) {
+    lastEventCount = model.monthEventCount;
+    ui.baseDrawn = false;
+  }
+
+  // Refresh on click - force calendar + notion update
   if (click == ENC_SHORT) {
     ui.uiTick(true);
+#if FEATURE_CALENDAR
+    if (model.cfg.calendarUrl.length() > 0)
+      calendar.forceUpdate();
+#endif
 #if FEATURE_NOTION
     if (model.cfg.notionApiKey.length() > 0)
       notion.forceUpdate();
