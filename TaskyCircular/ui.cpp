@@ -129,7 +129,7 @@ void TaskyUI::drawFlashIfNeeded() {
 }
 
 uint16_t TaskyUI::accentColor() {
-  return (model->phase == PHASE_WORK) ? C_TEAL : C_ORANGE;
+  return (model->phase == PHASE_WORK) ? C_TEAL : C_PURPLE;
 }
 
 // Helper to get color based on progress for ring
@@ -138,7 +138,7 @@ uint16_t getRingColor(float pct) {
   if (pct > 0.66)
     return 0x2E57; // Teal/Blue-ish
   if (pct > 0.25)
-    return 0xFD20; // Orange/Yellow
+    return 0x780F; // Purple
   return 0xF800;   // Red
 }
 
@@ -338,14 +338,10 @@ void TaskyUI::drawTasks() {
     return;
   }
 
-  // Tasks layout - vertically centered in available space (after header ~50px
-  // to ~220px) Available height: 170px, 3 tasks with spacing
+  // Tasks layout - 3 tasks + "Add" row
   const int contentTop = 60;
-  const int contentBottom = 220;
-  const int rowH = 45;
-  const int totalHeight = 3 * rowH;
-  const int yBase =
-      contentTop + (contentBottom - contentTop - totalHeight) / 2 + 25;
+  const int rowH = 40;
+  const int yBase = contentTop + 20;
 
   const int checkboxX = 28;
   const int textStartX = 52;
@@ -392,7 +388,7 @@ void TaskyUI::drawTasks() {
     tft.setCursor(textStartX, baseline);
     tft.print(t);
 
-    // Selection indicator - small arrow or dot on the left
+    // Selection indicator - small arrow on the left
     if (isSelected) {
       tft.fillTriangle(18, baseline - 4, 18, baseline + 4, 24, baseline,
                        C_TEAL);
@@ -400,6 +396,26 @@ void TaskyUI::drawTasks() {
 
     tft.setFont();
   }
+
+  // "Add" row at the bottom
+  int addBaseline = yBase + 3 * rowH;
+  bool addSelected = (tasksSel == 3);
+  uint16_t addColor = addSelected ? C_TEAL : C_MUTED;
+
+  // Plus icon
+  tft.drawFastHLine(checkboxX + 4, addBaseline - 1, 10, addColor);
+  tft.drawFastVLine(checkboxX + 9, addBaseline - 6, 10, addColor);
+
+  tft.setTextColor(addColor);
+  tft.setFont(&FreeSans12pt7b);
+  tft.setCursor(textStartX, addBaseline);
+  tft.print("Add task...");
+
+  if (addSelected) {
+    tft.fillTriangle(18, addBaseline - 4, 18, addBaseline + 4, 24, addBaseline,
+                     C_TEAL);
+  }
+  tft.setFont();
 }
 
 // Helper to get days in month
@@ -842,7 +858,7 @@ uint16_t TaskyUI::calendarDayColor(uint8_t eventCount) {
   if (eventCount == 1)
     return C_GREEN;  // Light day
   if (eventCount <= 3)
-    return C_ORANGE; // Moderate
+    return C_PURPLE; // Moderate
   return C_RED;      // Busy day (4+)
 }
 
@@ -883,7 +899,7 @@ void TaskyUI::drawFocusBase(FocusDNS* dns) {
 
 void TaskyUI::drawFocusList(FocusDNS* dns) {
   // Clear list area
-  tft.fillRect(0, 96, 240, 114, C_BG);
+  tft.fillRect(0, 96, 240, 116, C_BG);
 
   int count = dns->getBlockedCount();
   if (count == 0) {
@@ -893,7 +909,7 @@ void TaskyUI::drawFocusList(FocusDNS* dns) {
   }
 
   // Clamp scroll
-  int maxVisible = 6;
+  int maxVisible = 7;
   if (focusDomainScroll > count - 1) focusDomainScroll = count - 1;
   if (focusDomainScroll < 0) focusDomainScroll = 0;
 
@@ -906,7 +922,7 @@ void TaskyUI::drawFocusList(FocusDNS* dns) {
   int yPos = 98;
   for (int i = startIdx; i < count && i < startIdx + maxVisible; i++) {
     bool selected = (i == focusDomainScroll);
-    int itemY = yPos + (i - startIdx) * 19;
+    int itemY = yPos + (i - startIdx) * 16;
 
     if (selected) {
       tft.fillRect(10, itemY - 2, 220, 18, C_TEAL);
@@ -933,8 +949,7 @@ void TaskyUI::drawFocusList(FocusDNS* dns) {
       displayName[0] -= 32;
     }
 
-    // Same font size as settings screen
-    tft.setFont(&FreeSans12pt7b);
+    tft.setFont(&FreeSans9pt7b);
     // Center the name
     int16_t x1, y1;
     uint16_t tw, th;
@@ -974,38 +989,26 @@ void TaskyUI::drawAgenda() {
   int marginX = 24;
   int yPos = 56;
 
-  // Get current day and day name
+  // Get current day
   time_t nowTime = time(nullptr);
   struct tm now;
   bool hasTime = (nowTime > 1577836800);
   int currentDay = 1;
   int currentMonth = 0;
-  int currentWday = 0;
   if (hasTime) {
     localtime_r(&nowTime, &now);
     currentDay = now.tm_mday;
     currentMonth = now.tm_mon;
-    currentWday = now.tm_wday;
   }
   int tomorrowDay = currentDay + 1;
   const int daysPerMonth[] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
   if (tomorrowDay > daysPerMonth[currentMonth]) tomorrowDay = 1;
 
-  const char* dayNames[] = {"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"};
-  int tomorrowWday = (currentWday + 1) % 7;
-
   // === TODAY section ===
-  char todayLabel[24];
-  snprintf(todayLabel, sizeof(todayLabel), "Today - %s", dayNames[currentWday]);
   tft.setTextColor(C_TEAL);
   tft.setFont(&FreeSansBold12pt7b);
   tft.setCursor(marginX, yPos);
   tft.print("Today");
-  // Day name smaller
-  tft.setFont(&FreeSans9pt7b);
-  tft.setTextColor(C_MUTED);
-  tft.setCursor(marginX + 72, yPos);
-  tft.print(dayNames[currentWday]);
   yPos += 6;
 
   // Count today's events from monthEvents
@@ -1062,14 +1065,10 @@ void TaskyUI::drawAgenda() {
   yPos += 20;
 
   // === TOMORROW section ===
-  tft.setTextColor(C_ORANGE);
+  tft.setTextColor(C_PURPLE);
   tft.setFont(&FreeSansBold12pt7b);
   tft.setCursor(marginX, yPos);
   tft.print("Tomorrow");
-  tft.setFont(&FreeSans9pt7b);
-  tft.setTextColor(C_MUTED);
-  tft.setCursor(marginX + 112, yPos);
-  tft.print(dayNames[tomorrowWday]);
   yPos += 6;
 
   // Count tomorrow's events
@@ -1381,7 +1380,7 @@ void TaskyUI::drawWeather(float temp, float feelsLike, uint8_t humidity,
 
   switch (icon) {
     case 0: // Clear day - sun
-      tft.fillCircle(iconX, iconY, 18, C_ORANGE);
+      tft.fillCircle(iconX, iconY, 18, C_PURPLE);
       // Sun rays
       for (int i = 0; i < 8; i++) {
         float angle = i * 45.0 * 3.14159 / 180.0;
@@ -1389,7 +1388,7 @@ void TaskyUI::drawWeather(float temp, float feelsLike, uint8_t humidity,
         int y1 = iconY + (int)(sin(angle) * 24);
         int x2 = iconX + (int)(cos(angle) * 32);
         int y2 = iconY + (int)(sin(angle) * 32);
-        tft.drawLine(x1, y1, x2, y2, C_ORANGE);
+        tft.drawLine(x1, y1, x2, y2, C_PURPLE);
       }
       break;
     case 1: // Clear night - moon
@@ -1666,9 +1665,9 @@ void TaskyUI::drawAgentModeSelect(int selection, int8_t currentOverride) {
   // 10 items: AUTO + 9 modes
   static const int TOTAL_MODES = 10;
   static const char* modeLabels[10] = {
-    "AUTO", "ENFOQUE", "ARRANQUE", "TIEMPO",
-    "CLARIDAD", "ORDEN", "CIERRE", "MOVIMIENTO",
-    "GYM", "RECETAS"
+    "AUTO", "FOCUS", "KICKSTART", "TIME",
+    "CLARITY", "ORDER", "CLOSING", "MOVEMENT",
+    "GYM", "RECIPES"
   };
 
   // Determine which item is currently active

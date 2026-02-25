@@ -67,6 +67,7 @@ public:
   uint16_t C_TEAL = 0x2E57;
   uint16_t C_GREEN = 0x07E0;
   uint16_t C_ORANGE = 0xFD20;
+  uint16_t C_PURPLE = 0x780F;
   uint16_t C_RED = 0xF800;
   uint16_t C_SPLASH_BG, C_SPLASH_TX;
 

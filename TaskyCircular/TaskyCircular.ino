@@ -404,12 +404,19 @@ void handleTasks(int step, EncClickType click) {
   if (step != 0) {
     ui.tasksSel += step;
     if (ui.tasksSel < 0)
-      ui.tasksSel = 2;
-    if (ui.tasksSel > 2)
+      ui.tasksSel = 3;
+    if (ui.tasksSel > 3)
       ui.tasksSel = 0;
     ui.drawTasks();
   }
   if (click == ENC_SHORT) {
+    if (ui.tasksSel == 3) {
+      // "Add" item → go to QR screen
+      screen = SCR_QR;
+      ui.goToScreen(SCR_QR);
+      if (!portal.wifiOn) portal.begin();
+      return;
+    }
     model.taskDone[ui.tasksSel] = !model.taskDone[ui.tasksSel];
     ui.uiTick(true);
     if (model.taskDone[ui.tasksSel])
@@ -417,7 +424,7 @@ void handleTasks(int step, EncClickType click) {
     model.save();
     ui.drawTasks();
   }
-  if (click == ENC_LONG) {
+  if (click == ENC_LONG && ui.tasksSel < 3) {
     showingDetail = true;
     ui.uiTick(true);
     ui.drawTaskDetail(ui.tasksSel);
@@ -425,10 +432,13 @@ void handleTasks(int step, EncClickType click) {
 }
 
 void handleCalendar(int step, EncClickType click) {
+  static uint32_t dayTasksClosedAt = 0;  // Debounce guard
+
   if (ui.showingDayTasks) {
     if (click == ENC_SHORT || click == ENC_LONG) {
       ui.showingDayTasks = false;
       ui.baseDrawn = false;
+      dayTasksClosedAt = millis();
     }
     return;
   }
@@ -445,7 +455,7 @@ void handleCalendar(int step, EncClickType click) {
       ui.calendarSelDay = 1;
     ui.drawCalendar();
   }
-  if (click == ENC_SHORT && ui.calendarSelDay > 0) {
+  if (click == ENC_SHORT && ui.calendarSelDay > 0 && (millis() - dayTasksClosedAt > 300)) {
     ui.showingDayTasks = true;
     ui.uiTick(true);
     ui.drawDayTasks(ui.calendarSelDay);

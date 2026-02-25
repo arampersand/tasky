@@ -27,28 +27,28 @@ static String llmJsonStr(const String& json, const String& key) {
 
 // Display names (short, for header)
 static const char* modeNames[LLM_MODE_COUNT] = {
-  "ENFOQUE",
-  "ARRANQUE",
-  "TIEMPO",
-  "CLARIDAD",
-  "ORDEN",
-  "CIERRE",
-  "MOVIMIENTO",
+  "FOCUS",
+  "KICKSTART",
+  "TIME",
+  "CLARITY",
+  "ORDER",
+  "CLOSING",
+  "MOVEMENT",
   "GYM",
-  "RECETAS"
+  "RECIPES"
 };
 
 // Short descriptions (for IDLE screen)
 static const char* modeDescs[LLM_MODE_COUNT] = {
-  "Accion concreta para avanzar",
-  "Rompe la inercia del dia",
-  "Optimiza tu uso del tiempo",
-  "Una pregunta para priorizar",
-  "Orden fisico, claridad mental",
-  "Prepara un buen cierre",
-  "Rutina breve de ejercicio",
-  "Rutina de gym del dia",
-  "Receta facil y economica"
+  "Concrete action to move forward",
+  "Break the day's inertia",
+  "Optimize your time usage",
+  "A question to prioritize",
+  "Physical order, mental clarity",
+  "Prepare a good closing",
+  "Short exercise routine",
+  "Gym routine for today",
+  "Easy affordable recipe"
 };
 
 // Full prompts sent to LLM (reference user context injected via system prompt)
@@ -301,7 +301,7 @@ void LlmService::sendDailyPrompt() {
   // 2. Config check (only real error shown to user)
   if (!isConfigured()) {
     state = AGENT_ERROR;
-    strncpy(errorMsg, "Configura API key en portal", sizeof(errorMsg) - 1);
+    strncpy(errorMsg, "Set API key in portal", sizeof(errorMsg) - 1);
     return;
   }
 
@@ -512,7 +512,7 @@ void LlmService::parseAnthropicResponse(const String& json) {
       String errMsg = llmJsonStr(json, "message");
       strncpy(errorMsg, errMsg.length() > 0 ? errMsg.c_str() : "API error", sizeof(errorMsg) - 1);
     } else {
-      strncpy(errorMsg, "Sin respuesta", sizeof(errorMsg) - 1);
+      strncpy(errorMsg, "No response", sizeof(errorMsg) - 1);
     }
     state = AGENT_ERROR;
     return;
@@ -602,7 +602,7 @@ void LlmService::executeRequest(const char* userMessage) {
     client.setTimeout(15);
 
     if (!client.connect("api.anthropic.com", 443)) {
-      strncpy(errorMsg, "Conexion fallida", sizeof(errorMsg) - 1);
+      strncpy(errorMsg, "Connection failed", sizeof(errorMsg) - 1);
       state = AGENT_ERROR;
       return;
     }
@@ -647,7 +647,7 @@ void LlmService::executeRequest(const char* userMessage) {
   }
 
   if (result.length() == 0) {
-    strncpy(errorMsg, "Respuesta vacia", sizeof(errorMsg) - 1);
+    strncpy(errorMsg, "Empty response", sizeof(errorMsg) - 1);
     state = AGENT_ERROR;
     Serial.println("[LLM] Empty response");
     return;
