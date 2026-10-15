@@ -19,12 +19,12 @@
 #define FEATURE_LLM      1   // AI Agent - cloud LLM integration (Claude/OpenAI)
 
 // ==================== SECRETS (from config_secrets.h, gitignored) ====================
-// Create TaskyCircular/config_secrets.h with your API keys (see template in repo).
+// Copy config_secrets.h.example to config_secrets.h and fill in your keys.
 // If the file doesn't exist, everything compiles fine with empty defaults.
 #if __has_include("config_secrets.h")
   #include "config_secrets.h"
 #else
-  #warning "config_secrets.h not found - all API keys will be empty. Copy the template to add your keys."
+  #warning "config_secrets.h not found - all API keys will be empty. Copy config_secrets.h.example to add your keys."
   #define SECRET_WIFI_SSID          ""
   #define SECRET_WIFI_PASS          ""
   #define SECRET_LLM_API_KEY        ""

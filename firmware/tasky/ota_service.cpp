@@ -1,6 +1,8 @@
 #include "ota_service.h"
 
-const char* OtaService::FIRMWARE_VERSION = "2.3.0";
+#include "version.h"
+
+const char* OtaService::FIRMWARE_VERSION = TASKY_VERSION;
 
 OtaService::OtaService(TaskyModel *m) : model(m) {}
 

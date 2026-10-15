@@ -1,19 +1,22 @@
-# Secrets - NEVER commit API keys
-TaskyCircular/config_secrets.h
+# Secrets — never commit
+firmware/tasky/config_secrets.h
 
-# macOS
-.DS_Store
-
-# Build artifacts
-build/
+# Build output
 .pio/
-*.o
-*.elf
 *.bin
+*.elf
 *.hex
+*.o
 
-# IDE
+# Web build output (fetched from GitHub Releases at build time)
+web/public/firmware/
+.vercel/
+node_modules/
+
+# OS / IDE
+.DS_Store
 .vscode/
 .idea/
 *.swp
-*.swo
+*.log
+.playwright-mcp/

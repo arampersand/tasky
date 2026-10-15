@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tasky 3D</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@500;700;800&display=swap" rel="stylesheet">
+<style>
+  :root { color-scheme: dark; }
+  body { margin: 0; min-height: 100vh; display: grid; place-items: center; gap: 8px; background:
+    radial-gradient(900px 500px at 50% 35%, #12182a, #05070d 70%); color: #9aa3b2; font: 500 14px Inter, system-ui, sans-serif; overflow-x: hidden; }
+  tasky-device { --size: min(240px, 34vw); }
+  body { align-content: center; }
+  p { margin: 0; text-align: center; }
+</style>
+<script type="module" src="./tasky-device.js"></script>
+</head>
+<body>
+  <tasky-device></tasky-device>
+  <p>Drag to rotate · click the screen or the knob to switch screens</p>
+</body>
+</html>
