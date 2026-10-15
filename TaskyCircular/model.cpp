@@ -35,11 +35,20 @@ void TaskyModel::load() {
 
   // Focus Mode
   cfg.focusAutoMode = pref.getBool("fAuto", true);
-  cfg.focusManualMode = pref.getBool("fMan", false);
+  cfg.focusLight = pref.getBool("fLit", true);
+  cfg.focusLock = pref.getBool("fLck", true);
+
+  // Workday
+  cfg.dayStartHour = pref.getUChar("dsh", 9);
+  cfg.dayEndHour = pref.getUChar("deh", 18);
+  cfg.lastMorningDay = pref.getShort("bmd", -1);
+  cfg.lastEveningDay = pref.getShort("bed", -1);
 
   // Streak Settings
   cfg.streakSource = (StreakSource)pref.getUChar("sks", STREAK_BOTH);
   cfg.dailyPomodoroCount = pref.getUChar("dpc", 0);
+  cfg.yesterdayPomodoro = pref.getUChar("ypc", 0);
+  cfg.dailyFocusMin = pref.getUShort("dfm", 0);
   cfg.githubContribCount = pref.getUChar("ghc", 0);
 
   // Firebase Cloud Sync
@@ -71,7 +80,10 @@ void TaskyModel::load() {
     taskDone[i] = pref.getBool(keyd.c_str(), false);
     String keyDesc = "td" + String(i);
     taskDescription[i] = pref.getString(keyDesc.c_str(), "");
+    String keyFocus = "tf" + String(i);
+    taskFocusMin[i] = pref.getUShort(keyFocus.c_str(), 0);
   }
+  currentTask = pref.getChar("ct", -1);
 
   // Calendar events (reset on load, will be populated by calendar service)
   for (int i = 0; i < 31; i++) {
@@ -170,11 +182,20 @@ void TaskyModel::save() {
 
   // Focus Mode
   pref.putBool("fAuto", cfg.focusAutoMode);
-  pref.putBool("fMan", cfg.focusManualMode);
+  pref.putBool("fLit", cfg.focusLight);
+  pref.putBool("fLck", cfg.focusLock);
+
+  // Workday
+  pref.putUChar("dsh", cfg.dayStartHour);
+  pref.putUChar("deh", cfg.dayEndHour);
+  pref.putShort("bmd", cfg.lastMorningDay);
+  pref.putShort("bed", cfg.lastEveningDay);
 
   // Streak Settings
   pref.putUChar("sks", (uint8_t)cfg.streakSource);
   pref.putUChar("dpc", cfg.dailyPomodoroCount);
+  pref.putUChar("ypc", cfg.yesterdayPomodoro);
+  pref.putUShort("dfm", cfg.dailyFocusMin);
   pref.putUChar("ghc", cfg.githubContribCount);
 
   // Firebase Cloud Sync
@@ -206,7 +227,10 @@ void TaskyModel::save() {
     pref.putBool(keyd.c_str(), taskDone[i]);
     String keyDesc = "td" + String(i);
     pref.putString(keyDesc.c_str(), taskDescription[i]);
+    String keyFocus = "tf" + String(i);
+    pref.putUShort(keyFocus.c_str(), taskFocusMin[i]);
   }
+  pref.putChar("ct", currentTask);
 
   for (int i = 0; i < STREAK_N; i++) {
     String k = "s" + String(i);
@@ -245,6 +269,9 @@ void TaskyModel::finishTimer() {
 
   if (phase == PHASE_WORK) {
     cfg.totalFocusMin += cfg.workMin;
+    cfg.dailyFocusMin += cfg.workMin;
+    if (hasCurrentTask())
+      taskFocusMin[currentTask] += cfg.workMin;
     cfg.dailyPomodoroCount++;  // Track daily sessions
     updateStreakIntensity();    // Update streak based on source
     save();
@@ -355,7 +382,9 @@ void TaskyModel::checkDayChange() {
     streak[currentDayIndex] = 0;  // Reset new day to 0
 
     // Reset daily counters
+    cfg.yesterdayPomodoro = cfg.dailyPomodoroCount;
     cfg.dailyPomodoroCount = 0;
+    cfg.dailyFocusMin = 0;
     cfg.githubContribCount = 0;
     cfg.llmDailyCount = 0;
     cfg.llmHourlyCount = 0;
@@ -377,15 +406,54 @@ void TaskyModel::checkDayChange() {
 }
 
 bool TaskyModel::isFocusModeActive() {
-  // Manual override always wins
-  if (cfg.focusManualMode) return true;
+  return cfg.focusAutoMode && st.running && phase == PHASE_WORK;
+}
 
-  // Auto mode: active during work phase when timer running
-  if (cfg.focusAutoMode && st.running && phase == PHASE_WORK) {
-    return true;
+bool TaskyModel::hasCurrentTask() {
+  return currentTask >= 0 && currentTask < 3 && tasks[currentTask] != "Empty" &&
+         tasks[currentTask].length() > 0;
+}
+
+int TaskyModel::hhmmToMinutes(const char *hhmm) {
+  if (!hhmm || strlen(hhmm) < 5 || hhmm[2] != ':' || !isdigit(hhmm[0]))
+    return -1;
+  return atoi(hhmm) * 60 + atoi(hhmm + 3);
+}
+
+const CalendarEventItem *TaskyModel::nextEventToday(int nowMin) {
+  const CalendarEventItem *best = nullptr;
+  int bestMin = 24 * 60;
+  for (int i = 0; i < todayEventCount; i++) {
+    const CalendarEventItem &e = todayEvents[i];
+    int start = hhmmToMinutes(e.startTime);
+    if (e.isAllDay || start < nowMin || start >= bestMin)
+      continue;
+    best = &e;
+    bestMin = start;
   }
+  return best;
+}
 
-  return false;
+const CalendarEventItem *TaskyModel::firstEventOnDay(int dayOfMonth) {
+  const CalendarEventItem *best = nullptr;
+  int bestMin = 24 * 60;
+  for (int i = 0; i < monthEventCount; i++) {
+    const CalendarEventItem &e = monthEvents[i];
+    int start = hhmmToMinutes(e.startTime);
+    if (e.day != dayOfMonth || e.isAllDay || start < 0 || start >= bestMin)
+      continue;
+    best = &e;
+    bestMin = start;
+  }
+  return best;
+}
+
+bool TaskyModel::localNow(struct tm &out) {
+  time_t nowTime = time(nullptr);
+  if (nowTime < 1577836800) // Before 2020 = NTP not synced yet
+    return false;
+  localtime_r(&nowTime, &out);
+  return true;
 }
 
 void TaskyModel::updateStreakIntensity() {

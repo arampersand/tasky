@@ -1,6 +1,6 @@
 #include "ota_service.h"
 
-const char* OtaService::FIRMWARE_VERSION = "2.2.0";
+const char* OtaService::FIRMWARE_VERSION = "2.3.0";
 
 OtaService::OtaService(TaskyModel *m) : model(m) {}
 
@@ -15,7 +15,13 @@ void OtaService::loop() {
 }
 
 bool OtaService::startUpdate(size_t totalSize) {
-  if (state != OTA_IDLE) {
+  if (!isArmed()) {
+    errorMsg = "Enable Update on the Tasky first (More > Update)";
+    state = OTA_ERROR;
+    return false;
+  }
+  // A previous failed attempt must not block retries
+  if (state == OTA_RECEIVING || state == OTA_WRITING) {
     errorMsg = "Update already in progress";
     return false;
   }
@@ -68,6 +74,8 @@ bool OtaService::writeChunk(uint8_t *data, size_t len) {
 }
 
 bool OtaService::finishUpdate() {
+  if (state == OTA_ERROR)
+    return false; // Keep the error that stopped the upload
   if (state != OTA_WRITING) {
     errorMsg = "Not in writing state";
     return false;

@@ -6,9 +6,6 @@
 #include <Adafruit_GFX.h>
 #include <Arduino.h>
 
-// Forward declaration
-class FocusDNS;
-
 // --- Compile time switch ---
 #define DISPLAY_CIRCULAR 0 // 0 = ST7789 square, 1 = GC9A01A circular
 // ---------------------------
@@ -45,21 +42,29 @@ public:
 #endif
 
 enum Screen {
+  // Main carousel (MODO button)
   SCR_TIMER = 0,
-  SCR_FOCUS,      // Immersive focus mode
   SCR_TASKS,
   SCR_AGENDA,     // Today's calendar + Notion tasks
+  SCR_STATS,
+  SCR_MORE,       // Menu with the less frequent screens
+  // Opened from More
+  SCR_FOCUS,      // Focus mode settings
   SCR_CALENDAR,
   SCR_STREAK,
-  SCR_STATS,
   SCR_WEATHER,    // Weather widget screen
   SCR_SPOTIFY,    // Spotify now playing + controls
   SCR_AGENT,      // AI Agent - LLM assistant
+  SCR_UPDATE,     // Allow an OTA upload from the device
   SCR_SETTINGS,
   SCR_QR,
   SCR_WIFI_INFO,
-  SCR_QUOTES      // Inspirational quotes (screensaver mode)
+  // Overlays
+  SCR_AMBIENT,    // Idle: clock + next event + weather
+  SCR_NOTICE      // Meeting alert / morning brief / day close
 };
+
+enum NoticeType { NOTICE_MEETING, NOTICE_MORNING, NOTICE_EVENING };
 
 class TaskyUI {
 public:
@@ -71,8 +76,6 @@ public:
   uint16_t C_RED = 0xF800;
   uint16_t C_SPLASH_BG, C_SPLASH_TX;
 
-  bool flashOn = false;
-  uint32_t flashUntilMs = 0;
   bool baseDrawn = false;
 
   // Animation system
@@ -80,7 +83,9 @@ public:
 
   int lastShownMin = -1;
   int lastShownSec = -1;
-  int lastProgSegOn = -1;
+  int lastProgOn = -1;          // Lit perimeter steps last drawn
+  uint16_t lastProgColor = 0;   // Perimeter color last drawn
+  int lastFocusShown = -1;      // Focus label state last drawn
 
   int settingsSel = 0;
   bool settingsEditing = false;
@@ -101,20 +106,12 @@ public:
   bool agentModeSelect = false;  // Mode selection overlay active
   int agentModeSel = 0;          // Selected index (0=AUTO, 1-7=modes)
 
-  // Focus blocklist screen
-  int focusDomainScroll = 0;  // Scroll offset for domain list
+  // Focus settings / More menu selections
+  int focusSel = 0;
+  int moreSel = 0;
 
   // WiFi state (set from main loop)
   bool wifiConnected = false;
-
-  // Quotes / Screensaver
-  int quoteIndex = 0;
-  uint32_t lastQuoteChange = 0;
-
-  // Use correct circular driver
-  // ...
-
-  // ...
 
 #if DISPLAY_CIRCULAR
   Adafruit_GC9A01A tft;
@@ -131,16 +128,23 @@ public:
 
   void drawTimerBase();
   void drawTimerTime(int mm, int ss);
+  void drawTimerTaskLine(const char *overrideMsg = nullptr); // nullptr = task
   void drawSettings();
   void drawTasks();
   void drawTaskDetail(int index);
   void drawCalendar();
   void drawDayTasks(int day); // Show tasks for a specific calendar day
-  void drawFocus(FocusDNS* dns);  // Focus mode blocklist screen
-  void drawFocusBase(FocusDNS* dns);
-  void drawFocusList(FocusDNS* dns);  // Update domain list only
+  void drawFocus();           // Focus mode settings
+  void drawMore(const char *const labels[], int count);
   void drawAgenda();          // Today's calendar events + Notion tasks
-  void drawFocusIndicator(bool active);  // Shield icon when blocking
+  void drawAmbient(bool weatherOk, float temp, const char *desc, bool celsius);
+  void drawAmbientClock();    // Only the clock digits (called each minute)
+  void drawMeetingAlert(const CalendarEventItem &ev, int minutes, bool timerPaused);
+  void drawMorningBrief();
+  void drawDayClose();
+  void drawUpdate(bool armed, const String &url, const String &hint,
+                  const String &version);
+  void drawUpdateCountdown(uint32_t remainingMs);
   void drawStreak();
   void drawStats();
 #if FEATURE_WEATHER
@@ -161,19 +165,18 @@ public:
   void drawQRFull(String ssid, String pass);
   void drawSplashTasky();
   void drawFinishScreen(const char *msg);
-  void drawQuotes(); // Inspirational quotes screen
 
-  void uiTick(bool strong = false); // kept for visual reference, sound handled
-                                    // externally if desired or inside
-  void drawFlashIfNeeded();
+  void uiTick(bool strong = false); // Click beep + click animation
 
   void applyTheme();
 
-  void drawFrame(); // Implementation of the required abstraction
-
-
 private:
-  void drawProgressSegments();
+  void drawProgressPerimeter(bool force);
+  void drawTimerLabel();
+  void drawSessionDots(int cy);
+  void drawRow(const char *label, const String &value, int baseline,
+               uint16_t valueColor);
+  String fitText(const String &s, int maxW, const GFXfont *font);
   uint16_t accentColor();
   uint16_t streakColor(uint8_t v);
   uint16_t calendarDayColor(uint8_t eventCount);  // Color based on busyness

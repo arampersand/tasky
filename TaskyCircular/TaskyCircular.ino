@@ -3,8 +3,6 @@
 #include "model.h"
 #include "network_manager.h"
 #include "ota_service.h"
-#include "power_manager.h"
-#include "focus_dns.h"
 #include "ui.h"
 #include "wifi_portal.h"
 #if FEATURE_CALENDAR
@@ -51,7 +49,6 @@ NotionService notion(&model);
 #if FEATURE_FIREBASE
 FirebaseService firebase(&model);
 #endif
-PowerManager power(&model, TFT_RST, ENCODER_SW);
 #if FEATURE_WEATHER
 WeatherService weather(&model);
 #endif
@@ -62,20 +59,35 @@ SpotifyService spotify(&model);
 LlmService llm(&model);
 #endif
 OtaService ota(&model);
-FocusDNS focusDns(&model);
-WiFiPortal portal(&model, &net, &focusDns, &ota);
+WiFiPortal portal(&model, &net, &ota);
 
 // ==================== STATE ====================
 Screen screen = SCR_TIMER;
-Screen screenBeforeScreensaver = SCR_TIMER;
+Screen screenBeforeOverlay = SCR_TIMER; // Where Ambient / notices return to
 
 // Input state
 bool lastEncBtn = HIGH;
 uint32_t encBtnDownAt = 0;
 bool lastModeBtn = HIGH;
 const uint32_t ENC_LONGPRESS_MS = 900;
+uint32_t lastInputAt = 0;
 
-bool screensaverActive = false;
+// Idle screen after this long without input (timer not running)
+const uint32_t AMBIENT_IDLE_MS = 5UL * 60UL * 1000UL;
+// Meeting alert lead time
+const int MEETING_LEAD_MIN = 5;
+// Wait for WiFi + calendar after boot before the morning/evening brief
+const uint32_t BRIEF_BOOT_DELAY_MS = 2UL * 60UL * 1000UL;
+
+// Notice overlay (meeting alert / morning brief / day close)
+NoticeType noticeType = NOTICE_MEETING;
+CalendarEventItem noticeEvent;
+int noticeMinutes = 0;
+bool noticeTimerPaused = false;
+
+// Focus lock feedback on the timer task line
+uint32_t lockToastUntil = 0;
+
 enum ModeClickType { MODE_NONE, MODE_SHORT, MODE_LONG, MODE_DOUBLE };
 
 uint32_t lastAnimAt = 0;
@@ -211,77 +223,44 @@ ModeClickType modeClickType() {
 }
 
 // ==================== NAVIGATION & HANDLERS ====================
-static Screen getNextScreen(Screen s) {
-  // Order: Timer→Tasks→Calendar→Agenda→Agent→Focus→Streak→Weather→Stats→Spotify→QR→Settings
-  switch (s) {
-  case SCR_TIMER: return SCR_TASKS;
-  case SCR_TASKS: return SCR_CALENDAR;
-  case SCR_CALENDAR: return SCR_AGENDA;
-  case SCR_AGENDA:
-#if FEATURE_LLM
-    return SCR_AGENT;
-#else
-    return SCR_FOCUS;
-#endif
-  case SCR_AGENT: return SCR_FOCUS;
-  case SCR_FOCUS: return SCR_STREAK;
-  case SCR_STREAK:
+// MODO cycles through the everyday screens; everything else lives in More.
+static const Screen CAROUSEL[] = {SCR_TIMER, SCR_TASKS, SCR_AGENDA, SCR_STATS,
+                                  SCR_MORE};
+static const int CAROUSEL_N = sizeof(CAROUSEL) / sizeof(CAROUSEL[0]);
+
+struct MoreItem {
+  const char *label;
+  Screen screen;
+};
+static const MoreItem MORE_ITEMS[] = {
+    {"Focus", SCR_FOCUS},
+    {"Calendar", SCR_CALENDAR},
+    {"Streak", SCR_STREAK},
 #if FEATURE_WEATHER
-    return SCR_WEATHER;
-#else
-    return SCR_STATS;
+    {"Weather", SCR_WEATHER},
 #endif
-  case SCR_WEATHER: return SCR_STATS;
-  case SCR_STATS:
+#if FEATURE_LLM
+    {"Agent", SCR_AGENT},
+#endif
 #if FEATURE_SPOTIFY
-    return SCR_SPOTIFY;
-#else
-    return SCR_QR;
+    {"Music", SCR_SPOTIFY},
 #endif
-  case SCR_SPOTIFY: return SCR_QR;
-  case SCR_QR: return SCR_SETTINGS;
-  case SCR_SETTINGS: return SCR_TIMER;
-  default: return SCR_TIMER;
-  }
+    {"Update", SCR_UPDATE},
+    {"Setup (QR)", SCR_QR},
+    {"Settings", SCR_SETTINGS},
+};
+static const int MORE_N = sizeof(MORE_ITEMS) / sizeof(MORE_ITEMS[0]);
+static const char *moreLabels[MORE_N];
+
+static int carouselIndex(Screen s) {
+  for (int i = 0; i < CAROUSEL_N; i++)
+    if (CAROUSEL[i] == s)
+      return i;
+  return -1;
 }
 
-static Screen getPrevScreen(Screen s) {
-  // Reverse of: Timer→Tasks→Calendar→Agenda→Agent→Focus→Streak→Weather→Stats→Spotify→QR→Settings
-  switch (s) {
-  case SCR_TIMER: return SCR_SETTINGS;
-  case SCR_TASKS: return SCR_TIMER;
-  case SCR_CALENDAR: return SCR_TASKS;
-  case SCR_AGENDA: return SCR_CALENDAR;
-  case SCR_AGENT: return SCR_AGENDA;
-  case SCR_FOCUS:
-#if FEATURE_LLM
-    return SCR_AGENT;
-#else
-    return SCR_AGENDA;
-#endif
-  case SCR_STREAK: return SCR_FOCUS;
-  case SCR_WEATHER: return SCR_STREAK;
-  case SCR_STATS:
-#if FEATURE_WEATHER
-    return SCR_WEATHER;
-#else
-    return SCR_STREAK;
-#endif
-  case SCR_SPOTIFY: return SCR_STATS;
-  case SCR_QR:
-#if FEATURE_SPOTIFY
-    return SCR_SPOTIFY;
-#else
-    return SCR_STATS;
-#endif
-  case SCR_SETTINGS: return SCR_QR;
-  default: return SCR_TIMER;
-  }
-}
-
-void navigateNext() {
-  Screen next = getNextScreen(screen);
-  if (next == SCR_QR || next == SCR_WIFI_INFO) {
+void goTo(Screen next) {
+  if (next == SCR_QR || next == SCR_WIFI_INFO || next == SCR_UPDATE) {
     if (!portal.wifiOn) portal.begin();
   }
   if (model.st.finished && next != SCR_TIMER) {
@@ -294,19 +273,15 @@ void navigateNext() {
   ui.applyTheme();
 }
 
+// Screens opened from More return to More with MODO (either direction)
+void navigateNext() {
+  int i = carouselIndex(screen);
+  goTo(i < 0 ? SCR_MORE : CAROUSEL[(i + 1) % CAROUSEL_N]);
+}
+
 void navigatePrev() {
-  Screen prev = getPrevScreen(screen);
-  if (prev == SCR_QR || prev == SCR_WIFI_INFO) {
-    if (!portal.wifiOn) portal.begin();
-  }
-  if (model.st.finished && prev != SCR_TIMER) {
-    alarmStop();
-  }
-  screen = prev;
-  ui.baseDrawn = false;
-  ui.settingsEditing = false;
-  ui.streakEditing = false;
-  ui.applyTheme();
+  int i = carouselIndex(screen);
+  goTo(i < 0 ? SCR_MORE : CAROUSEL[(i + CAROUSEL_N - 1) % CAROUSEL_N]);
 }
 
 void handleTimer(int step, EncClickType click) {
@@ -340,7 +315,6 @@ void handleTimer(int step, EncClickType click) {
       else
         buzzerOff();
     }
-    ui.drawFlashIfNeeded();
     return;
   }
   if (click == ENC_SHORT) {
@@ -395,7 +369,16 @@ void handleTasks(int step, EncClickType click) {
     showingDetail = false;
   }
   if (showingDetail) {
-    if (click == ENC_SHORT || click == ENC_LONG) {
+    // Click on an open task: make it the task the timer works on
+    if (click == ENC_SHORT && !model.taskDone[ui.tasksSel]) {
+      ui.uiTick(true);
+      model.currentTask = ui.tasksSel;
+      model.save();
+      showingDetail = false;
+      goTo(SCR_TIMER);
+      return;
+    }
+    if (click != ENC_NONE) {
       showingDetail = false;
       ui.drawTasks();
     }
@@ -419,8 +402,11 @@ void handleTasks(int step, EncClickType click) {
     }
     model.taskDone[ui.tasksSel] = !model.taskDone[ui.tasksSel];
     ui.uiTick(true);
-    if (model.taskDone[ui.tasksSel])
+    if (model.taskDone[ui.tasksSel]) {
       model.streakAddCompletion();
+      if (model.currentTask == ui.tasksSel)
+        model.currentTask = -1; // Done: stop tracking time on it
+    }
     model.save();
     ui.drawTasks();
   }
@@ -594,51 +580,209 @@ void handleWifi(int step, EncClickType click) {
 }
 
 void handleFocus(int step, EncClickType click) {
-  // Focus mode - blocklist management screen
   if (!ui.baseDrawn) {
-    ui.drawFocus(&focusDns);
+    ui.drawFocus();
     ui.baseDrawn = true;
   }
-
-  // Encoder scroll through domain list
   if (step != 0) {
-    int count = focusDns.getBlockedCount();
-    if (count > 0) {
-      ui.focusDomainScroll += step;
-      if (ui.focusDomainScroll < 0) ui.focusDomainScroll = 0;
-      if (ui.focusDomainScroll >= count) ui.focusDomainScroll = count - 1;
-      ui.drawFocusList(&focusDns);
-    }
+    ui.focusSel = (ui.focusSel + step + 3) % 3;
+    ui.drawFocus();
   }
-
-  // Short click: toggle focus mode ON/OFF
   if (click == ENC_SHORT) {
     ui.uiTick(true);
-    bool newState = !focusDns.isFocusModeActive();
-    focusDns.setFocusMode(newState);
-    ui.baseDrawn = false;  // Redraw full screen to update status
+    Config &c = model.cfg;
+    if (ui.focusSel == 0)
+      c.focusAutoMode = !c.focusAutoMode;
+    else if (ui.focusSel == 1)
+      c.focusLight = !c.focusLight;
+    else
+      c.focusLock = !c.focusLock;
+    model.save();
+    ui.drawFocus();
+  }
+}
+
+void handleMore(int step, EncClickType click) {
+  if (!ui.baseDrawn) {
+    ui.drawMore(moreLabels, MORE_N);
+    ui.baseDrawn = true;
+  }
+  if (step != 0) {
+    ui.moreSel = (ui.moreSel + step + MORE_N) % MORE_N;
+    ui.drawMore(moreLabels, MORE_N);
+  }
+  if (click == ENC_SHORT) {
+    ui.uiTick(true);
+    goTo(MORE_ITEMS[ui.moreSel].screen);
+  }
+}
+
+// Firmware uploads are refused unless allowed here (physical confirmation)
+void handleUpdate(int step, EncClickType click) {
+  static bool shownArmed = false;
+  static uint32_t lastTickAt = 0;
+  if (!ui.baseDrawn || ota.isArmed() != shownArmed) {
+    shownArmed = ota.isArmed();
+    String url, hint;
+    if (net.isConnected()) {
+      url = "http://" + net.getIP() + "/";
+      hint = "Same WiFi as this Tasky";
+    } else {
+      url = "http://" + WiFi.softAPIP().toString() + "/";
+      hint = "WiFi " + portal.apSSID + " / " + portal.apPass;
+    }
+    ui.drawUpdate(shownArmed, url, hint, ota.getVersion());
+    ui.baseDrawn = true;
+    lastTickAt = 0;
+  }
+  if (shownArmed && millis() - lastTickAt >= 1000) {
+    lastTickAt = millis();
+    ui.drawUpdateCountdown(ota.armedRemainingMs());
+  }
+  if (click == ENC_SHORT) {
+    ui.uiTick(true);
+    if (ota.isArmed())
+      ota.disarm();
+    else
+      ota.arm();
+    ui.baseDrawn = false;
+  }
+}
+
+// ==================== OVERLAYS ====================
+void drawAmbientScreen() {
+#if FEATURE_WEATHER
+  ui.drawAmbient(weather.hasData(), weather.temperature, weather.description,
+                 model.cfg.weatherCelsius);
+#else
+  ui.drawAmbient(false, 0, "", true);
+#endif
+}
+
+void enterAmbient() {
+  screenBeforeOverlay = screen;
+  screen = SCR_AMBIENT;
+  ui.baseDrawn = false;
+}
+
+void handleAmbient() {
+  static int lastMin = -1;
+  static uint32_t lastFullAt = 0;
+  struct tm t;
+  bool hasTime = model.localNow(t);
+  // Full refresh every 10 min (next event, weather); clock every minute
+  if (!ui.baseDrawn || millis() - lastFullAt > 10UL * 60UL * 1000UL) {
+    drawAmbientScreen();
+    ui.baseDrawn = true;
+    lastFullAt = millis();
+    lastMin = hasTime ? t.tm_min : -1;
+  } else if (hasTime && t.tm_min != lastMin) {
+    lastMin = t.tm_min;
+    ui.drawAmbientClock();
+  }
+}
+
+void showNotice(NoticeType type) {
+  // Keep the original screen when a notice lands on top of Ambient
+  if (screen != SCR_AMBIENT && screen != SCR_NOTICE)
+    screenBeforeOverlay = screen;
+  noticeType = type;
+  screen = SCR_NOTICE;
+  ui.baseDrawn = false;
+}
+
+void handleNotice(EncClickType click, bool modePressed) {
+  static uint32_t shownAt = 0;
+  if (!ui.baseDrawn) {
+    if (noticeType == NOTICE_MEETING)
+      ui.drawMeetingAlert(noticeEvent, noticeMinutes, noticeTimerPaused);
+    else if (noticeType == NOTICE_MORNING)
+      ui.drawMorningBrief();
+    else
+      ui.drawDayClose();
+    ui.baseDrawn = true;
+    shownAt = millis();
   }
 
-  // Long click: remove selected domain, or reset to defaults if empty
-  if (click == ENC_LONG) {
-    int count = focusDns.getBlockedCount();
-    if (count == 0) {
-      // Reset to defaults
-      ui.uiTick(true);
-      focusDns.loadDefaultBlockList();
-      ui.focusDomainScroll = 0;
-      ui.baseDrawn = false;
-    } else if (ui.focusDomainScroll < count) {
-      ui.uiTick(true);
-      const char* domain = focusDns.getBlockedDomain(ui.focusDomainScroll);
-      focusDns.removeBlockedDomain(domain);
-      // Adjust scroll if needed
-      if (ui.focusDomainScroll >= focusDns.getBlockedCount() && ui.focusDomainScroll > 0) {
-        ui.focusDomainScroll--;
-      }
-      ui.baseDrawn = false;
+  // Meeting: blink the light bar for 10 s, three beeps at the start
+  if (noticeType == NOTICE_MEETING) {
+    uint32_t el = millis() - shownAt;
+    bool on = (el / 250) % 2 == 0;
+    setLed((el < 10000 && on) ? model.cfg.ledBright : 0);
+    if (model.cfg.soundOn && el < 1500) {
+      if (on) buzzerTone(2200);
+      else buzzerOff();
+    } else if (el < 1800) {
+      buzzerOff();
     }
   }
+
+  if (click != ENC_NONE || modePressed) {
+    alarmStop();
+    screen = screenBeforeOverlay;
+    ui.baseDrawn = false;
+  }
+}
+
+// Alert once per event, MEETING_LEAD_MIN before it starts
+void checkMeetingAlert() {
+  if (screen == SCR_NOTICE || screen == SCR_UPDATE)
+    return;
+  struct tm t;
+  if (!model.localNow(t))
+    return;
+  int nowMin = t.tm_hour * 60 + t.tm_min;
+  const CalendarEventItem *ev = model.nextEventToday(nowMin);
+  if (!ev)
+    return;
+  int minutes = TaskyModel::hhmmToMinutes(ev->startTime) - nowMin;
+  if (minutes > MEETING_LEAD_MIN)
+    return;
+
+  static char lastKey[48] = "";
+  char key[48];
+  snprintf(key, sizeof(key), "%d|%s|%s", t.tm_yday, ev->startTime, ev->title);
+  if (strcmp(key, lastKey) == 0)
+    return;
+  strcpy(lastKey, key);
+
+  noticeEvent = *ev;
+  noticeMinutes = minutes;
+  noticeTimerPaused = model.st.running && model.phase == PHASE_WORK;
+  if (noticeTimerPaused)
+    model.pauseTimer();
+  showNotice(NOTICE_MEETING);
+}
+
+// Morning brief at the start of the workday, day close at its end.
+// Never interrupts a running session.
+void checkDayBriefs() {
+  if (millis() < BRIEF_BOOT_DELAY_MS || screen == SCR_NOTICE ||
+      screen == SCR_UPDATE || model.st.running || model.st.finished)
+    return;
+  struct tm t;
+  if (!model.localNow(t))
+    return;
+  Config &c = model.cfg;
+  int h = t.tm_hour;
+  if (h >= c.dayStartHour && h < c.dayEndHour && c.lastMorningDay != t.tm_yday) {
+    c.lastMorningDay = t.tm_yday;
+    model.save();
+    showNotice(NOTICE_MORNING);
+  } else if (h >= c.dayEndHour && c.lastEveningDay != t.tm_yday) {
+    c.lastEveningDay = t.tm_yday;
+    model.save();
+    showNotice(NOTICE_EVENING);
+  }
+}
+
+// Light bar: steady "do not disturb" while focusing. The finished alarm and
+// the meeting alert drive it themselves.
+void updateFocusLight() {
+  if (screen == SCR_NOTICE || model.st.finished)
+    return;
+  bool on = model.isFocusModeActive() && model.cfg.focusLight;
+  setLed(on ? model.cfg.ledBright : 0);
 }
 
 void handleAgenda(int step, EncClickType click) {
@@ -1000,8 +1144,10 @@ void setup() {
   llm.begin();
 #endif
   ota.begin();
-  power.begin();
-  focusDns.loadDefaultBlockList();
+
+  for (int i = 0; i < MORE_N; i++)
+    moreLabels[i] = MORE_ITEMS[i].label;
+  lastInputAt = millis();
 
   screen = SCR_TIMER;
   ui.baseDrawn = false;
@@ -1015,9 +1161,6 @@ void loop() {
   uint32_t now = millis();
   portal.loop();
   net.loop();
-
-  // Power management deshabilitado - siempre encendido
-  power.loop();
 
 #if TFT_BL >= 0
   // Mantener backlight encendido (evita que se apague tras inactividad)
@@ -1053,9 +1196,14 @@ void loop() {
     llm.loop();
 #endif
     model.checkDayChange();
+    checkMeetingAlert();
+    checkDayBriefs();
+  }
 
-    // Update focus mode state in DNS server
-    focusDns.setFocusMode(model.isFocusModeActive());
+  static uint32_t lastLightAt = 0;
+  if (now - lastLightAt >= 250) {
+    lastLightAt = now;
+    updateFocusLight();
   }
 
   if (uiBeepOffAt && millis() >= uiBeepOffAt) {
@@ -1067,10 +1215,9 @@ void loop() {
   int step = encoderStep();
   EncClickType click = encoderClickType();
 
-  // Register activity for power management (any input prevents sleep)
-  if (step != 0 || click != ENC_NONE || modeClick != MODE_NONE) {
-    power.registerActivity();
-  }
+  bool anyInput = step != 0 || click != ENC_NONE || modeClick != MODE_NONE;
+  if (anyInput)
+    lastInputAt = now;
 
   static uint32_t bothBtnDownAt = 0;
   bool encDown = digitalRead(ENCODER_SW) == LOW;
@@ -1098,26 +1245,46 @@ void loop() {
     bothBtnDownAt = 0;
   }
 
-  if (modeClick == MODE_LONG && !screensaverActive) {
-    if (!model.st.running && !model.st.finished) {
-      screenBeforeScreensaver = screen;
-      screensaverActive = true;
-      ui.quoteIndex = random(30);
-      ui.drawQuotes();
+  // Overlays take any input to close
+  if (screen == SCR_NOTICE) {
+    handleNotice(click, modeClick != MODE_NONE);
+    return;
+  }
+  if (screen == SCR_AMBIENT) {
+    if (anyInput) {
+      screen = screenBeforeOverlay;
+      ui.baseDrawn = false;
+      return;
     }
+    handleAmbient();
     return;
   }
 
-  if (screensaverActive) {
-    if (step != 0) {
-      ui.quoteIndex = (ui.quoteIndex + step + 30) % 30;
-      ui.drawQuotes();
-    }
-    if (modeClick != MODE_NONE || click != ENC_NONE) {
-      screensaverActive = false;
-      screen = screenBeforeScreensaver;
-      ui.goToScreen(screen);
-    }
+  // Focus lock: MODO can't leave the timer while a focus session runs
+  if (model.cfg.focusLock && model.isFocusModeActive() && screen == SCR_TIMER &&
+      modeClick != MODE_NONE) {
+    ui.uiTick(false);
+    ui.drawTimerTaskLine("Pause to unlock");
+    lockToastUntil = now + 1500;
+    modeClick = MODE_NONE;
+  }
+  if (lockToastUntil && now > lockToastUntil) {
+    lockToastUntil = 0;
+    if (screen == SCR_TIMER)
+      ui.drawTimerTaskLine();
+  }
+
+  // Idle: hold MODO, or 5 min without input while no session is running
+  bool sessionActive = model.st.running || model.st.finished;
+  bool idleAllowed = !sessionActive && screen != SCR_UPDATE &&
+                     screen != SCR_QR && screen != SCR_WIFI_INFO;
+  if (modeClick == MODE_LONG) {
+    if (idleAllowed)
+      enterAmbient();
+    return;
+  }
+  if (idleAllowed && now - lastInputAt > AMBIENT_IDLE_MS) {
+    enterAmbient();
     return;
   }
 
@@ -1135,8 +1302,14 @@ void loop() {
   case SCR_TIMER:
     handleTimer(step, click);
     break;
+  case SCR_MORE:
+    handleMore(step, click);
+    break;
   case SCR_FOCUS:
     handleFocus(step, click);
+    break;
+  case SCR_UPDATE:
+    handleUpdate(step, click);
     break;
   case SCR_TASKS:
     handleTasks(step, click);

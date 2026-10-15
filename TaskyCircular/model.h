@@ -2,6 +2,7 @@
 
 #include <Arduino.h>
 #include <Preferences.h>
+#include <time.h>
 
 // -------------------- Constants --------------------
 #define STREAK_ROWS 6   // Reduced for circular display
@@ -59,13 +60,22 @@ struct Config {
   String notionApiKey = "";
   String notionDatabaseId = "";
 
-  // Focus Mode Settings
-  bool focusAutoMode = true;      // Auto-enable during work sessions
-  bool focusManualMode = false;   // Manual override (always block)
+  // Focus Mode Settings (active while a work session runs)
+  bool focusAutoMode = true;      // Enter focus when the work timer runs
+  bool focusLight = true;         // Light bar on as "do not disturb" signal
+  bool focusLock = true;          // MODO can't leave the timer while focusing
+
+  // Workday (local hours) for morning brief / day close
+  uint8_t dayStartHour = 9;
+  uint8_t dayEndHour = 18;
+  int16_t lastMorningDay = -1;      // tm_yday the morning brief was shown
+  int16_t lastEveningDay = -1;      // tm_yday the day close was shown
 
   // Streak Settings
   StreakSource streakSource = STREAK_BOTH;
   uint8_t dailyPomodoroCount = 0;   // Pomodoro sessions completed today
+  uint8_t yesterdayPomodoro = 0;    // Sessions completed yesterday
+  uint16_t dailyFocusMin = 0;       // Focus minutes today
   uint8_t githubContribCount = 0;   // GitHub contributions today
 
   // Firebase Cloud Sync
@@ -116,6 +126,8 @@ public:
   String tasks[3];
   String taskDescription[3];  // Extended descriptions for long press view
   bool taskDone[3];
+  uint16_t taskFocusMin[3];   // Focus minutes spent on each task
+  int8_t currentTask = -1;    // Task the timer is working on (-1 = none)
 
   // Calendar events (for grid view)
   uint8_t calendarEvents[31];  // Events per day of month (0-3 intensity)
@@ -166,7 +178,16 @@ public:
   void checkDayChange();           // Check if day changed and advance streak index
 
   // Focus mode
-  bool isFocusModeActive();        // Returns true if DNS blocking should be active
+  bool isFocusModeActive();        // True while a work session runs (if enabled)
+  bool hasCurrentTask();           // currentTask points at a real task
+
+  // Local time (false until NTP has synced)
+  bool localNow(struct tm &out);
+
+  // Calendar helpers
+  static int hhmmToMinutes(const char *hhmm);      // "HH:MM" -> minutes, -1 if invalid
+  const CalendarEventItem *nextEventToday(int nowMin); // First timed event at/after nowMin
+  const CalendarEventItem *firstEventOnDay(int dayOfMonth);
 
   // Streak intensity
   void updateStreakIntensity();    // Update streak based on source setting

@@ -2,17 +2,17 @@
 
 #include "model.h"
 #include <Arduino.h>
+#include <DNSServer.h>
 #include <WebServer.h>
 #include <WiFi.h>
 
 class TaskyNetManager; // Forward declaration
-class FocusDNS;        // Forward declaration
 class OtaService;      // Forward declaration
 
 class WiFiPortal {
 public:
   WebServer server;
-  FocusDNS* focusDns;   // Custom DNS with focus mode blocking
+  DNSServer dns;        // Captive portal DNS (resolves everything to the AP)
   OtaService* ota;      // OTA update service
   TaskyModel *model;
   TaskyNetManager *net;
@@ -20,7 +20,7 @@ public:
   String apSSID = "Tasky";
   String apPass = "GetItDone";
 
-  WiFiPortal(TaskyModel *m, TaskyNetManager *n, FocusDNS* dns, OtaService* otaSvc);
+  WiFiPortal(TaskyModel *m, TaskyNetManager *n, OtaService* otaSvc);
 
   void begin();
   void stop();

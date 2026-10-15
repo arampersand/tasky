@@ -1,5 +1,4 @@
 #include "ui.h"
-#include "focus_dns.h"
 #include "config_hardware.h"
 #include "config_features.h"
 #include <time.h> // For getLocalTime()
@@ -12,13 +11,16 @@ extern void buzzerOff();
 
 // --- Constants ---
 static const int W = 240, H = 240, CX = 120, CY = 120;
-static const int MARGIN = 16;
-static const int PWM_FREQ = 5000;
-static const int PWM_RES = 8;
+// The case window hides ~1 mm (~9 px) of panel edge and varies per unit:
+// keep every pixel of content inside [SAFE, W - SAFE].
+static const int SAFE = 12;
 
-static const uint16_t C_FLASH = 0x39E7;
-static const uint16_t C_FLASH2 = 0x1082;
-static const int PROG_SEG_N = 12;
+// Timer progress: rounded-rect stroke that follows the case window.
+// Centerline inset 14 px (stroke 12..16), corner radius 26.
+static const int PERIM_L = 14, PERIM_T = 14, PERIM_R = 225, PERIM_B = 225;
+static const int PERIM_RAD = 26;
+static const int PERIM_STROKE = 4;
+static const int PERIM_STEPS = 200; // ~4 px per step
 
 TaskyUI::TaskyUI(TaskyModel *m, int8_t cs, int8_t dc, int8_t rst)
     : model(m), tft(cs, dc, rst), _rst(rst) {}
@@ -83,13 +85,6 @@ void TaskyUI::goToScreen(Screen s) {
   baseDrawn = false;
 }
 
-// Draw Frame Abstraction - Always circular for TE style
-void TaskyUI::drawFrame() {
-  // Always draw circular frame for TE aesthetic (works on both displays)
-  tft.drawCircle(CX, CY, 119, C_LINE);
-}
-
-
 void TaskyUI::uiTick(bool strong) {
   uint32_t now = millis();
   if (model->cfg.soundOn && (now - lastUiBeepAt > 60)) {
@@ -102,30 +97,6 @@ void TaskyUI::uiTick(bool strong) {
   if (strong) {
     anim.triggerClick();
   }
-
-  // NOTE: Visual flash is only enabled if explicitly desired.
-  // We'll separate this logic. This function is called for feedback.
-  // If we want visual flash, we set flashOn.
-  // For encoder rotation, caller should call a different function or we check
-  // args? User wanted NO LED on encoder. So we only enable flashOn here if it's
-  // NOT just simple rotation. Actually, we'll make flashOn controlled by
-  // argument in a wrapper or change usage. For now, let's say uiTick is sound
-  // only + flash. We will overload or change call sites for encoder.
-
-  flashOn = true;
-  flashUntilMs = now + (strong ? 80 : 50);  // Mas corto = menos parpadeo
-}
-
-void TaskyUI::drawFlashIfNeeded() {
-  if (!flashOn)
-    return;
-  if (millis() > flashUntilMs) {
-    tft.drawCircle(CX, CY, 119, C_LINE);
-    flashOn = false;
-    return;
-  }
-  // Flash mas sutil - solo borde, duracion corta
-  tft.drawCircle(CX, CY, 119, C_FLASH);
 }
 
 uint16_t TaskyUI::accentColor() {
@@ -142,115 +113,184 @@ uint16_t getRingColor(float pct) {
   return 0xF800;   // Red
 }
 
-void TaskyUI::drawProgressSegments() {
+// Point at step i of the rounded-rect centerline, starting at top center and
+// going clockwise.
+static void perimeterPoint(int i, int &x, int &y) {
+  const float QUARTER_TURN = 1.5707963f;
+  const float straight = (float)(PERIM_R - PERIM_L - 2 * PERIM_RAD);
+  const float half = straight / 2;
+  const float arc = QUARTER_TURN * PERIM_RAD;
+  float s = (4 * straight + 4 * arc) * i / PERIM_STEPS;
+  float fx, fy;
+
+  if (s < half) {
+    fx = (PERIM_L + PERIM_R) / 2.0f + s;
+    fy = PERIM_T;
+  } else {
+    s -= half;
+    // Corners TR, BR, BL, TL, each followed by the next side
+    const float ccx[4] = {PERIM_R - PERIM_RAD, PERIM_R - PERIM_RAD,
+                          PERIM_L + PERIM_RAD, PERIM_L + PERIM_RAD};
+    const float ccy[4] = {PERIM_T + PERIM_RAD, PERIM_B - PERIM_RAD,
+                          PERIM_B - PERIM_RAD, PERIM_T + PERIM_RAD};
+    for (int c = 0; c < 4; c++) {
+      if (s < arc) {
+        float a = -QUARTER_TURN + c * QUARTER_TURN + s / PERIM_RAD;
+        fx = ccx[c] + cosf(a) * PERIM_RAD;
+        fy = ccy[c] + sinf(a) * PERIM_RAD;
+        break;
+      }
+      s -= arc;
+      if (c == 3 || s < straight) {
+        switch (c) {
+        case 0: fx = PERIM_R; fy = PERIM_T + PERIM_RAD + s; break;
+        case 1: fx = PERIM_R - PERIM_RAD - s; fy = PERIM_B; break;
+        case 2: fx = PERIM_L; fy = PERIM_B - PERIM_RAD - s; break;
+        default: fx = PERIM_L + PERIM_RAD + s; fy = PERIM_T; break;
+        }
+        break;
+      }
+      s -= straight;
+    }
+  }
+  x = (int)lroundf(fx);
+  y = (int)lroundf(fy);
+}
+
+// The remaining time is lit; it ends at top center and the gap grows
+// clockwise from top center as time passes. Only changed steps are redrawn.
+void TaskyUI::drawProgressPerimeter(bool force) {
   uint32_t dur = model->phaseDurationMs();
-  uint32_t rem = model->remainingMs();
+  float pct = dur ? (float)model->remainingMs() / (float)dur : 0;
+  int on = constrain((int)(pct * PERIM_STEPS + 0.5f), 0, PERIM_STEPS);
+  uint16_t color = getRingColor(pct);
 
-  if (dur == 0)
-    dur = 1;
+  if (lastProgOn < 0 || color != lastProgColor)
+    force = true;
+  if (!force && on == lastProgOn)
+    return;
 
-  float pct = (float)rem / (float)dur;
-  int totalSegs = 120;
-  int segsOn = (int)(pct * totalSegs);
-  if (segsOn < 0)
-    segsOn = 0;
-  if (segsOn > totalSegs)
-    segsOn = totalSegs;
-
-  // Smooth arc: radial line segments from inner to outer radius
-  int rInner = 112;
-  int rOuter = 116;
-  uint16_t activeColor = getRingColor(pct);
-
-  for (int i = 0; i < totalSegs; i++) {
-    // Start from top (12 o'clock), go clockwise
-    float angle = -90.0 + (360.0 / totalSegs) * i;
-    float rad = angle * 3.14159 / 180.0;
-    float cosA = cos(rad);
-    float sinA = sin(rad);
-
-    int x1 = CX + (int)(cosA * rInner);
-    int y1 = CY + (int)(sinA * rInner);
-    int x2 = CX + (int)(cosA * rOuter);
-    int y2 = CY + (int)(sinA * rOuter);
-
-    uint16_t color = (i >= totalSegs - segsOn) ? activeColor : C_LINE;
-    tft.drawLine(x1, y1, x2, y2, color);
-
-    // Yield every 30 segments to keep system responsive
-    if (i % 30 == 0)
+  int from = 0, to = PERIM_STEPS;
+  if (!force) {
+    from = PERIM_STEPS - max(on, lastProgOn);
+    to = PERIM_STEPS - min(on, lastProgOn);
+  }
+  const int h = PERIM_STROKE / 2;
+  for (int i = from; i < to; i++) {
+    int x, y;
+    perimeterPoint(i, x, y);
+    tft.fillRect(x - h, y - h, PERIM_STROKE, PERIM_STROKE,
+                 (i >= PERIM_STEPS - on) ? color : C_LINE);
+    if ((i & 31) == 0)
       yield();
   }
+  lastProgOn = on;
+  lastProgColor = color;
+}
+
+void TaskyUI::drawTimerLabel() {
+  bool focus = model->isFocusModeActive();
+  const char *label = (model->phase == PHASE_WORK) ? "FOCUS" : "BREAK";
+
+  tft.fillRect(36, 34, 168, 22, C_BG);
+  tft.setFont(&FreeSans9pt7b);
+  int16_t x1, y1;
+  uint16_t w, h;
+  tft.getTextBounds(label, 0, 0, &x1, &y1, &w, &h);
+  int dotSpace = focus ? 12 : 0;
+  int x = (W - (int)w - dotSpace) / 2;
+  if (focus)
+    tft.fillCircle(x + 3, 44, 3, C_TEAL); // "focusing" dot
+  tft.setTextColor(accentColor());
+  tft.setCursor(x + dotSpace, 50);
+  tft.print(label);
+  tft.setFont();
+  lastFocusShown = focus;
+}
+
+// Today's sessions as a 4-dot pomodoro cycle
+void TaskyUI::drawSessionDots(int cy) {
+  int n = model->cfg.dailyPomodoroCount;
+  int filled = (n > 0 && n % 4 == 0) ? 4 : n % 4;
+  tft.fillRect(CX - 32, cy - 6, 64, 13, C_BG);
+  for (int i = 0; i < 4; i++) {
+    int x = CX - 24 + i * 16;
+    if (i < filled)
+      tft.fillCircle(x, cy, 4, C_TEAL);
+    else
+      tft.drawCircle(x, cy, 4, C_LINE);
+  }
+}
+
+void TaskyUI::drawTimerTaskLine(const char *overrideMsg) {
+  tft.fillRect(24, 194, 192, 22, C_BG);
+  if (overrideMsg) {
+    centerTextFont(overrideMsg, 210, C_TEAL, &FreeSans9pt7b);
+    return;
+  }
+  if (model->phase != PHASE_WORK || !model->hasCurrentTask())
+    return;
+  String t = fitText(model->tasks[model->currentTask], 180, &FreeSans9pt7b);
+  centerTextFont(t.c_str(), 210, C_MUTED, &FreeSans9pt7b);
 }
 
 void TaskyUI::drawTimerBase() {
   tft.fillScreen(C_BG);
-  flashOn = false;
-
-  drawFrame();
-
-  // Reset states
   baseDrawn = true;
   lastShownMin = -1;
   lastShownSec = -1;
-  lastProgSegOn = -1;
+  lastProgOn = -1;
 
-  // Force draw segments immediately
-  drawProgressSegments();
+  drawProgressPerimeter(true);
+  drawTimerLabel();
+  drawSessionDots(186);
+  drawTimerTaskLine();
 }
 
 void TaskyUI::drawFinishScreen(const char *msg) {
   tft.fillScreen(C_BG);
-  drawFrame();
 
-  // Big centered text "WELL DONE" or similar
-  tft.setTextColor(getRingColor(0.1)); // Red/Orange for attention? Or Green?
-  // Actually "Finished" is good -> Green or Teal?
-  // Let's use Teal or Text color.
+  // Whole track lit green: the session is complete
+  const int h = PERIM_STROKE / 2;
+  for (int i = 0; i < PERIM_STEPS; i++) {
+    int x, y;
+    perimeterPoint(i, x, y);
+    tft.fillRect(x - h, y - h, PERIM_STROKE, PERIM_STROKE, C_GREEN);
+  }
+  lastProgOn = -1; // Timer screen must repaint the track when it returns
 
-  centerTextFont(msg, 130, C_TEXT, &FreeSansBold12pt7b);
+  centerTextFont(msg, 118, C_TEXT, &FreeSansBold12pt7b);
+  centerTextFont(model->phase == PHASE_WORK ? "Click: take a break"
+                                            : "Click: back to focus",
+                 150, C_MUTED, &FreeSans9pt7b);
+  drawSessionDots(186);
 }
 
 void TaskyUI::drawTimerTime(int mm, int ss) {
-  // Region to clear for time text
-  // 24pt font digits are about 35px high.
-  // Center Y is 120. Text bounds need checking.
-
   char buf[8];
   snprintf(buf, sizeof(buf), "%02d:%02d", mm, ss);
 
-  tft.setTextColor(C_TEXT);
   tft.setFont(&FreeSansBold24pt7b);
-
   int16_t x1, y1;
   uint16_t w, h;
   tft.getTextBounds(buf, 0, 0, &x1, &y1, &w, &h);
-
-  // Calculate center position
-  int cx = (W - w) / 2 - x1;     // x1 is usually 0 or small offset
-  int cy = (H - h) / 2 + h - 10; // 10 is visual adjustment for baseline
-
-  // Clear previous text area
-  tft.fillRect(CX - 85, CY - 35, 170, 70, C_BG);
-  tft.setCursor(cx, cy);
+  tft.fillRect(28, 96, 184, 48, C_BG);
+  tft.setTextColor(C_TEXT);
+  tft.setCursor((W - (int)w) / 2 - x1, 136);
   tft.print(buf);
   tft.setFont();
 
-  // Status (Paused/Done)
-  tft.fillRect(40, 160, 160, 30, C_BG);
+  // Status line, only while paused / done
+  tft.fillRect(28, 148, 184, 24, C_BG);
   if (model->st.finished) {
-    centerTextFont("DONE", 180, C_RED, &FreeSansBold12pt7b);
+    centerTextFont("DONE", 166, C_RED, &FreeSansBold12pt7b);
   } else if (!model->st.running) {
-    centerTextFont("PAUSED", 180, C_MUTED, &FreeSansBold12pt7b);
+    centerTextFont("PAUSED", 166, C_MUTED, &FreeSansBold12pt7b);
   }
 
-  // Progress: solo redibujar cuando cambia el segmento (evita lentitud)
-  uint32_t dur = model->phaseDurationMs();
-  int segOn = (dur > 0) ? (int)((float)model->remainingMs() / dur * 60) : 0;
-  if (segOn != lastProgSegOn) {
-    lastProgSegOn = segOn;
-    drawProgressSegments();
-  }
+  if ((int)model->isFocusModeActive() != lastFocusShown)
+    drawTimerLabel();
+  drawProgressPerimeter(false);
 }
 
 void TaskyUI::drawSettings() {
@@ -366,12 +406,19 @@ void TaskyUI::drawTasks() {
                    C_GREEN);
     }
 
+    // Focus minutes on the right (teal for the task the timer works on)
+    bool hasMin = model->taskFocusMin[i] > 0 && model->tasks[i] != "Empty";
+    if (hasMin) {
+      rightTextFont(String(model->taskFocusMin[i]) + "m", 212, baseline,
+                    (i == model->currentTask) ? C_TEAL : C_MUTED,
+                    &FreeSans9pt7b);
+    }
+
     // Task text - aligned LEFT, color based on selection
     String t = model->tasks[i];
     if (t == "Empty")
       t = "---";
-    if (t.length() > 15)
-      t = t.substring(0, 15) + "..";
+    t = fitText(t, hasMin ? 120 : 160, &FreeSans12pt7b);
 
     // Color: teal if selected, muted if done, white otherwise
     uint16_t textColor;
@@ -579,14 +626,14 @@ void TaskyUI::drawCalendar() {
     char footerBuf[24];
     snprintf(footerBuf, sizeof(footerBuf), "%d event%s on day %d", eventsOnDay,
              eventsOnDay > 1 ? "s" : "", calendarSelDay);
-    centerTextFont(footerBuf, 225, C_TEAL, &FreeSans9pt7b);
+    centerTextFont(footerBuf, 218, C_TEAL, &FreeSans9pt7b);
   } else if (model->cfg.calendarUrl.length() == 0) {
-    centerTextFont("No calendar linked", 225, C_MUTED, &FreeSans9pt7b);
+    centerTextFont("No calendar linked", 218, C_MUTED, &FreeSans9pt7b);
   } else {
     char footerBuf[24];
     snprintf(footerBuf, sizeof(footerBuf), "Day %d - No events",
              calendarSelDay);
-    centerTextFont(footerBuf, 225, C_MUTED, &FreeSans9pt7b);
+    centerTextFont(footerBuf, 218, C_MUTED, &FreeSans9pt7b);
   }
 }
 
@@ -708,8 +755,8 @@ void TaskyUI::drawTaskDetail(int index) {
   tft.fillScreen(C_BG);
 
   // Header with status
-  centerTextFont("TASK DETAIL", 28, C_TEXT, &FreeSansBold12pt7b);
-  tft.drawFastHLine(40, 38, 160, C_LINE);
+  centerTextFont("TASK DETAIL", 32, C_TEXT, &FreeSansBold12pt7b);
+  tft.drawFastHLine(40, 42, 160, C_LINE);
 
   // Task name - large, prominent
   tft.setFont(&FreeSansBold12pt7b);
@@ -743,6 +790,9 @@ void TaskyUI::drawTaskDetail(int index) {
   int statusY = nameY + 10;
   if (isDone) {
     centerTextFont("COMPLETED", statusY, C_GREEN, &FreeSans9pt7b);
+  } else if (model->taskFocusMin[index] > 0) {
+    String focused = "Focused " + String(model->taskFocusMin[index]) + " min";
+    centerTextFont(focused.c_str(), statusY, C_TEAL, &FreeSans9pt7b);
   } else {
     centerTextFont("IN PROGRESS", statusY, C_MUTED, &FreeSans9pt7b);
   }
@@ -758,7 +808,7 @@ void TaskyUI::drawTaskDetail(int index) {
 
     // Word wrap description
     remaining = taskDesc;
-    while (remaining.length() > 0 && descY < 200) {
+    while (remaining.length() > 0 && descY < 182) {
       String line = remaining;
       if (line.length() > 22) {
         int sp = line.lastIndexOf(' ', 22);
@@ -778,8 +828,10 @@ void TaskyUI::drawTaskDetail(int index) {
     centerTextFont("Add via web portal", descY + 20, C_MUTED, &FreeSans9pt7b);
   }
 
-  // Footer hint
-  centerTextFont("Press to close", 225, C_MUTED, &FreeSans9pt7b);
+  // Footer hints
+  tft.drawFastHLine(40, 192, 160, C_LINE);
+  centerTextFont(isDone ? "Click: close" : "Click: focus on it", 210, C_TEAL,
+                 &FreeSans9pt7b);
   tft.setFont();
 }
 
@@ -862,122 +914,307 @@ uint16_t TaskyUI::calendarDayColor(uint8_t eventCount) {
   return C_RED;      // Busy day (4+)
 }
 
-void TaskyUI::drawFocusBase(FocusDNS* dns) {
-  tft.fillScreen(C_BG);
+// ==================== TEXT HELPERS ====================
+static const char *const DAY_NAMES[] = {"Sun", "Mon", "Tue", "Wed",
+                                        "Thu", "Fri", "Sat"};
+static const char *const MONTH_NAMES[] = {"Jan", "Feb", "Mar", "Apr",
+                                          "May", "Jun", "Jul", "Aug",
+                                          "Sep", "Oct", "Nov", "Dec"};
 
-  // Header
-  centerTextFont("FOCUS MODE", 30, C_TEAL, &FreeSansBold12pt7b);
-  tft.drawFastHLine(60, 42, 120, C_LINE);
-
-  // Status indicator
-  bool active = dns->isFocusModeActive();
-  uint16_t statusColor = active ? C_GREEN : C_RED;
-  const char* statusText = active ? "ACTIVE" : "INACTIVE";
-  centerTextFont(statusText, 64, statusColor, &FreeSansBold12pt7b);
-
-  // Shield icon if active
-  if (active) {
-    drawFocusIndicator(true);
-  }
-
-  // Stats line
-  char statsBuf[32];
-  snprintf(statsBuf, sizeof(statsBuf), "Blocked: %lu",
-           (unsigned long)dns->getBlockedQueryCount());
-  centerTextFont(statsBuf, 84, C_MUTED, &FreeSans9pt7b);
-
-  // Separator
-  tft.drawFastHLine(20, 92, 200, C_LINE);
-
-  // Domain list
-  drawFocusList(dns);
-
-  // Bottom instructions
-  tft.drawFastHLine(20, 212, 200, C_LINE);
-  centerTextFont("Click:ON/OFF Long:Remove", 230, C_MUTED, nullptr);
+static String formatDate(const struct tm &t) {
+  char buf[16];
+  snprintf(buf, sizeof(buf), "%s, %s %d", DAY_NAMES[t.tm_wday],
+           MONTH_NAMES[t.tm_mon], t.tm_mday);
+  return String(buf);
 }
 
-void TaskyUI::drawFocusList(FocusDNS* dns) {
-  // Clear list area
-  tft.fillRect(0, 96, 240, 116, C_BG);
+static String daysText(int n) { return String(n) + (n == 1 ? " day" : " days"); }
 
-  int count = dns->getBlockedCount();
-  if (count == 0) {
-    centerTextFont("No blocked sites", 145, C_MUTED, &FreeSans9pt7b);
-    centerTextFont("Long press to restore", 165, C_MUTED, &FreeSans9pt7b);
+// Truncate with ".." so the text fits in maxW pixels
+String TaskyUI::fitText(const String &s, int maxW, const GFXfont *font) {
+  tft.setFont(font);
+  int16_t x1, y1;
+  uint16_t w, h;
+  tft.getTextBounds(s, 0, 0, &x1, &y1, &w, &h);
+  String t = s;
+  while ((int)w > maxW && t.length() > 1) {
+    t.remove(t.length() - 1);
+    tft.getTextBounds(t + "..", 0, 0, &x1, &y1, &w, &h);
+    if ((int)w <= maxW)
+      t += "..";
+  }
+  tft.setFont();
+  return t;
+}
+
+// "Label ............ value" row inside the safe area
+void TaskyUI::drawRow(const char *label, const String &value, int baseline,
+                      uint16_t valueColor) {
+  tft.setFont(&FreeSans9pt7b);
+  int16_t x1, y1;
+  uint16_t w, h;
+  tft.getTextBounds(label, 0, 0, &x1, &y1, &w, &h);
+  tft.setTextColor(C_MUTED);
+  tft.setCursor(28, baseline);
+  tft.print(label);
+  tft.setFont();
+  int maxW = 212 - (28 + (int)w + 12);
+  rightTextFont(fitText(value, maxW, &FreeSans9pt7b), 212, baseline,
+                valueColor, &FreeSans9pt7b);
+}
+
+// ==================== FOCUS MODE ====================
+void TaskyUI::drawFocus() {
+  tft.fillScreen(C_BG);
+  Config &cfg = model->cfg;
+
+  centerTextFont("FOCUS MODE", 34, C_TEAL, &FreeSansBold12pt7b);
+  tft.drawFastHLine(60, 44, 120, C_LINE);
+
+  if (model->isFocusModeActive())
+    centerTextFont("Active now", 70, C_GREEN, &FreeSans9pt7b);
+  else if (cfg.focusAutoMode)
+    centerTextFont("Starts with the timer", 70, C_MUTED, &FreeSans9pt7b);
+  else
+    centerTextFont("Off", 70, C_RED, &FreeSans9pt7b);
+
+  const char *labels[3] = {"Auto with timer", "Light signal", "Lock screens"};
+  bool values[3] = {cfg.focusAutoMode, cfg.focusLight, cfg.focusLock};
+  for (int i = 0; i < 3; i++) {
+    int baseline = 104 + i * 30;
+    bool sel = (i == focusSel);
+    if (sel)
+      tft.drawRoundRect(20, baseline - 18, 200, 26, 6, C_TEAL);
+    tft.setFont(&FreeSans9pt7b);
+    tft.setTextColor(sel ? C_TEAL : C_TEXT);
+    tft.setCursor(28, baseline);
+    tft.print(labels[i]);
+    tft.setFont();
+    rightTextFont(values[i] ? "ON" : "OFF", 212, baseline,
+                  values[i] ? C_GREEN : C_MUTED, &FreeSans9pt7b);
+  }
+
+  tft.drawFastHLine(20, 184, 200, C_LINE);
+  char buf[40];
+  snprintf(buf, sizeof(buf), "Today: %d sessions, %dm", cfg.dailyPomodoroCount,
+           cfg.dailyFocusMin);
+  centerTextFont(buf, 208, C_MUTED, &FreeSans9pt7b);
+}
+
+// ==================== MORE MENU ====================
+void TaskyUI::drawMore(const char *const labels[], int count) {
+  tft.fillScreen(C_BG);
+  centerTextFont("MORE", 34, C_TEXT, &FreeSansBold12pt7b);
+  tft.drawFastHLine(40, 44, 160, C_LINE);
+
+  const int visible = 6, rowH = 22, first = 74;
+  moreSel = constrain(moreSel, 0, count - 1);
+  int start = constrain(moreSel - visible / 2, 0, max(0, count - visible));
+
+  for (int v = 0; v < visible && start + v < count; v++) {
+    int i = start + v;
+    int baseline = first + v * rowH;
+    bool sel = (i == moreSel);
+    if (sel)
+      tft.fillRoundRect(20, baseline - 15, 200, 20, 4, C_TEAL);
+    tft.setFont(&FreeSans9pt7b);
+    tft.setTextColor(sel ? C_BG : C_TEXT);
+    tft.setCursor(32, baseline);
+    tft.print(labels[i]);
+    tft.setCursor(202, baseline);
+    tft.print(">");
+    tft.setFont();
+  }
+
+  // Scroll hints
+  if (start > 0)
+    tft.fillTriangle(CX - 4, 54, CX + 4, 54, CX, 50, C_MUTED);
+  if (start + visible < count)
+    tft.fillTriangle(CX - 4, 200, CX + 4, 200, CX, 205, C_MUTED);
+}
+
+// ==================== AMBIENT (IDLE) ====================
+void TaskyUI::drawAmbientClock() {
+  char buf[6] = "--:--";
+  struct tm t;
+  if (model->localNow(t))
+    snprintf(buf, sizeof(buf), "%02d:%02d", t.tm_hour, t.tm_min);
+
+  tft.fillRect(28, 58, 184, 48, C_BG);
+  tft.setFont(&FreeSansBold24pt7b);
+  int16_t x1, y1;
+  uint16_t w, h;
+  tft.getTextBounds(buf, 0, 0, &x1, &y1, &w, &h);
+  tft.setTextColor(C_TEXT);
+  tft.setCursor((W - (int)w) / 2 - x1, 100);
+  tft.print(buf);
+  tft.setFont();
+}
+
+void TaskyUI::drawAmbient(bool weatherOk, float temp, const char *desc,
+                          bool celsius) {
+  tft.fillScreen(C_BG);
+  drawAmbientClock();
+
+  struct tm t;
+  bool hasTime = model->localNow(t);
+  if (hasTime)
+    centerTextFont(formatDate(t).c_str(), 128, C_MUTED, &FreeSans9pt7b);
+  tft.drawFastHLine(40, 146, 160, C_LINE);
+
+  // What's next: upcoming event, else the task in focus
+  String next;
+  if (hasTime) {
+    const CalendarEventItem *ev =
+        model->nextEventToday(t.tm_hour * 60 + t.tm_min);
+    if (ev)
+      next = String(ev->startTime) + "  " + ev->title;
+  }
+  if (next.length() == 0 && model->hasCurrentTask())
+    next = model->tasks[model->currentTask];
+  if (next.length() > 0)
+    centerTextFont(fitText(next, 196, &FreeSans9pt7b).c_str(), 174, C_TEXT,
+                   &FreeSans9pt7b);
+  else
+    centerTextFont("Nothing scheduled", 174, C_MUTED, &FreeSans9pt7b);
+
+  if (weatherOk) {
+    // "21°C  Cloudy" (the font has no degree glyph: draw a small ring)
+    String num = String((int)lroundf(temp));
+    String rest = fitText(String(celsius ? "C  " : "F  ") + desc, 150,
+                          &FreeSans9pt7b);
+    tft.setFont(&FreeSans9pt7b);
+    int16_t x1, y1;
+    uint16_t w1, w2, h;
+    tft.getTextBounds(num, 0, 0, &x1, &y1, &w1, &h);
+    tft.getTextBounds(rest, 0, 0, &x1, &y1, &w2, &h);
+    int x = (W - (int)(w1 + 7 + w2)) / 2;
+    tft.setTextColor(C_TEAL);
+    tft.setCursor(x, 204);
+    tft.print(num);
+    tft.drawCircle(x + w1 + 3, 193, 2, C_TEAL);
+    tft.setCursor(x + w1 + 7, 204);
+    tft.print(rest);
+    tft.setFont();
+  }
+}
+
+// ==================== NOTICES ====================
+void TaskyUI::drawMeetingAlert(const CalendarEventItem &ev, int minutes,
+                               bool timerPaused) {
+  tft.fillScreen(C_BG);
+  centerTextFont("MEETING", 50, C_ORANGE, &FreeSansBold12pt7b);
+
+  char buf[12];
+  if (minutes <= 0)
+    snprintf(buf, sizeof(buf), "Now");
+  else
+    snprintf(buf, sizeof(buf), "%d min", minutes);
+  centerTextFont(buf, 112, C_TEXT, &FreeSansBold24pt7b);
+
+  centerTextFont(fitText(ev.title, 200, &FreeSans9pt7b).c_str(), 150, C_TEXT,
+                 &FreeSans9pt7b);
+  String span = ev.startTime;
+  if (TaskyModel::hhmmToMinutes(ev.endTime) >= 0)
+    span += String(" - ") + ev.endTime;
+  centerTextFont(span.c_str(), 174, C_MUTED, &FreeSans9pt7b);
+
+  if (timerPaused)
+    centerTextFont("Timer paused", 192, C_ORANGE, &FreeSans9pt7b);
+  centerTextFont("Click to dismiss", 212, C_MUTED, &FreeSans9pt7b);
+}
+
+void TaskyUI::drawMorningBrief() {
+  tft.fillScreen(C_BG);
+  centerTextFont("GOOD MORNING", 40, C_TEAL, &FreeSansBold12pt7b);
+
+  struct tm t;
+  bool hasTime = model->localNow(t);
+  if (hasTime)
+    centerTextFont(formatDate(t).c_str(), 62, C_MUTED, &FreeSans9pt7b);
+
+  int n = model->todayEventCount;
+  drawRow("Events", n ? String(n) + " today" : String("Free day"), 96, C_TEXT);
+  const CalendarEventItem *ev =
+      model->nextEventToday(hasTime ? t.tm_hour * 60 + t.tm_min : 0);
+  drawRow("Next", ev ? String(ev->startTime) + " " + ev->title : String("-"),
+          122, C_TEXT);
+  drawRow("Streak", daysText(model->calculateCurrentStreak()), 148, C_TEAL);
+  drawRow("Yesterday", String(model->cfg.yesterdayPomodoro) + " sessions", 174,
+          C_TEXT);
+  centerTextFont("Click to start", 210, C_MUTED, &FreeSans9pt7b);
+}
+
+void TaskyUI::drawDayClose() {
+  tft.fillScreen(C_BG);
+  Config &cfg = model->cfg;
+  centerTextFont("DAY DONE", 40, C_PURPLE, &FreeSansBold12pt7b);
+
+  struct tm t;
+  bool hasTime = model->localNow(t);
+  if (hasTime)
+    centerTextFont(formatDate(t).c_str(), 62, C_MUTED, &FreeSans9pt7b);
+
+  int done = 0, total = 0;
+  for (int i = 0; i < 3; i++) {
+    if (model->tasks[i].length() == 0 || model->tasks[i] == "Empty")
+      continue;
+    total++;
+    if (model->taskDone[i])
+      done++;
+  }
+
+  drawRow("Focus", String(cfg.dailyFocusMin) + " min", 96, C_TEAL);
+  drawRow("Sessions", String(cfg.dailyPomodoroCount), 122, C_TEXT);
+  drawRow("Tasks", total ? String(done) + "/" + String(total) : String("-"),
+          148, C_TEXT);
+  drawRow("Streak", daysText(model->calculateCurrentStreak()), 174, C_TEAL);
+
+  // Tomorrow's first meeting (month events only cover the current month)
+  String footer = "Rest well";
+  if (hasTime) {
+    time_t tomorrow = time(nullptr) + 24 * 3600;
+    struct tm tm2;
+    localtime_r(&tomorrow, &tm2);
+    const CalendarEventItem *ev =
+        (tm2.tm_mon == t.tm_mon) ? model->firstEventOnDay(tm2.tm_mday) : nullptr;
+    if (ev)
+      footer = String("Tomorrow ") + ev->startTime + " " + ev->title;
+  }
+  centerTextFont(fitText(footer, 200, &FreeSans9pt7b).c_str(), 210, C_MUTED,
+                 &FreeSans9pt7b);
+}
+
+// ==================== OTA UPDATE ====================
+void TaskyUI::drawUpdate(bool armed, const String &url, const String &hint,
+                         const String &version) {
+  tft.fillScreen(C_BG);
+  centerTextFont("UPDATE", 40, C_TEXT, &FreeSansBold12pt7b);
+  centerTextFont(("v" + version).c_str(), 62, C_MUTED, &FreeSans9pt7b);
+
+  if (!armed) {
+    centerTextFont("Click to allow", 110, C_TEXT, &FreeSans9pt7b);
+    centerTextFont("updates for 5 min", 132, C_MUTED, &FreeSans9pt7b);
+    centerTextFont("Blocked otherwise", 200, C_MUTED, &FreeSans9pt7b);
     return;
   }
 
-  // Clamp scroll
-  int maxVisible = 7;
-  if (focusDomainScroll > count - 1) focusDomainScroll = count - 1;
-  if (focusDomainScroll < 0) focusDomainScroll = 0;
-
-  // Calculate visible window centered on selection
-  int startIdx = focusDomainScroll - maxVisible / 2;
-  if (startIdx < 0) startIdx = 0;
-  if (startIdx > count - maxVisible) startIdx = count - maxVisible;
-  if (startIdx < 0) startIdx = 0;
-
-  int yPos = 98;
-  for (int i = startIdx; i < count && i < startIdx + maxVisible; i++) {
-    bool selected = (i == focusDomainScroll);
-    int itemY = yPos + (i - startIdx) * 16;
-
-    if (selected) {
-      tft.fillRect(10, itemY - 2, 220, 18, C_TEAL);
-      tft.setTextColor(C_BG);
-    } else {
-      tft.setTextColor(C_TEXT);
-    }
-
-    // Domain name - strip .com/.net suffixes for cleaner display
-    const char* domain = dns->getBlockedDomain(i);
-    char displayName[24];
-    strncpy(displayName, domain, sizeof(displayName) - 1);
-    displayName[sizeof(displayName) - 1] = '\0';
-    // Strip common suffixes
-    char* dot = strstr(displayName, ".com");
-    if (dot && strlen(dot) == 4) *dot = '\0';
-    dot = strstr(displayName, ".net");
-    if (dot && strlen(dot) == 4) *dot = '\0';
-    dot = strstr(displayName, ".org");
-    if (dot && strlen(dot) == 4) *dot = '\0';
-
-    // Capitalize first letter
-    if (displayName[0] >= 'a' && displayName[0] <= 'z') {
-      displayName[0] -= 32;
-    }
-
-    tft.setFont(&FreeSans9pt7b);
-    // Center the name
-    int16_t x1, y1;
-    uint16_t tw, th;
-    tft.getTextBounds(displayName, 0, 0, &x1, &y1, &tw, &th);
-    int cx = (W - (int)tw) / 2;
-    tft.setCursor(cx, itemY + 13);
-    tft.print(displayName);
-
-    tft.setFont();
-  }
-
-  // Scroll indicators
-  if (startIdx > 0) {
-    tft.setTextColor(C_MUTED);
-    tft.setFont();
-    tft.setCursor(115, 97);
-    tft.print("^");
-  }
-  if (startIdx + maxVisible < count) {
-    tft.setTextColor(C_MUTED);
-    tft.setFont();
-    tft.setCursor(115, 210);
-    tft.print("v");
-  }
+  centerTextFont("READY", 92, C_GREEN, &FreeSansBold12pt7b);
+  centerTextFont("Open in browser", 124, C_MUTED, &FreeSans9pt7b);
+  centerTextFont(fitText(url, 200, &FreeSans9pt7b).c_str(), 148, C_TEXT,
+                 &FreeSans9pt7b);
+  if (hint.length() > 0)
+    centerTextFont(fitText(hint, 200, &FreeSans9pt7b).c_str(), 172, C_MUTED,
+                   &FreeSans9pt7b);
 }
 
-void TaskyUI::drawFocus(FocusDNS* dns) {
-  drawFocusBase(dns);
+void TaskyUI::drawUpdateCountdown(uint32_t remainingMs) {
+  uint32_t s = remainingMs / 1000;
+  char buf[16];
+  snprintf(buf, sizeof(buf), "%lu:%02lu left", (unsigned long)(s / 60),
+           (unsigned long)(s % 60));
+  tft.fillRect(40, 188, 160, 22, C_BG);
+  centerTextFont(buf, 204, C_TEAL, &FreeSans9pt7b);
 }
 
 void TaskyUI::drawAgenda() {
@@ -1161,26 +1398,6 @@ void TaskyUI::drawAgenda() {
   tft.setFont();
 }
 
-void TaskyUI::drawFocusIndicator(bool active) {
-  // Shield icon in top right corner indicating blocking is active
-  if (!active) return;
-
-  int x = 200;
-  int y = 26;
-
-  // Simple shield shape
-  uint16_t color = C_RED;
-
-  // Shield outline (pentagon-like shape)
-  tft.fillTriangle(x, y - 8, x - 10, y - 4, x + 10, y - 4, color);
-  tft.fillRect(x - 10, y - 4, 21, 10, color);
-  tft.fillTriangle(x - 10, y + 6, x + 10, y + 6, x, y + 14, color);
-
-  // Inner shield detail (optional - darker center)
-  uint16_t innerColor = 0x7800; // Darker red
-  tft.fillCircle(x, y, 3, innerColor);
-}
-
 void TaskyUI::drawStats() {
   tft.fillScreen(C_BG);
   // No frame - cleaner look
@@ -1199,10 +1416,11 @@ void TaskyUI::drawStats() {
   centerTextFont(buf, 110, C_TEXT, &FreeSansBold18pt7b);
   centerTextFont("Total Focus Time", 135, C_MUTED, &FreeSans9pt7b);
 
-  // Sessions completed today
-  int todaySessions = model->streak[model->currentDayIndex];
-  snprintf(buf, sizeof(buf), "%d sessions today", todaySessions);
+  // Today
+  snprintf(buf, sizeof(buf), "%d sessions today", model->cfg.dailyPomodoroCount);
   centerTextFont(buf, 175, C_TEAL, &FreeSans12pt7b);
+  snprintf(buf, sizeof(buf), "%d min focused today", model->cfg.dailyFocusMin);
+  centerTextFont(buf, 202, C_MUTED, &FreeSans9pt7b);
 }
 
 #if FEATURE_SPOTIFY
@@ -1336,7 +1554,7 @@ void TaskyUI::drawSpotify(const char* track, const char* artist, uint32_t progre
   tft.print(timeBuf);
 
   // Footer - control hints
-  centerTextFont("Vol: Turn | Click: Play", 230, C_LINE, &FreeSans9pt7b);
+  centerTextFont("Vol: Turn | Click: Play", 218, C_LINE, &FreeSans9pt7b);
   tft.setFont();
 }
 #endif
@@ -1516,7 +1734,7 @@ void TaskyUI::drawAgent(int state, const char* response, int responseLen,
       tft.fillCircle(dx, dotY, dotSize, dotColor);
     }
 
-    centerTextFont("Press to cancel", 228, C_MUTED, &FreeSans9pt7b);
+    centerTextFont("Press to cancel", 218, C_MUTED, &FreeSans9pt7b);
     return;
   }
 
@@ -1551,7 +1769,7 @@ void TaskyUI::drawAgent(int state, const char* response, int responseLen,
       }
     }
 
-    centerTextFont("Press to go back", 228, C_MUTED, &FreeSans9pt7b);
+    centerTextFont("Press to go back", 218, C_MUTED, &FreeSans9pt7b);
     tft.setFont();
     return;
   }
@@ -1574,7 +1792,7 @@ void TaskyUI::drawAgent(int state, const char* response, int responseLen,
     String remaining = String(response);
     int yPos = 56 - scrollOffset;
     int lineHeight = 18;
-    int maxY = 208;
+    int maxY = 190;
     int marginX = 24;  // Left/right margin
     int maxChars = 20;  // Narrower for safe margins on 240px
 
@@ -1621,11 +1839,11 @@ void TaskyUI::drawAgent(int state, const char* response, int responseLen,
     }
 
     // Footer with subtle separator
-    tft.drawFastHLine(60, 216, 120, C_LINE);
+    tft.drawFastHLine(60, 200, 120, C_LINE);
     if (yPos > maxY + lineHeight) {
-      centerTextFont("Turn to scroll", 232, C_MUTED, &FreeSans9pt7b);
+      centerTextFont("Turn to scroll", 218, C_MUTED, &FreeSans9pt7b);
     } else {
-      centerTextFont("Press to go back", 232, C_MUTED, &FreeSans9pt7b);
+      centerTextFont("Press to go back", 218, C_MUTED, &FreeSans9pt7b);
     }
 
     tft.setFont();
@@ -1677,8 +1895,8 @@ void TaskyUI::drawAgentModeSelect(int selection, int8_t currentOverride) {
   // Determine which item is currently active
   int activeIdx = (currentOverride < 0) ? 0 : (currentOverride + 1);
 
-  // Scrollable list - show 6 items centered on selection
-  int visibleCount = 6;
+  // Scrollable list - show 5 items centered on selection
+  int visibleCount = 5;
   int startIdx = selection - visibleCount / 2;
   if (startIdx < 0) startIdx = 0;
   if (startIdx > TOTAL_MODES - visibleCount) startIdx = TOTAL_MODES - visibleCount;
@@ -1723,11 +1941,11 @@ void TaskyUI::drawAgentModeSelect(int selection, int8_t currentOverride) {
     tft.fillTriangle(CX - 5, 46, CX + 5, 46, CX, 41, C_MUTED);
   }
   if (startIdx + visibleCount < TOTAL_MODES) {
-    tft.fillTriangle(CX - 5, 224, CX + 5, 224, CX, 229, C_MUTED);
+    tft.fillTriangle(CX - 5, 193, CX + 5, 193, CX, 198, C_MUTED);
   }
 
   // Footer
-  centerTextFont("Click to select", 225, C_MUTED, &FreeSans9pt7b);
+  centerTextFont("Click to select", 220, C_MUTED, &FreeSans9pt7b);
   tft.setFont();
 }
 #endif
@@ -1911,142 +2129,6 @@ void TaskyUI::drawSplashTasky() {
   }
 
   delay(400);
-}
-
-// ==================== QUOTES DATA (PROGMEM) ====================
-const char quote0[] PROGMEM = "Every second counts.";
-const char quote1[] PROGMEM = "Find a way.";
-const char quote2[] PROGMEM = "Stay hungry, stay foolish.|Steve Jobs";
-const char quote3[] PROGMEM = "Move fast and break things.|Mark Zuckerberg";
-const char quote4[] PROGMEM =
-    "The only way to do great work is to love what you do.|Steve Jobs";
-const char quote5[] PROGMEM = "Done is better than perfect.|Sheryl Sandberg";
-const char quote6[] PROGMEM = "Make something people want.|Paul Graham";
-const char quote7[] PROGMEM =
-    "Ideas are easy. Execution is everything.|John Doerr";
-const char quote8[] PROGMEM =
-    "The best way to predict the future is to invent it.|Alan Kay";
-const char quote9[] PROGMEM =
-    "Simplicity is the ultimate sophistication.|Leonardo da Vinci";
-const char quote10[] PROGMEM =
-    "First, solve the problem. Then, write the code.|John Johnson";
-const char quote11[] PROGMEM = "Code is poetry.";
-const char quote12[] PROGMEM = "Ship it.|Seth Godin";
-const char quote13[] PROGMEM = "Think different.|Apple";
-const char quote14[] PROGMEM =
-    "What would you attempt if you knew you could not fail?|Robert Schuller";
-const char quote15[] PROGMEM = "The obstacle is the way.|Marcus Aurelius";
-const char quote16[] PROGMEM = "Memento mori.";
-const char quote17[] PROGMEM = "Amor fati.|Nietzsche";
-const char quote18[] PROGMEM = "Per aspera ad astra.";
-const char quote19[] PROGMEM = "Cogito, ergo sum.|Descartes";
-const char quote20[] PROGMEM = "Knowledge is power.|Francis Bacon";
-const char quote21[] PROGMEM =
-    "The unexamined life is not worth living.|Socrates";
-const char quote22[] PROGMEM = "Be the change you wish to see.|Gandhi";
-const char quote23[] PROGMEM =
-    "Time is the most valuable thing a man can spend.|Theophrastus";
-const char quote24[] PROGMEM =
-    "Action is the foundational key to all success.|Picasso";
-const char quote25[] PROGMEM = "Begin anywhere.|John Cage";
-const char quote26[] PROGMEM = "Less is more.|Mies van der Rohe";
-const char quote27[] PROGMEM = "Form follows function.|Louis Sullivan";
-const char quote28[] PROGMEM =
-    "Make it work, make it right, make it fast.|Kent Beck";
-const char quote29[] PROGMEM = "Iteration is the mother of progress.";
-
-const char *const quotes[] PROGMEM = {
-    quote0,  quote1,  quote2,  quote3,  quote4,  quote5,  quote6,  quote7,
-    quote8,  quote9,  quote10, quote11, quote12, quote13, quote14, quote15,
-    quote16, quote17, quote18, quote19, quote20, quote21, quote22, quote23,
-    quote24, quote25, quote26, quote27, quote28, quote29};
-
-#define NUM_QUOTES 30
-
-void TaskyUI::drawQuotes() {
-  tft.fillScreen(0x0000); // Pure black background
-
-  // Read quote from PROGMEM
-  char buffer[128];
-  strcpy_P(buffer, (char *)pgm_read_ptr(&quotes[quoteIndex]));
-
-  String fullQuote = String(buffer);
-
-  // Split quote and author (separated by |)
-  String quoteText = fullQuote;
-  String author = "";
-
-  int pipePos = fullQuote.indexOf('|');
-  if (pipePos > 0) {
-    quoteText = fullQuote.substring(0, pipePos);
-    author = fullQuote.substring(pipePos + 1);
-  }
-
-  // Word wrap the quote for multi-line display
-  // Max ~20 chars per line for 12pt font
-  const int maxLineLen = 18;
-  const int maxLines = 4;
-  String lines[maxLines];
-  int numLines = 0;
-
-  String remaining = quoteText;
-  while (remaining.length() > 0 && numLines < maxLines) {
-    if (remaining.length() <= maxLineLen) {
-      lines[numLines++] = remaining;
-      break;
-    }
-
-    // Find space to break at
-    int breakAt = maxLineLen;
-    for (int i = maxLineLen; i > 0; i--) {
-      if (remaining[i] == ' ') {
-        breakAt = i;
-        break;
-      }
-    }
-
-    lines[numLines++] = remaining.substring(0, breakAt);
-    remaining = remaining.substring(breakAt);
-    remaining.trim();
-  }
-
-  // Calculate vertical centering
-  int lineHeight = 28;
-  int totalHeight = numLines * lineHeight + (author.length() > 0 ? 30 : 0);
-  int startY = (240 - totalHeight) / 2 + 20;
-
-  // Draw quote lines - OP-1 style (white on black)
-  tft.setFont(&FreeSansBold12pt7b);
-  tft.setTextColor(0xFFFF); // Pure white
-
-  for (int i = 0; i < numLines; i++) {
-    int16_t x1, y1;
-    uint16_t w, h;
-    tft.getTextBounds(lines[i], 0, 0, &x1, &y1, &w, &h);
-    int x = (240 - w) / 2;
-    tft.setCursor(x, startY + i * lineHeight);
-    tft.print(lines[i]);
-  }
-
-  // Draw author - smaller, muted
-  if (author.length() > 0) {
-    int authorY = startY + numLines * lineHeight + 20;
-    tft.setFont(&FreeSans9pt7b);
-    tft.setTextColor(0x7BEF); // Muted gray
-
-    String authorLine = "- " + author;
-    int16_t x1, y1;
-    uint16_t w, h;
-    tft.getTextBounds(authorLine, 0, 0, &x1, &y1, &w, &h);
-    int x = (240 - w) / 2;
-    tft.setCursor(x, authorY);
-    tft.print(authorLine);
-  }
-
-  tft.setFont();
-
-  // Store time for auto-advance
-  lastQuoteChange = millis();
 }
 
 void TaskyUI::centerTextFont(const char *s, int baselineY, uint16_t color,

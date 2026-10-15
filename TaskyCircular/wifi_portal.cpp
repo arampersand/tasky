@@ -1,11 +1,10 @@
 #include "wifi_portal.h"
 #include "config_features.h"
 #include "network_manager.h"
-#include "focus_dns.h"
 #include "ota_service.h"
 
-WiFiPortal::WiFiPortal(TaskyModel *m, TaskyNetManager *n, FocusDNS* dns, OtaService* otaSvc)
-    : server(80), model(m), net(n), focusDns(dns), ota(otaSvc) {}
+WiFiPortal::WiFiPortal(TaskyModel *m, TaskyNetManager *n, OtaService* otaSvc)
+    : server(80), model(m), net(n), ota(otaSvc) {}
 
 void WiFiPortal::begin() {
   if (wifiOn)
@@ -16,10 +15,8 @@ void WiFiPortal::begin() {
 
   IPAddress ip = WiFi.softAPIP();
 
-  // Start FocusDNS (replaces standard DNSServer)
-  if (focusDns) {
-    focusDns->begin(ip);
-  }
+  // Captive portal DNS: every name resolves to the AP so phones open setup
+  dns.start(53, "*", ip);
 
   // Routes
   server.on("/", HTTP_GET, [this]() { handleRoot(); });
@@ -72,9 +69,7 @@ void WiFiPortal::begin() {
 void WiFiPortal::stop() {
   if (!wifiOn)
     return;
-  if (focusDns) {
-    focusDns->stop();
-  }
+  dns.stop();
   server.stop();
   WiFi.softAPdisconnect(true);
   WiFi.mode(WIFI_OFF);
@@ -83,9 +78,7 @@ void WiFiPortal::stop() {
 
 void WiFiPortal::loop() {
   if (wifiOn) {
-    if (focusDns) {
-      focusDns->loop();  // Process DNS queries with focus mode filtering
-    }
+    dns.processNextRequest();
     server.handleClient();
   }
 }
@@ -235,13 +228,12 @@ String WiFiPortal::htmlPage() {
   s += "<details class='guide'>";
   s += "<summary>&#128737; Como usar Focus Mode</summary>";
   s += "<div class='content'>";
-  s += "<p>Focus Mode bloquea sitios de distraccion durante tus sesiones de trabajo.</p>";
+  s += "<p>Focus Mode se activa solo cuando corre una sesion de trabajo.</p>";
   s += "<ol>";
-  s += "<li>En tu telefono, ir a <strong>Settings &rarr; WiFi</strong></li>";
-  s += "<li>Conectar a la red <strong>\"" + apSSID + "\"</strong></li>";
-  s += "<li>En configuracion avanzada de WiFi, cambiar DNS a: <strong>" + WiFi.softAPIP().toString() + "</strong></li>";
+  s += "<li><strong>Luz:</strong> la barra de luz se enciende como senal de no molestar</li>";
+  s += "<li><strong>Bloqueo:</strong> el boton MODO no cambia de pantalla; pausa el timer para salir</li>";
   s += "</ol>";
-  s += "<p style='color:#888;margin-top:8px'>Sitios bloqueados: Facebook, Instagram, Twitter/X, TikTok, YouTube, Reddit</p>";
+  s += "<p style='color:#888;margin-top:8px'>Se configura en el Tasky: MODO hasta More &rarr; Focus</p>";
   s += "</div></details>";
 
   // ===== FORM START =====
@@ -273,6 +265,11 @@ String WiFiPortal::htmlPage() {
   s += "<hr><h3>&#9201; Timer Pomodoro</h3>";
   s += "<label>Minutos por Sesion</label>";
   s += "<input name='work' type='number' value='" + String(model->cfg.workMin) + "' min='5' max='90'>";
+  s += "<label>Inicio de jornada (hora, 0-23)</label>";
+  s += "<input name='dsh' type='number' value='" + String(model->cfg.dayStartHour) + "' min='0' max='23'>";
+  s += "<label>Fin de jornada (hora, 0-23)</label>";
+  s += "<input name='deh' type='number' value='" + String(model->cfg.dayEndHour) + "' min='0' max='23'>";
+  s += "<p style='font-size:11px;color:#888'>Tasky te da un resumen al empezar y al cerrar el dia.</p>";
 
   // ===== INTEGRATIONS =====
   s += "<hr><h3>&#128279; Integraciones</h3>";
@@ -302,33 +299,6 @@ String WiFiPortal::htmlPage() {
   s += "<input name='ndb' value='" + model->cfg.notionDatabaseId + "' placeholder='abc123def456...'>";
   s += "</div>";
 #endif
-
-  // ===== FOCUS MODE =====
-  s += "<hr><h3>&#128737; Focus Mode</h3>";
-
-  // Status indicator
-  s += "<div style='margin:8px 0;padding:10px;background:#111;border-radius:4px;display:flex;align-items:center;gap:8px'>";
-  s += "<span style='color:#888'>Estado:</span>";
-  if (model->isFocusModeActive()) {
-    s += "<span style='color:#f44;font-weight:bold'>&#128721; BLOQUEANDO</span>";
-  } else {
-    s += "<span style='color:#0f0'>&#128994; Normal</span>";
-  }
-  s += "</div>";
-
-  s += "<label>Auto-bloquear en Sesiones de Trabajo</label>";
-  s += "<select name='fAuto'>";
-  s += model->cfg.focusAutoMode ?
-       "<option value='1' selected>ON - Bloquea cuando corre el timer</option><option value='0'>OFF</option>" :
-       "<option value='1'>ON - Bloquea cuando corre el timer</option><option value='0' selected>OFF</option>";
-  s += "</select>";
-
-  s += "<label>Override Manual (Siempre Bloquear)</label>";
-  s += "<select name='fMan'>";
-  s += model->cfg.focusManualMode ?
-       "<option value='1' selected>ON - Siempre bloqueando</option><option value='0'>OFF</option>" :
-       "<option value='1'>ON - Siempre bloqueando</option><option value='0' selected>OFF</option>";
-  s += "</select>";
 
   // ===== STREAK =====
   s += "<hr><h3>&#128293; Streak</h3>";
@@ -490,6 +460,7 @@ String WiFiPortal::htmlPage() {
   // ===== OTA UPDATE SECTION (Outside form) =====
   s += "<hr><h3>&#128229; Firmware Update</h3>";
   s += "<p style='font-size:10px;color:#666;margin-bottom:8px'>Actualiza el firmware via WiFi</p>";
+  s += "<p style='font-size:12px;color:#ff6b35'>Primero en el Tasky: MODO hasta More &rarr; Update y presiona la perilla. La actualizacion queda habilitada 5 minutos.</p>";
 
   // Current version
   String version = ota ? ota->getVersion() : "Unknown";
@@ -651,9 +622,16 @@ void WiFiPortal::handleSave() {
   for (int i = 0; i < 3; i++) {
     String k = "t" + String(i);
     if (server.hasArg(k)) {
-      model->tasks[i] = server.arg(k);
-      if (model->tasks[i].length() == 0)
-        model->tasks[i] = "Empty";
+      String name = server.arg(k);
+      if (name.length() == 0)
+        name = "Empty";
+      if (name != model->tasks[i]) {
+        // New task in this slot: its focus time starts from zero
+        model->taskFocusMin[i] = 0;
+        if (model->currentTask == i)
+          model->currentTask = -1;
+      }
+      model->tasks[i] = name;
       model->taskDone[i] = false;
     }
 
@@ -672,6 +650,10 @@ void WiFiPortal::handleSave() {
       v = 90;
     model->cfg.workMin = (uint8_t)v;
   }
+  if (server.hasArg("dsh"))
+    model->cfg.dayStartHour = (uint8_t)constrain(server.arg("dsh").toInt(), 0, 23);
+  if (server.hasArg("deh"))
+    model->cfg.dayEndHour = (uint8_t)constrain(server.arg("deh").toInt(), 0, 23);
 
   if (server.hasArg("ssid"))
     model->cfg.wifiSSID = server.arg("ssid");
@@ -696,12 +678,6 @@ void WiFiPortal::handleSave() {
   if (server.hasArg("ndb"))
     model->cfg.notionDatabaseId = server.arg("ndb");
 #endif
-
-  // Focus Mode
-  if (server.hasArg("fAuto"))
-    model->cfg.focusAutoMode = server.arg("fAuto") == "1";
-  if (server.hasArg("fMan"))
-    model->cfg.focusManualMode = server.arg("fMan") == "1";
 
   // Streak Source
   if (server.hasArg("sks")) {

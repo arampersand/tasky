@@ -38,8 +38,17 @@ public:
   // Reboot after successful update
   void rebootDevice();
 
+  // Uploads are only accepted while armed from the device itself (physical
+  // confirmation), so nobody on the network can flash firmware unnoticed.
+  static const uint32_t ARM_WINDOW_MS = 5UL * 60UL * 1000UL;
+  void arm() { armedUntil = millis() + ARM_WINDOW_MS; }
+  void disarm() { armedUntil = 0; }
+  bool isArmed() const { return armedUntil != 0 && (int32_t)(armedUntil - millis()) > 0; }
+  uint32_t armedRemainingMs() const { return isArmed() ? armedUntil - millis() : 0; }
+
 private:
   TaskyModel *model;
+  uint32_t armedUntil = 0;
   OtaState state = OTA_IDLE;
   int progress = 0;
   size_t totalBytes = 0;
