@@ -3,6 +3,11 @@
 // served same-origin (GitHub release assets send no CORS headers, so the
 // browser cannot fetch them directly).
 //
+// The manifest flashes the individual parts (bootloader, partitions, boot_app0,
+// app) listed in tasky-<env>-parts.json instead of the merged image: the merged
+// image fills the NVS gap with 0xFF and would wipe the user's settings on a
+// reinstall. ESP Web Tools still offers an explicit "erase device" option.
+//
 // Env: TASKY_REPO (default arampersand/tasky), GITHUB_TOKEN (optional, rate limit).
 import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
@@ -28,21 +33,24 @@ if (!res.ok) throw new Error(`GitHub API ${res.status}: ${await res.text()}`);
 const rel = await res.json();
 const version = rel.tag_name.replace(/^v/, "");
 
-for (const b of BOARDS) {
-  const name = `tasky-${b.env}-${rel.tag_name}.bin`;
+async function download(name) {
   const asset = rel.assets.find((a) => a.name === name);
   if (!asset) throw new Error(`Release ${rel.tag_name} has no asset ${name}`);
-  const bin = await fetch(asset.browser_download_url, { headers: { "User-Agent": headers["User-Agent"] } });
-  if (!bin.ok) throw new Error(`Download ${name}: ${bin.status}`);
-  const file = `tasky-${b.env}.bin`;
-  await writeFile(join(OUT, file), Buffer.from(await bin.arrayBuffer()));
+  const r = await fetch(asset.browser_download_url, { headers: { "User-Agent": headers["User-Agent"] } });
+  if (!r.ok) throw new Error(`Download ${name}: ${r.status}`);
+  return Buffer.from(await r.arrayBuffer());
+}
+
+for (const b of BOARDS) {
+  const parts = JSON.parse((await download(`tasky-${b.env}-parts.json`)).toString("utf8"));
+  for (const p of parts) await writeFile(join(OUT, p.path), await download(p.path));
   await writeFile(join(OUT, `manifest-${b.id}.json`), JSON.stringify({
     name: "Tasky",
     version,
     new_install_prompt_erase: true,
-    builds: [{ chipFamily: b.chipFamily, parts: [{ path: file, offset: 0 }] }],
+    builds: [{ chipFamily: b.chipFamily, parts }],
   }, null, 2));
-  console.log(`✓ ${file} (${asset.size} bytes) + manifest-${b.id}.json`);
+  console.log(`✓ ${b.env}: ${parts.map((p) => `${p.path}@0x${p.offset.toString(16)}`).join(", ")}`);
 }
 
 await writeFile(join(OUT, "latest.json"), JSON.stringify({

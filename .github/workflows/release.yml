@@ -28,11 +28,19 @@ jobs:
       - run: pip install -U platformio
       - run: pio run -e ${{ matrix.env }}
         working-directory: firmware
-      - run: cp firmware/.pio/build/${{ matrix.env }}/tasky-${{ matrix.env }}-merged.bin "tasky-${{ matrix.env }}-${GITHUB_REF_NAME}.bin"
+      - name: Collect release files
+        run: |
+          R=firmware/.pio/build/${{ matrix.env }}/release
+          E=${{ matrix.env }}
+          mkdir -p out && cp $R/* out/
+          # Friendly names: full image for esptool, app-only for OTA via the Wi-Fi portal.
+          mv out/tasky-$E-merged.bin "out/tasky-$E-${GITHUB_REF_NAME}.bin"
+          cp out/tasky-$E-app.bin "out/tasky-$E-${GITHUB_REF_NAME}-ota.bin"
+          ls -la out
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.env }}
-          path: tasky-${{ matrix.env }}-${{ github.ref_name }}.bin
+          path: out/*
 
   publish:
     needs: build
@@ -45,6 +53,14 @@ jobs:
         with:
           files: dist/*
           generate_release_notes: true
+          body: |
+            **Install:** open https://tasky-flash.vercel.app in Chrome/Edge and click *Connect & flash* (keeps your settings unless you choose to erase).
+
+            | File | Use |
+            |---|---|
+            | `tasky-<board>-${{ github.ref_name }}.bin` | Full image for `esptool.py write_flash 0x0 …` (erases settings) |
+            | `tasky-<board>-${{ github.ref_name }}-ota.bin` | Over-Wi-Fi update: device **More → Update**, then upload in the setup page |
+            | `tasky-<board>-{bootloader,partitions,boot_app0,app}.bin` + `-parts.json` | Individual parts (used by the web flasher) |
       - name: Redeploy the web flasher
         env:
           HOOK: ${{ secrets.VERCEL_DEPLOY_HOOK }}

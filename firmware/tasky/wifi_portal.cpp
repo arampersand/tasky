@@ -2,6 +2,7 @@
 #include "config_features.h"
 #include "network_manager.h"
 #include "ota_service.h"
+#include "version.h"
 
 WiFiPortal::WiFiPortal(TaskyModel *m, TaskyNetManager *n, OtaService* otaSvc)
     : server(80), model(m), net(n), ota(otaSvc) {}
@@ -555,7 +556,7 @@ String WiFiPortal::htmlPage() {
 
   // ===== FOOTER =====
   s += "<div style='text-align:center;margin:20px 0;padding:16px;border-top:1px solid #222;font-size:10px;color:#666'>";
-  s += "<p>Tasky v2.2 &bull; <a href='https://github.com/ampersand-five/tasky' target='_blank'>GitHub</a></p>";
+  s += "<p>Tasky v" TASKY_VERSION " &bull; <a href='https://github.com/arampersand/tasky' target='_blank'>GitHub</a></p>";
   s += "<p>Red: " + apSSID + " &bull; Pass: " + apPass + "</p>";
   s += "</div>";
 

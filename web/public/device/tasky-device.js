@@ -1,12 +1,12 @@
 // <tasky-device> — interactive CSS-3D model of Tasky with a live screen.
 // Zero dependencies. Drag to rotate, click the screen or knob to change screen.
-// Colours come from the firmware palette (ui.h / ui.cpp): C_TEAL 0x2E57 = #29CEBD.
+// Colours come from the firmware palette (ui.h / ui.cpp): C_TEAL 0x2E57 = #29CBBD.
 //
 // Usage:  <script type="module" src="/device/tasky-device.js"></script>
 //         <tasky-device style="--size: 260px"></tasky-device>
 // Attributes: screen="focus|tasks|stats|more" (pins one screen, disables cycling)
 
-const TEAL = "#29CEBD";
+const TEAL = "#29CBBD";
 const BG = "#050a14";
 const MUTED = "#7b8494";
 const SCREENS = ["focus", "tasks", "stats", "more"];
