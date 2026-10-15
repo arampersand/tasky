@@ -5,6 +5,7 @@ on:
     paths: [firmware/**, .github/workflows/ci.yml]
   pull_request:
     paths: [firmware/**, .github/workflows/ci.yml]
+  workflow_dispatch:
 
 jobs:
   build:
