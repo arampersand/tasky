@@ -10,6 +10,11 @@
 
 **Spec:** `docs/superpowers/specs/2026-10-15-open-source-release-design.md`
 
+**Visual assets already in the working tree (untracked — commit them in Task 2, do not regenerate):**
+- `docs/images/tasky-{front,focus,stats,menu,tasks,top,encoder,side}.jpg` — real device photos, cropped 1000×1000, background terminal removed. README hero: `tasky-front.jpg` + a row of `tasky-focus.jpg`, `tasky-tasks.jpg`, `tasky-stats.jpg`, `tasky-menu.jpg`; HARDWARE uses `tasky-top.jpg`, `tasky-encoder.jpg`, `tasky-side.jpg`.
+- `docs/images/tasky-render.jpg` — AI studio render (Canva, from the photos), 1680×944; if missing, the maintainer still has to download it from Canva. Use as landing `og:image` and optional README banner.
+- `web/public/device/tasky-device.js` — `<tasky-device>` web component: CSS-3D model, drag to rotate, live firmware-styled screens (Focus/Tasks/Stats/More), palette from `ui.h`. Task 5 landing hero MUST embed it: `<script type="module" src="/device/tasky-device.js"></script><tasky-device style="--size:240px"></tasky-device>`. Demo at `/device/`. Keep `web/public/device/` when writing `web/` files.
+
 **Environment caveats (read first):**
 - The working copy lives at `/Volumes/&/tasky/TaskyFirmware`. The `&` breaks PlatformIO builds (include paths go through `sh`). Build via the ampersand-free symlinks: `S=/private/tmp/claude-501/-Volumes---tasky/89f5ee3b-aff5-4a07-a5dc-e4ac8c18203c/scratchpad; cd $S/proj/<firmware dir> && PLATFORMIO_CORE_DIR=$S/core $S/core/penv/bin/pio run -e xiao_c3`. `$S/proj` → repo root, `$S/core` → `/Volumes/&/tasky/.pio-core-v2` (has the pioarduino packages cached and a Python 3.13 penv; the Homebrew `pio` uses Python 3.14 which pioarduino rejects).
 - Git pushes must go over SSH (`git@github.com:...`): the HTTPS keychain token lacks the `workflow` scope needed to push `.github/workflows/*`.
