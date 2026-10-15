@@ -1,0 +1,53 @@
+name: release
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: build (${{ matrix.env }})
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        env: [xiao_c3, xiao_c6]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check tag matches version.h
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          grep -q "\"$TAG\"" firmware/tasky/version.h || { echo "::error::firmware/tasky/version.h does not match tag $GITHUB_REF_NAME"; exit 1; }
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - uses: actions/cache@v4
+        with:
+          path: ~/.platformio
+          key: pio-${{ runner.os }}-${{ matrix.env }}-${{ hashFiles('firmware/platformio.ini') }}
+      - run: pip install -U platformio
+      - run: pio run -e ${{ matrix.env }}
+        working-directory: firmware
+      - run: cp firmware/.pio/build/${{ matrix.env }}/tasky-${{ matrix.env }}-merged.bin "tasky-${{ matrix.env }}-${GITHUB_REF_NAME}.bin"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.env }}
+          path: tasky-${{ matrix.env }}-${{ github.ref_name }}.bin
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with: { merge-multiple: true, path: dist }
+      - run: cd dist && sha256sum *.bin > SHA256SUMS && cat SHA256SUMS
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          generate_release_notes: true
+      - name: Redeploy the web flasher
+        env:
+          HOOK: ${{ secrets.VERCEL_DEPLOY_HOOK }}
+        run: |
+          if [ -z "$HOOK" ]; then echo "VERCEL_DEPLOY_HOOK not set, skipping"; exit 0; fi
+          curl -fsS -X POST "$HOOK" > /dev/null && echo "Vercel deploy triggered"

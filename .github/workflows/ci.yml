@@ -1,0 +1,36 @@
+name: ci
+on:
+  push:
+    branches: [main]
+    paths: [firmware/**, .github/workflows/ci.yml]
+  pull_request:
+    paths: [firmware/**, .github/workflows/ci.yml]
+
+jobs:
+  build:
+    name: build (${{ matrix.env }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        env: [xiao_c3, xiao_c6]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - uses: actions/cache@v4
+        with:
+          path: ~/.platformio
+          key: pio-${{ runner.os }}-${{ matrix.env }}-${{ hashFiles('firmware/platformio.ini') }}
+      - run: pip install -U platformio
+      - name: Build
+        run: pio run -e ${{ matrix.env }}
+        working-directory: firmware
+      - name: Size report
+        run: |
+          BIN=firmware/.pio/build/${{ matrix.env }}/tasky-${{ matrix.env }}-merged.bin
+          echo "### ${{ matrix.env }}: $(stat -c%s firmware/.pio/build/${{ matrix.env }}/firmware.bin) bytes app, $(stat -c%s $BIN) bytes merged" >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tasky-${{ matrix.env }}
+          path: firmware/.pio/build/${{ matrix.env }}/tasky-${{ matrix.env }}-merged.bin
