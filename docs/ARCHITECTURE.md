@@ -329,7 +329,7 @@ stateDiagram-v2
 
 ### Setup access point (`WiFiPortal`)
 
-- **Started lazily**, only when the user opens **Setup (QR)**, **Settings > WiFi**, or **Update**, or picks "Add" in Tasks. A device that never needs setup never broadcasts an AP. Once started, it stays on until reboot.
+- **Started lazily**, only when the user opens **Setup (QR)**, **Settings > WiFi**, or **Update**, or picks "Add" in Tasks. A device that never needs setup never broadcasts an AP (the station connection uses `WIFI_STA` unless the portal is up). It stays up while a setup screen is open, a phone is connected or an OTA is armed, and `portal.loop()` stops it after `IDLE_STOP_MS` (10 min) of inactivity, falling back to `WIFI_STA`. Secret fields are write-only and every reflected value is HTML-escaped.
 - SSID `Tasky`, WPA2 password `GetItDone` (`apSSID` / `apPass` in `wifi_portal.h`), default IP `192.168.4.1`.
 - A captive DNS server (`dns.start(53, "*", ip)`) resolves every hostname to the device, and the OS connectivity probes (`/generate_204`, `/hotspot-detect.html`, `/ncsi.txt`, ...) are answered so phones open the portal automatically.
 

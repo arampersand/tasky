@@ -4,6 +4,24 @@
 #include "ota_service.h"
 #include "version.h"
 
+// HTML-escape a value reflected into the page (attributes and text).
+static String esc(const String &in) {
+  String out;
+  out.reserve(in.length() + 8);
+  for (size_t i = 0; i < in.length(); i++) {
+    char c = in[i];
+    switch (c) {
+      case '&': out += "&amp;"; break;
+      case '<': out += "&lt;"; break;
+      case '>': out += "&gt;"; break;
+      case '"': out += "&quot;"; break;
+      case '\'': out += "&#39;"; break;
+      default: out += c;
+    }
+  }
+  return out;
+}
+
 WiFiPortal::WiFiPortal(TaskyModel *m, TaskyNetManager *n, OtaService* otaSvc)
     : server(80), model(m), net(n), ota(otaSvc) {}
 
@@ -19,7 +37,18 @@ void WiFiPortal::begin() {
   // Captive portal DNS: every name resolves to the AP so phones open setup
   dns.start(53, "*", ip);
 
-  // Routes
+  addRoutes();
+  server.begin();
+  wifiOn = true;
+  touch();
+}
+
+void WiFiPortal::addRoutes() {
+  // WebServer keeps handlers across stop()/begin(): register them once.
+  if (routesAdded)
+    return;
+  routesAdded = true;
+
   server.on("/", HTTP_GET, [this]() { handleRoot(); });
   server.on("/save", HTTP_POST, [this]() { handleSave(); });
 
@@ -62,9 +91,6 @@ void WiFiPortal::begin() {
   server.onNotFound(redirect);
   server.on("/ping", HTTP_GET,
             [this]() { server.send(200, "text/plain", "pong"); });
-
-  server.begin();
-  wifiOn = true;
 }
 
 void WiFiPortal::stop() {
@@ -73,15 +99,25 @@ void WiFiPortal::stop() {
   dns.stop();
   server.stop();
   WiFi.softAPdisconnect(true);
-  WiFi.mode(WIFI_OFF);
+  // Keep the home-network (station) connection alive for the services.
+  WiFi.mode(model->cfg.wifiSSID.length() > 0 ? WIFI_STA : WIFI_OFF);
   wifiOn = false;
+  Serial.println("[Portal] Setup network stopped");
 }
 
 void WiFiPortal::loop() {
-  if (wifiOn) {
-    dns.processNextRequest();
-    server.handleClient();
-  }
+  if (!wifiOn)
+    return;
+  dns.processNextRequest();
+  server.handleClient();
+
+  // Stay up while a phone is on the setup network or an update is armed/running.
+  bool busy = WiFi.softAPgetStationNum() > 0 ||
+              (ota && (ota->isArmed() || ota->getState() == OTA_WRITING));
+  if (busy)
+    touch();
+  if (millis() - lastActivityAt > IDLE_STOP_MS)
+    stop();
 }
 
 String WiFiPortal::getUptimeString() {
@@ -158,7 +194,7 @@ String WiFiPortal::htmlPage() {
   // ===== HEADER =====
   s += "<h2>&#128337; Tasky</h2>";
 #if TASKY_MODE_DEV
-  s += "<div style='font-size:10px;color:#666;margin-bottom:12px;padding:6px;background:#1a1a1a;border-radius:4px'>&#128295; Modo desarrollador - API keys visibles</div>";
+  s += "<div style='font-size:10px;color:#666;margin-bottom:12px;padding:6px;background:#1a1a1a;border-radius:4px'>&#128295; Modo desarrollador - integraciones avanzadas</div>";
 #endif
 
   // ===== STATUS BAR =====
@@ -243,9 +279,8 @@ String WiFiPortal::htmlPage() {
   // ===== WIFI CONFIG =====
   s += "<hr><h3>&#128246; Conexion WiFi</h3>";
   s += "<label>SSID de tu WiFi</label>";
-  s += "<input name='ssid' value='" + model->cfg.wifiSSID + "' maxlength='32' placeholder='Nombre de tu red WiFi'>";
-  s += "<label>Password</label>";
-  s += "<input name='pass' type='password' value='" + model->cfg.wifiPass + "' maxlength='64' placeholder='Contrasena de WiFi'>";
+  s += "<input name='ssid' value='" + esc(model->cfg.wifiSSID) + "' maxlength='32' placeholder='Nombre de tu red WiFi'>";
+  s += secretField("Password", "pass", model->cfg.wifiPass, "Contrasena de WiFi");
   s += "<label>Zona Horaria (UTC Offset)</label>";
   s += "<input name='tz' type='number' value='" + String(model->cfg.timezone) + "' min='-12' max='14' placeholder='-6 para CDMX'>";
 
@@ -254,8 +289,8 @@ String WiFiPortal::htmlPage() {
   for (int i = 0; i < 3; i++) {
     s += "<div class='task-card'>";
     s += "<label>Tarea " + String(i + 1) + "</label>";
-    s += "<input name='t" + String(i) + "' value='" + model->tasks[i] + "' maxlength='40' placeholder='Nombre de la tarea'>";
-    s += "<textarea name='td" + String(i) + "' maxlength='200' placeholder='Descripcion (opcional)' style='height:50px;resize:vertical'>" + model->taskDescription[i] + "</textarea>";
+    s += "<input name='t" + String(i) + "' value='" + esc(model->tasks[i]) + "' maxlength='40' placeholder='Nombre de la tarea'>";
+    s += "<textarea name='td" + String(i) + "' maxlength='200' placeholder='Descripcion (opcional)' style='height:50px;resize:vertical'>" + esc(model->taskDescription[i]) + "</textarea>";
     String checkmark = model->taskDone[i] ? "&#10003; Completada" : "&#9744; Pendiente";
     String statusClass = model->taskDone[i] ? "task-done" : "task-pending";
     s += "<div class='task-status " + statusClass + "'>" + checkmark + "</div>";
@@ -279,25 +314,23 @@ String WiFiPortal::htmlPage() {
   // GitHub
   s += "<div class='section'>";
   s += "<label>&#128025; GitHub Username</label>";
-  s += "<input name='ghu' value='" + model->cfg.githubUser + "' placeholder='tu-username'>";
+  s += "<input name='ghu' value='" + esc(model->cfg.githubUser) + "' placeholder='tu-username'>";
   s += "</div>";
 #endif
 
 #if FEATURE_CALENDAR
   // Calendar
   s += "<div class='section'>";
-  s += "<label>&#128197; Calendar URL (iCal)</label>";
-  s += "<input name='cal' value='" + model->cfg.calendarUrl + "' placeholder='https://calendar.google.com/...'>";
+  s += secretField("&#128197; Calendar URL (iCal, secreta)", "cal", model->cfg.calendarUrl, "https://calendar.google.com/...");
   s += "</div>";
 #endif
 
 #if FEATURE_NOTION && TASKY_MODE_DEV
   // Notion (solo modo dev - requiere API key)
   s += "<div class='section'>";
-  s += "<label>&#128221; Notion API Key</label>";
-  s += "<input name='nkey' type='password' value='" + model->cfg.notionApiKey + "' placeholder='secret_...'>";
+  s += secretField("&#128221; Notion API Key", "nkey", model->cfg.notionApiKey, "secret_...");
   s += "<label>&#128221; Notion Database ID</label>";
-  s += "<input name='ndb' value='" + model->cfg.notionDatabaseId + "' placeholder='abc123def456...'>";
+  s += "<input name='ndb' value='" + esc(model->cfg.notionDatabaseId) + "' placeholder='abc123def456...'>";
   s += "</div>";
 #endif
 
@@ -332,9 +365,8 @@ String WiFiPortal::htmlPage() {
 
   s += "<div class='section'>";
   s += "<label>Firebase URL</label>";
-  s += "<input name='fbUrl' value='" + model->cfg.firebaseUrl + "' placeholder='tu-proyecto.firebaseio.com'>";
-  s += "<label>Firebase Secret</label>";
-  s += "<input name='fbKey' type='password' value='" + model->cfg.firebaseSecret + "' placeholder='Database secret...'>";
+  s += "<input name='fbUrl' value='" + esc(model->cfg.firebaseUrl) + "' placeholder='tu-proyecto.firebaseio.com'>";
+  s += secretField("Firebase Secret", "fbKey", model->cfg.firebaseSecret, "Database secret...");
   s += "<label>Habilitar Sync</label>";
   s += "<select name='fbOn'>";
   s += model->cfg.firebaseEnabled ?
@@ -351,7 +383,7 @@ String WiFiPortal::htmlPage() {
 
   s += "<div class='section'>";
   s += "<label>Ciudad</label>";
-  s += "<input name='wCity' value='" + model->cfg.weatherCity + "' placeholder='Chihuahua, Monterrey, etc.'>";
+  s += "<input name='wCity' value='" + esc(model->cfg.weatherCity) + "' placeholder='Chihuahua, Monterrey, etc.'>";
   s += "<label>Latitud (opcional - se autocompleta por ciudad)</label>";
   s += "<input name='wLat' type='number' step='0.0001' value='" + String(model->cfg.weatherLat, 4) + "' placeholder='28.6353'>";
   s += "<label>Longitud (opcional - se autocompleta por ciudad)</label>";
@@ -388,9 +420,8 @@ String WiFiPortal::htmlPage() {
 
   s += "<div class='section'>";
   s += "<label>Spotify Client ID</label>";
-  s += "<input name='spId' value='" + model->cfg.spotifyClientId + "' placeholder='abc123...'>";
-  s += "<label>Spotify Client Secret</label>";
-  s += "<input name='spSec' type='password' value='" + model->cfg.spotifySecret + "' placeholder='xyz789...'>";
+  s += "<input name='spId' value='" + esc(model->cfg.spotifyClientId) + "' placeholder='abc123...'>";
+  s += secretField("Spotify Client Secret", "spSec", model->cfg.spotifySecret, "xyz789...");
 
   // Show auth status
   if (model->cfg.spotifyToken.length() > 0) {
@@ -442,15 +473,7 @@ String WiFiPortal::htmlPage() {
   s += "<option value='0'" + String(model->cfg.llmProvider == 0 ? " selected" : "") + ">Anthropic (Claude)</option>";
   s += "<option value='1'" + String(model->cfg.llmProvider == 1 ? " selected" : "") + ">OpenAI (GPT)</option>";
   s += "</select>";
-  s += "<label>API Key</label>";
-  s += "<input name='lKey' type='password' value='" + model->cfg.llmApiKey + "' placeholder='sk-ant-... o sk-...'>";
-
-  // Status indicator
-  if (model->cfg.llmApiKey.length() > 10) {
-    s += "<div style='margin:8px 0;padding:10px;background:#143d1a;border-radius:4px;color:#0f0'>";
-    s += "&#10003; API key configurada";
-    s += "</div>";
-  }
+  s += secretField("API Key", "lKey", model->cfg.llmApiKey, "sk-ant-... o sk-...");
   s += "</div>";
 #endif
 
@@ -557,14 +580,39 @@ String WiFiPortal::htmlPage() {
   // ===== FOOTER =====
   s += "<div style='text-align:center;margin:20px 0;padding:16px;border-top:1px solid #222;font-size:10px;color:#666'>";
   s += "<p>Tasky v" TASKY_VERSION " &bull; <a href='https://github.com/arampersand/tasky' target='_blank'>GitHub</a></p>";
-  s += "<p>Red: " + apSSID + " &bull; Pass: " + apPass + "</p>";
   s += "</div>";
 
   s += "</body></html>";
   return s;
 }
 
-void WiFiPortal::handleRoot() { server.send(200, "text/html", htmlPage()); }
+String WiFiPortal::secretField(const char *label, const char *name, const String &stored,
+                               const char *placeholder, const char *type) {
+  String s = "<label>" + String(label) + "</label>";
+  bool isSet = stored.length() > 0;
+  s += "<input name='" + String(name) + "' type='" + String(type) + "' value='' autocomplete='off' placeholder='" +
+       (isSet ? String("Guardada - deja vacio para conservarla") : esc(placeholder)) + "'>";
+  if (isSet) {
+    s += "<label style='display:flex;gap:6px;align-items:center;text-transform:none;color:#0c8'>&#10003; Configurada"
+         "<span style='margin-left:auto;color:#888'><input type='checkbox' name='" + String(name) +
+         "_clr' value='1' style='width:auto;margin:0'> borrar</span></label>";
+  }
+  return s;
+}
+
+void WiFiPortal::applySecret(const char *name, String &stored) {
+  if (server.hasArg(String(name) + "_clr")) {
+    stored = "";
+    return;
+  }
+  if (server.hasArg(name) && server.arg(name).length() > 0)
+    stored = server.arg(name);  // empty submit keeps the stored value
+}
+
+void WiFiPortal::handleRoot() {
+  touch();
+  server.send(200, "text/html", htmlPage());
+}
 
 void WiFiPortal::handleOtaStatus() {
   if (!ota) {
@@ -587,6 +635,7 @@ void WiFiPortal::handleOtaUpload() {
 
   HTTPUpload& upload = server.upload();
 
+  touch();
   if (upload.status == UPLOAD_FILE_START) {
     Serial.printf("[OTA] Upload started: %s\n", upload.filename.c_str());
 
@@ -621,6 +670,7 @@ void WiFiPortal::handleOtaUpload() {
 }
 
 void WiFiPortal::handleSave() {
+  touch();
   for (int i = 0; i < 3; i++) {
     String k = "t" + String(i);
     if (server.hasArg(k)) {
@@ -628,13 +678,13 @@ void WiFiPortal::handleSave() {
       if (name.length() == 0)
         name = "Empty";
       if (name != model->tasks[i]) {
-        // New task in this slot: its focus time starts from zero
+        // New task in this slot: starts undone with zero focus time
         model->taskFocusMin[i] = 0;
+        model->taskDone[i] = false;
         if (model->currentTask == i)
           model->currentTask = -1;
       }
       model->tasks[i] = name;
-      model->taskDone[i] = false;
     }
 
     // Task descriptions
@@ -659,8 +709,7 @@ void WiFiPortal::handleSave() {
 
   if (server.hasArg("ssid"))
     model->cfg.wifiSSID = server.arg("ssid");
-  if (server.hasArg("pass"))
-    model->cfg.wifiPass = server.arg("pass");
+  applySecret("pass", model->cfg.wifiPass);
   if (server.hasArg("tz"))
     model->cfg.timezone = (int8_t)server.arg("tz").toInt();
 
@@ -669,14 +718,12 @@ void WiFiPortal::handleSave() {
     model->cfg.githubUser = server.arg("ghu");
 #endif
 #if FEATURE_CALENDAR
-  if (server.hasArg("cal"))
-    model->cfg.calendarUrl = server.arg("cal");
+  applySecret("cal", model->cfg.calendarUrl);
 #endif
 
   // Notion Integration
 #if FEATURE_NOTION
-  if (server.hasArg("nkey"))
-    model->cfg.notionApiKey = server.arg("nkey");
+  applySecret("nkey", model->cfg.notionApiKey);
   if (server.hasArg("ndb"))
     model->cfg.notionDatabaseId = server.arg("ndb");
 #endif
@@ -693,8 +740,7 @@ void WiFiPortal::handleSave() {
   // Firebase Cloud Sync
   if (server.hasArg("fbUrl"))
     model->cfg.firebaseUrl = server.arg("fbUrl");
-  if (server.hasArg("fbKey"))
-    model->cfg.firebaseSecret = server.arg("fbKey");
+  applySecret("fbKey", model->cfg.firebaseSecret);
   if (server.hasArg("fbOn"))
     model->cfg.firebaseEnabled = server.arg("fbOn") == "1";
 #endif
@@ -723,14 +769,12 @@ void WiFiPortal::handleSave() {
   // Spotify Integration
   if (server.hasArg("spId"))
     model->cfg.spotifyClientId = server.arg("spId");
-  if (server.hasArg("spSec"))
-    model->cfg.spotifySecret = server.arg("spSec");
+  applySecret("spSec", model->cfg.spotifySecret);
 #endif
 
 #if FEATURE_LLM
   // LLM Agent
-  if (server.hasArg("lKey"))
-    model->cfg.llmApiKey = server.arg("lKey");
+  applySecret("lKey", model->cfg.llmApiKey);
   if (server.hasArg("lPrv")) {
     int v = server.arg("lPrv").toInt();
     if (v >= 0 && v <= 1)

@@ -1159,6 +1159,9 @@ void setup() {
 void loop() {
   yield();  // Evitar watchdog y dar tiempo a tareas WiFi
   uint32_t now = millis();
+  // Setup screens keep the setup network up; it stops on its own when idle.
+  if (screen == SCR_QR || screen == SCR_WIFI_INFO || screen == SCR_UPDATE)
+    portal.touch();
   portal.loop();
   net.loop();
 

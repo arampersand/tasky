@@ -2,6 +2,18 @@
 
 All notable changes to the Tasky firmware. Versions match `firmware/tasky/version.h` and git tags.
 
+## v2.4.1 — 2026-10-15 · Portal hardening
+
+### Security
+- The setup portal never sends saved secrets back to the browser (WiFi password, calendar URL, API keys). Fields are write-only: empty keeps the value, "borrar" clears it.
+- Every value shown in the portal is HTML-escaped (fixes corruption of values containing `'` and HTML injection).
+- The setup network and portal turn off after 10 minutes without activity instead of staying up until reboot.
+- Connecting to your home WiFi no longer re-enables the setup access point (`WIFI_STA` instead of `WIFI_AP_STA`).
+- The AP password is no longer printed in the portal footer.
+
+### Fixed
+- Saving the portal no longer un-completes tasks whose names didn't change.
+
 ## v2.4.0 — 2026-10-15 · First open-source release
 
 ### Added

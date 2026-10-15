@@ -1,6 +1,6 @@
 # Tasky User Manual
 
-Firmware version: **2.4.0**
+Firmware version: **2.4.1**
 
 Tasky is a small desk device that keeps your focus sessions, your three tasks for the day, your calendar and your streak in front of you. You operate it with one knob and one button.
 
@@ -341,15 +341,17 @@ Both notices wait at least 2 minutes after boot, so WiFi and the calendar have t
 
 ### Starting the portal
 
-The setup network (`Tasky` / `GetItDone`) and the web portal start the **first time** you open **Setup (QR)**, **Settings → WiFi** or **Update**, or select **Add task...**. After that they stay on until the device restarts.
+The setup network (`Tasky` / `GetItDone`) and the web portal start the **first time** you open **Setup (QR)**, **Settings → WiFi** or **Update**, or select **Add task...**. They stay on while one of those screens is open, while a phone is connected to the setup network or while an update is allowed, and **turn off by themselves after 10 minutes without activity**. Your home WiFi connection is not affected.
 
 You can reach the portal in two ways:
 
 - On the setup network: **http://192.168.4.1**
 - On your home WiFi: **http://&lt;device IP&gt;/** (the IP is shown on the WiFi info and Update screens)
 
+**Saved secrets are never shown.** The WiFi password, calendar URL and API keys appear as empty fields marked **Configurada**. Leave a field empty to keep the saved value, type a new one to replace it, or tick **borrar** to delete it.
+
 > [!WARNING]
-> Anyone who joins the setup network can open the portal and read the saved WiFi password and API keys. The network password is fixed in firmware. If that matters to you, build your own firmware with a different `apPass` in `firmware/tasky/wifi_portal.h` (see [BUILDING.md](BUILDING.md)).
+> The setup network password (`GetItDone`) is public, and the portal has no login: while it's on, anyone who joins can change the settings (but can't read your secrets). It turns off after 10 idle minutes. For a private password, build your own firmware with a different `apPass` in `firmware/tasky/wifi_portal.h` (see [BUILDING.md](BUILDING.md)).
 
 ### Portal fields
 
@@ -368,8 +370,8 @@ Tap **Guardar y Conectar** to save every field at once. Tasky then reconnects to
 | Weather Widget                    | Ciudad, Latitud, Longitud, Unidades | See [Weather](#weather-1)                                       |
 | AI Agent                          | Proveedor de IA, API Key       | See [AI agent](#ai-agent)                                            |
 
-> [!IMPORTANT]
-> Saving the form **clears every task's done checkmark**. When you change a task's name, that slot's focus minutes also start again from zero.
+> [!NOTE]
+> When you change a task's name, that slot starts again: not done, zero focus minutes. Tasks whose names you don't change keep their checkmark.
 
 The break length isn't in the portal. Set it on the device under **More → Settings → Break**.
 

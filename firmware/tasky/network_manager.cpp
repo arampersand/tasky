@@ -8,9 +8,9 @@ void TaskyNetManager::begin() {
     return;
   }
 
-  // Ensure we don't break AP if it's running
-  // If AP is on, use AP_STA, else STA
-  WiFi.mode(WIFI_AP_STA);
+  // Keep the setup AP only if the portal already started it. Never enable it
+  // here: WIFI_AP_STA would broadcast the last persisted AP config.
+  WiFi.mode((WiFi.getMode() & WIFI_MODE_AP) ? WIFI_AP_STA : WIFI_STA);
 
   Serial.print("Connecting to: ");
   Serial.println(model->cfg.wifiSSID);
