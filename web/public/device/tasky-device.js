@@ -16,7 +16,7 @@ const NOISE = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'
 
 const css = `
 :host { --size: 260px; display: inline-block; width: calc(var(--size) * 2); height: calc(var(--size) * 1.6);
-  touch-action: none; user-select: none; -webkit-user-select: none; cursor: grab; }
+  touch-action: pan-y; user-select: none; -webkit-user-select: none; cursor: grab; }
 :host(:active) { cursor: grabbing; }
 .stage { width: 100%; height: 100%; display: grid; place-items: center; perspective: calc(var(--size) * 5); position: relative; }
 .shadow { position: absolute; top: calc(50% + var(--size) * .5); width: calc(var(--size) * 1.25); height: calc(var(--size) * .22);

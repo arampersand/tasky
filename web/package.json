@@ -1,0 +1,10 @@
+{
+  "name": "tasky-flash",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node scripts/fetch-firmware.mjs",
+    "dev": "node scripts/fetch-firmware.mjs && npx serve public"
+  },
+  "engines": { "node": ">=20" }
+}

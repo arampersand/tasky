@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tasky — open-source desk focus companion</title>
+<meta name="description" content="Tasky is an open-source ESP32 desk companion: focus timer, tasks, streaks, calendar and an AI agent. Flash it straight from your browser.">
+<meta property="og:title" content="Tasky — flash it from your browser">
+<meta property="og:description" content="Open-source ESP32 desk companion. Focus timer, tasks, streaks, calendar, AI agent.">
+<meta property="og:image" content="https://tasky-flash.vercel.app/img/og.jpg">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="theme-color" content="#05070d">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='3' y='3' width='26' height='26' rx='7' fill='%23111'/%3E%3Crect x='7' y='6' width='18' height='4' rx='2' fill='%233f7dff'/%3E%3Crect x='8' y='12' width='16' height='14' rx='3' fill='%2329CEBD'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/styles.css">
+<script type="module" src="https://unpkg.com/esp-web-tools@10/dist/web/install-button.js?module"></script>
+<script type="module" src="/device/tasky-device.js"></script>
+<script type="module" src="/app.js"></script>
+</head>
+<body>
+<header class="nav wrap">
+  <a class="brand" href="#top" aria-label="Tasky home"><span class="mark"></span>Tasky</a>
+  <nav>
+    <a href="#flash">Flash</a>
+    <a href="#features">Features</a>
+    <a href="#build">Build your own</a>
+    <a class="gh" href="https://github.com/arampersand/tasky" rel="noopener">GitHub</a>
+  </nav>
+</header>
+
+<main id="top">
+  <section class="hero wrap">
+    <div class="hero-copy">
+      <p class="eyebrow"><span class="dot"></span><span id="hero-version">Open source · ESP32-C3 / C6</span></p>
+      <h1>A tiny desk companion that keeps you <em>in focus</em>.</h1>
+      <p class="lede">Tasky is a knob, a screen and a light bar. Focus sessions, today's tasks, your streak, your next meeting and an AI agent — without picking up your phone.</p>
+      <div class="cta">
+        <a class="btn primary" href="#flash">Flash from your browser</a>
+        <a class="btn ghost" href="https://github.com/arampersand/tasky" rel="noopener">View on GitHub</a>
+      </div>
+      <ul class="facts">
+        <li><strong>1-click</strong> flashing</li>
+        <li><strong>GPL-3.0</strong> firmware</li>
+        <li><strong>XIAO</strong> C3 or C6</li>
+      </ul>
+    </div>
+    <div class="hero-device">
+      <tasky-device></tasky-device>
+      <p class="hint">Drag to rotate · tap the screen</p>
+    </div>
+  </section>
+
+  <section id="flash" class="wrap section">
+    <div class="section-head">
+      <p class="kicker">Install</p>
+      <h2>Flash the latest firmware</h2>
+      <p class="sub">Straight from this page over USB. No toolchain, no drivers on macOS/Linux/Windows 10+.</p>
+    </div>
+
+    <div class="flash-card">
+      <ol class="steps">
+        <li>
+          <span class="num">1</span>
+          <div>
+            <h3>Pick your board</h3>
+            <div class="boards" role="radiogroup" aria-label="Board">
+              <label class="board"><input type="radio" name="board" value="c3" checked>
+                <span><strong>XIAO ESP32-C3</strong><small>Original Tasky build</small></span></label>
+              <label class="board"><input type="radio" name="board" value="c6">
+                <span><strong>XIAO ESP32-C6</strong><small>Wi-Fi 6 · same pinout</small></span></label>
+            </div>
+          </div>
+        </li>
+        <li>
+          <span class="num">2</span>
+          <div>
+            <h3>Plug it in</h3>
+            <p>Use a USB-C <em>data</em> cable. If no port shows up, hold <kbd>BOOT</kbd> on the XIAO while plugging it in.</p>
+          </div>
+        </li>
+        <li>
+          <span class="num">3</span>
+          <div>
+            <h3>Flash</h3>
+            <esp-web-install-button id="installer" manifest="/firmware/manifest-c3.json">
+              <button slot="activate" class="btn primary big">Connect &amp; flash</button>
+              <span slot="unsupported" class="note warn">Your browser can't talk to USB devices. Open this page in <strong>Chrome</strong> or <strong>Edge</strong> on a computer.</span>
+              <span slot="not-allowed" class="note warn">Web Serial needs a secure page — open <strong>https://tasky-flash.vercel.app</strong>.</span>
+            </esp-web-install-button>
+            <p id="no-release" class="note" hidden>No firmware release has been published yet. Check back soon or <a href="https://github.com/arampersand/tasky/blob/main/docs/BUILDING.md">build it yourself</a>.</p>
+          </div>
+        </li>
+      </ol>
+
+      <aside class="release">
+        <div class="release-head">
+          <span class="badge" id="rel-version">—</span>
+          <span id="rel-date"></span>
+        </div>
+        <details>
+          <summary>Release notes</summary>
+          <pre id="rel-notes">Loading…</pre>
+        </details>
+        <a id="rel-link" class="small-link" href="https://github.com/arampersand/tasky/releases" rel="noopener">All releases →</a>
+      </aside>
+    </div>
+
+    <div class="after">
+      <h3>After flashing</h3>
+      <ol>
+        <li>On your phone, join the Wi-Fi network <code>Tasky</code> (password <code>GetItDone</code>).</li>
+        <li>The setup page opens by itself — or go to <code>192.168.4.1</code>.</li>
+        <li>Add your Wi-Fi and, if you like, your calendar, GitHub, Notion, weather and AI keys.</li>
+      </ol>
+      <p class="small">Already running Tasky? You can also update over Wi-Fi: open <strong>More → Update</strong> on the device, then upload the new <code>.bin</code> from the setup page.</p>
+    </div>
+  </section>
+
+  <section id="features" class="wrap section">
+    <div class="section-head">
+      <p class="kicker">What it does</p>
+      <h2>Calm tech for deep work</h2>
+    </div>
+    <div class="features">
+      <article><h3>Focus timer</h3><p>Pomodoro-style sessions with a draining ring. The light bar turns on so people around you know you're heads-down.</p></article>
+      <article><h3>Today's tasks</h3><p>Three tasks, no more. Track focus minutes per task and tick them off with a click.</p></article>
+      <article><h3>Streak</h3><p>A GitHub-style grid fed by your focus sessions and, optionally, your real GitHub contributions.</p></article>
+      <article><h3>Calendar &amp; agenda</h3><p>Reads any iCal feed. Warns you 5 minutes before a meeting and gives you a morning brief.</p></article>
+      <article><h3>Weather</h3><p>Today at a glance, no API key needed.</p></article>
+      <article><h3>AI agent</h3><p>Bring your Claude or OpenAI key for a pocket assistant on your desk.</p></article>
+    </div>
+    <div class="gallery" aria-label="Photos of a real Tasky">
+      <img src="/img/focus.jpg" alt="Tasky showing a 25:00 focus timer" loading="lazy">
+      <img src="/img/tasks.jpg" alt="Tasky tasks screen" loading="lazy">
+      <img src="/img/stats.jpg" alt="Tasky stats screen" loading="lazy">
+      <img src="/img/menu.jpg" alt="Tasky More menu" loading="lazy">
+      <img src="/img/top.jpg" alt="Tasky enclosure with engraved logo" loading="lazy">
+      <img src="/img/encoder.jpg" alt="Tasky rotary knob and mode button" loading="lazy">
+    </div>
+  </section>
+
+  <section id="build" class="wrap section">
+    <div class="section-head">
+      <p class="kicker">Make it yours</p>
+      <h2>Build your own Tasky</h2>
+      <p class="sub">Everything is open: firmware, docs and this flasher. Fork it, change the screens, ship your own version.</p>
+    </div>
+    <div class="links">
+      <a href="https://github.com/arampersand/tasky/blob/main/docs/HARDWARE.md"><strong>Hardware</strong><span>Parts list, pinout and wiring</span></a>
+      <a href="https://github.com/arampersand/tasky/blob/main/docs/BUILDING.md"><strong>Build from source</strong><span>PlatformIO or Arduino IDE</span></a>
+      <a href="https://github.com/arampersand/tasky/blob/main/docs/CUSTOMIZING.md"><strong>Customize</strong><span>Screens, colours, pins, services, your own flasher</span></a>
+      <a href="https://github.com/arampersand/tasky/blob/main/docs/MANUAL.md"><strong>User manual</strong><span>Every screen and control</span></a>
+    </div>
+  </section>
+</main>
+
+<footer class="wrap footer">
+  <span>Tasky · GPL-3.0 · made by <a href="https://github.com/arampersand" rel="noopener">@arampersand</a></span>
+  <span>Flashing powered by <a href="https://esphome.github.io/esp-web-tools/" rel="noopener">ESP Web Tools</a></span>
+</footer>
+</body>
+</html>
