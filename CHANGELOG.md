@@ -19,6 +19,10 @@ All notable changes to the Tasky firmware. Versions match `firmware/tasky/versio
 ### Changed
 - Repository restructured into `firmware/`, `web/` and `docs/`.
 
+### Fixed
+- OTA upload from the Wi-Fi portal always failed with "Not enough space" (size was unknown at upload start).
+- Portal footer showed v2.2 and a wrong repository link.
+
 ## v2.3.0 — 2026-02-25
 - Major UX overhaul: English UI, new screens, service timing fixes.
 - UI polish: calendar fix, theme, "Add task", agenda auto-refresh, encoder direction and colour tuning.

@@ -36,8 +36,9 @@ bool OtaService::startUpdate(size_t totalSize) {
 
   Serial.printf("[OTA] Starting update, size: %d bytes\n", totalSize);
 
-  // Begin the update process
-  if (!Update.begin(totalSize)) {
+  // The exact image size isn't known until the upload ends: let Update use the
+  // whole OTA slot (passing a larger guess would fail with "not enough space").
+  if (!Update.begin(UPDATE_SIZE_UNKNOWN)) {
     errorMsg = "Not enough space for update";
     state = OTA_ERROR;
     Update.printError(Serial);
@@ -63,7 +64,8 @@ bool OtaService::writeChunk(uint8_t *data, size_t len) {
   }
 
   writtenBytes += written;
-  progress = (writtenBytes * 100) / totalBytes;
+  // totalBytes is an estimate (may be 0): stay below 100% until finishUpdate()
+  progress = totalBytes ? min<size_t>(99, (writtenBytes * 100) / totalBytes) : 0;
 
   // Print progress every 10%
   static int lastReportedProgress = -10;

@@ -596,8 +596,9 @@ void WiFiPortal::handleOtaUpload() {
       return;
     }
 
-    // Start OTA update
-    if (!ota->startUpdate(upload.totalSize > 0 ? upload.totalSize : 3145728)) {
+    // upload.totalSize is still 0 at FILE_START; the request's Content-Length
+    // (file + multipart overhead) is only used to estimate progress.
+    if (!ota->startUpdate(server.clientContentLength())) {
       Serial.println("[OTA] Failed to start update");
     }
   }
