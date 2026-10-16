@@ -2,9 +2,9 @@ name: ci
 on:
   push:
     branches: [main]
-    paths: [firmware/**, .github/workflows/ci.yml]
+    paths: [firmware/**, companion/**, .github/workflows/ci.yml]
   pull_request:
-    paths: [firmware/**, .github/workflows/ci.yml]
+    paths: [firmware/**, companion/**, .github/workflows/ci.yml]
   workflow_dispatch:
 
 jobs:
@@ -35,3 +35,12 @@ jobs:
         with:
           name: tasky-${{ matrix.env }}
           path: firmware/.pio/build/${{ matrix.env }}/release/tasky-${{ matrix.env }}-merged.bin
+
+  companion:
+    name: companion tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.9" }  # oldest we support (macOS's python3)
+      - run: python -m unittest discover -v companion/tests

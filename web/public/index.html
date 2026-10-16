@@ -140,6 +140,7 @@
         <li data-step="screens">Screens</li>
         <li data-step="phrases">Phrases</li>
         <li data-step="light">Light</li>
+        <li data-step="agents" hidden>Agents</li>
         <li data-step="done">Done</li>
       </ol>
 
@@ -234,7 +235,7 @@
         <!-- Phrases -->
         <div class="wz-step" data-step="phrases" hidden>
           <h3>Your phrases</h3>
-          <p>Write the phrases Tasky shows on Home and on the Phrases screen, one per line (up to 12, 60 characters each). Leave it empty to use the built-in ones. Accents are simplified (ñ → n): the screen font has no special characters.</p>
+          <p>Write the phrases Tasky shows on Home and on the Phrases screen, one per line (up to 12, 60 characters each). Add an author after a dash: <code>Stay hungry - Steve Jobs</code>. Leave it empty to use the built-in ones (about 50 quotes from philosophers, founders and builders). Accents are simplified (ñ → n): the screen font has no special characters.</p>
           <label class="wz-field">Phrases<textarea id="wz-phrases" rows="6" maxlength="800" placeholder="One thing at a time&#10;Deep work, calm mind&#10;You've got this"></textarea></label>
           <p class="wz-status" role="status"></p>
           <div class="wz-actions"><button class="btn ghost" data-skip>Skip</button><button class="btn primary" data-save="phrases">Save</button></div>
@@ -253,6 +254,17 @@
           <div class="wz-actions"><button class="btn ghost" data-skip>Skip</button><button class="btn primary" data-save="light">Save</button></div>
         </div>
 
+        <!-- Agents (Tasky for Agents only) -->
+        <div class="wz-step" data-step="agents" hidden>
+          <h3 class="wz-title-icon"><svg viewBox="0 0 24 24" width="28" height="28" aria-hidden="true"><path fill="#D97757" fill-rule="evenodd" clip-rule="evenodd" d="M20.998 10.949H24v3.102h-3v3.028h-1.487V20H18v-2.921h-1.487V20H15v-2.921H9V20H7.488v-2.921H6V20H4.487v-2.921H3V14.05H0V10.95h3V5h17.998v5.949zM6 10.949h1.488V8.102H6v2.847zm10.51 0H18V8.102h-1.49v2.847z"/></svg>Connect Claude Code</h3>
+          <p>In a terminal on this computer, run:</p>
+          <div class="wz-cmd"><code id="wz-agents-cmd">curl -fsSL https://tasky-flash.vercel.app/agents/install.sh | sh</code><button class="btn ghost" id="wz-copy" type="button">Copy</button></div>
+          <p class="small">It adds Tasky's hooks to Claude Code (your settings are backed up first) and only needs Python 3. Then restart Claude Code. Tasky shows each session, breathes its light when one needs you, and lets you allow or deny permission prompts with the knob. <a href="https://github.com/arampersand/tasky/blob/main/companion/README.md" target="_blank" rel="noopener">What it does</a></p>
+          <button class="btn ghost" id="wz-agent-test" type="button">Show a test card on Tasky</button>
+          <p class="wz-status" id="wz-agents-status" role="status"></p>
+          <div class="wz-actions"><button class="btn primary" data-skip>Next</button></div>
+        </div>
+
         <!-- Done -->
         <div class="wz-step" data-step="done" hidden>
           <h3>Your Tasky is ready ✨</h3>
@@ -262,8 +274,8 @@
             <li><strong>MODE</strong> moves to the next screen; double-press goes back.</li>
           </ul>
           <div class="wz-agents" id="wz-agents-tip" hidden>
-            <p><strong>Connect your agents:</strong> keep Tasky plugged into this computer and add the Claude Code hooks. Tasky's light breathes when an agent needs you, and the <strong>Controls</strong> screen turns the knob into a volume dial once you pair "Tasky" in Bluetooth.</p>
-            <a class="btn ghost" href="https://github.com/arampersand/tasky/blob/main/companion/README.md" target="_blank" rel="noopener">Set up the agent hooks →</a>
+            <p><strong>One last thing:</strong> this page is holding Tasky's USB port. Disconnect (or close the tab) so Claude Code can reach Tasky. Pair "Tasky" in Bluetooth to use the <strong>Controls</strong> screen.</p>
+            <button class="btn ghost" id="wz-disconnect" type="button">Disconnect</button>
           </div>
           <p class="small">Need more? Read the <a href="https://github.com/arampersand/tasky/blob/main/docs/MANUAL.md">manual</a>.</p>
         </div>

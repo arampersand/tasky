@@ -275,10 +275,10 @@ static Screen moreScreens[MAX_MENU];
 static const char *moreLabels[MAX_MENU];
 static int moreN = 0;
 
-// System entries always at the end of More
+// System entries always at the end of More (Setup (QR) is in SCREEN_DEFS:
+// it's listed here only when it isn't in your carousel)
 static const ScreenDef MORE_SYSTEM[] = {
     {"update", "Update", SCR_UPDATE},
-    {"qr", "Setup (QR)", SCR_QR},
     {"settings", "Settings", SCR_SETTINGS},
     {"tour", "Tour", SCR_TOUR},
 };
@@ -556,7 +556,7 @@ void handlePhrases(int step, EncClickType click) {
   static uint32_t shownAt = 0;
   int before = phraseIdx;
   if (step != 0)
-    phraseIdx += step;
+    phraseIdx -= step;  // knob up = next phrase
   if (click == ENC_SHORT) {
     ui.uiTick(true);
     phraseIdx += 1 + random(max(1, ui.phraseCount() - 1));
@@ -1489,7 +1489,7 @@ void loop() {
 
 #if FEATURE_AGENTS
   static uint32_t lastExpireAt = 0;
-  if (now - lastExpireAt > 60000UL) {
+  if (now - lastExpireAt > 1000UL) {  // questions time out to the second
     lastExpireAt = now;
     agents.expire();
   }
@@ -1497,9 +1497,11 @@ void loop() {
     agents.changed = false;
     refreshAgentStatus();
     if (screen == SCR_AGENTS)
-      ui.baseDrawn = false;
+      agentsRedraw = true;  // repaint the card (not the whole screen)
     else if (screen == SCR_HOME || screen == SCR_AMBIENT)
       ui.drawAmbientPhrase();
+    if (firstQuestion() < 0)
+      leaveQuestions();     // a question timed out or was cancelled: go back
   }
 #endif
 

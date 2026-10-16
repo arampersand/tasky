@@ -1,0 +1,11 @@
+# Tasky flash layout (4 MB XIAO ESP32-C3/C6), since 2.12.
+# min_spiffs.csv minus its unused 128 KB SPIFFS, split between the two OTA
+# slots (1.9375 MiB each). NVS stays at 0x9000 so settings survive the change.
+# A Tasky on the old layout must update once from the web flasher, which
+# writes this table; Wi-Fi (OTA) updates can't change partitions.
+# Name,   Type, SubType,  Offset,   Size
+nvs,      data, nvs,      0x9000,   0x5000,
+otadata,  data, ota,      0xe000,   0x2000,
+app0,     app,  ota_0,    0x10000,  0x1F0000,
+app1,     app,  ota_1,    0x200000, 0x1F0000,
+coredump, data, coredump, 0x3F0000, 0x10000,

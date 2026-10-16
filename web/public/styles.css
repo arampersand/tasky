@@ -143,6 +143,9 @@ pre { white-space: pre-wrap; word-break: break-word; color: #b4bccb; max-height:
 .wz-screen label { flex: 1; display: flex; align-items: center; gap: 10px; font-weight: 600; cursor: pointer; }
 .wz-move { width: 32px; height: 32px; border-radius: 8px; border: 1px solid var(--line); background: transparent; color: var(--text); cursor: pointer; }
 .wz-move:hover, .wz-move:focus-visible { border-color: var(--teal); }
+.wz-title-icon { display: flex; align-items: center; gap: 10px; }
+.wz-cmd { display: flex; gap: 8px; align-items: center; margin: 0 0 12px; }
+.wz-cmd code { flex: 1; min-width: 0; overflow-x: auto; white-space: nowrap; padding: 12px; background: #0a0f1d; }
 .wz-tips { padding-left: 20px; color: #b4bccb; }
 .wz-tips li { margin: 6px 0; }
 .after-note { margin-top: 18px; }

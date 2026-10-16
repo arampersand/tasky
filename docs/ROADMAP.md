@@ -71,7 +71,7 @@ All of it goes over Web Serial, so it works from the same page that flashed the 
 
 ## Phase 3 — Desk companion (computer) *(started)*
 
-**Shipped in 2.7.0:** the **Tasky for Agents** firmware: Claude Code status over USB via hooks (`companion/`), breathing light when an agent waits, and a Bluetooth Controls screen (volume, brightness, media, shortcuts). Next: a long-running companion that lets the knob switch/focus terminal sessions, Windows/Linux shortcut sets, more agents (Codex, Cursor, CI).
+**Shipped in 2.7.0:** the **Tasky for Agents** firmware: Claude Code status over USB via hooks (`companion/`), breathing light when an agent waits, and a Bluetooth Controls screen (volume, brightness, media, shortcuts). **Unreleased (2.12):** agent cards with a pixel robot, allow/deny Claude Code permission prompts from the knob, Controls as a Mac/Windows key row, one-command installer, background companion that owns the USB port. Next: Windows support for the companion, more agents (Codex, Cursor, CI status lights), one firmware for both editions.
 
 The XIAO C3/C6 have no native USB (USB-Serial/JTAG only), so they can't be a USB keyboard. Two routes that work on both:
 - **Bluetooth keyboard / media controller (BLE HID)**, no app needed: knob = volume (or brightness, switchable), press = play/pause, long press = mute. Extra actions mapped to shortcuts: Siri / Spotlight search, dictation, screenshot.

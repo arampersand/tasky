@@ -7,7 +7,22 @@
 // Status of the AI coding agents on your computer (e.g. Claude Code sessions),
 // pushed over USB by companion/tasky-agent.py from Claude Code hooks:
 //   TASKY AGENT {"id":"<session>","label":"<project>","state":"working|waiting|done|end","msg":"..."}
+//   TASKY ASK {"id":"<req>","session":"..","label":"..","tool":"Bash","detail":"npm test",
+//              "options":["Allow","Deny"],"timeout":60}
+//     -> later @tasky {"answer":{"id":"<req>","choice":0}}  (-1 = answer in the terminal)
+//   TASKY ASK-CANCEL {"id":"<req>"}   (timed out / answered elsewhere)
 enum AgentState : uint8_t { AGENT_WORKING, AGENT_WAITING, AGENT_DONE };
+
+// A permission question from a Claude Code PermissionRequest hook
+struct AgentQuestion {
+  char id[16];          // empty = no question
+  char tool[24];
+  char detail[64];
+  char options[3][16];
+  uint8_t optionCount;
+  uint8_t sel;
+  uint32_t deadline;    // millis()
+};
 
 struct AgentSession {
   char id[40];
@@ -16,6 +31,7 @@ struct AgentSession {
   AgentState state;
   bool acknowledged;    // you pressed the knob on it: stop pulsing the light
   uint32_t updatedAt;   // millis()
+  AgentQuestion question;
 };
 
 class AgentBoard {
@@ -40,8 +56,12 @@ public:
     int i = find(id);
     bool isNew = i < 0;
     if (isNew) {
-      if (count == MAX)  // replace the least recently updated session
-        remove(sessions[oldest()].id);
+      if (count == MAX) {  // replace the least recently updated session...
+        int o = oldest();
+        if (o < 0)
+          return false;    // ...but never one waiting on a question
+        remove(sessions[o].id);
+      }
       i = count++;
       memset(&sessions[i], 0, sizeof(AgentSession));
       strlcpy(sessions[i].id, id, sizeof(sessions[i].id));
@@ -65,6 +85,36 @@ public:
     changed = true;
   }
 
+  // Shows a question on the session's card (creates the card if needed).
+  // Returns the session index, or -1 if the request is unusable.
+  int ask(const char *reqId, const char *session, const char *label, const char *tool,
+          const char *detail, const char *const options[], int optionCount, uint32_t timeoutS) {
+    if (!reqId[0] || optionCount < 1)
+      return -1;
+    if (!update(session[0] ? session : reqId, label, "waiting", "Asks permission"))
+      return -1;
+    int i = find(session[0] ? session : reqId);
+    AgentQuestion &q = sessions[i].question;
+    memset(&q, 0, sizeof(q));
+    strlcpy(q.id, reqId, sizeof(q.id));
+    strlcpy(q.tool, tool, sizeof(q.tool));
+    strlcpy(q.detail, detail, sizeof(q.detail));
+    q.optionCount = optionCount > 3 ? 3 : optionCount;
+    for (int k = 0; k < q.optionCount; k++)
+      strlcpy(q.options[k], options[k], sizeof(q.options[k]));
+    q.deadline = millis() + constrain(timeoutS, 5UL, 600UL) * 1000UL;
+    return i;
+  }
+
+  // The question went away (answered here or in the terminal, or timed out)
+  void clearQuestion(const char *reqId) {
+    for (int i = 0; i < count; i++)
+      if (sessions[i].question.id[0] && strcmp(sessions[i].question.id, reqId) == 0) {
+        sessions[i].question.id[0] = 0;
+        changed = true;
+      }
+  }
+
   int waitingCount(bool onlyUnacknowledged = false) const {
     int n = 0;
     for (int i = 0; i < count; i++)
@@ -79,22 +129,28 @@ public:
     return n;
   }
 
-  // Forget sessions with no news for 2 h (crashed terminals, closed laptops).
+  // Forget sessions with no news for 2 h (crashed terminals, closed laptops),
+  // and questions past their deadline (the companion has given up on them).
   void expire() {
+    for (int i = 0; i < count; i++)
+      if (sessions[i].question.id[0] && (int32_t)(millis() - sessions[i].question.deadline) > 0)
+        clearQuestion(sessions[i].question.id);
     for (int i = count - 1; i >= 0; i--)
       if (millis() - sessions[i].updatedAt > 2UL * 60UL * 60UL * 1000UL) remove(sessions[i].id);
   }
 
-private:
   int find(const char *id) const {
     for (int i = 0; i < count; i++)
       if (strcmp(sessions[i].id, id) == 0) return i;
     return -1;
   }
-  int oldest() const {
-    int o = 0;
-    for (int i = 1; i < count; i++)
-      if (sessions[i].updatedAt < sessions[o].updatedAt) o = i;
+private:
+  int oldest() const {  // -1 if every session has a pending question
+    int o = -1;
+    for (int i = 0; i < count; i++)
+      if (!sessions[i].question.id[0] &&
+          (o < 0 || sessions[i].updatedAt < sessions[o].updatedAt))
+        o = i;
     return o;
   }
 };

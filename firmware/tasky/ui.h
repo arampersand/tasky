@@ -154,9 +154,14 @@ public:
   uint16_t statusColor = 0;
 #if FEATURE_AGENTS
   void drawAgents(const AgentBoard &board, int sel);
+  void drawAgentSprite(const AgentSession &s, int frame);  // the robot only
+  void drawQuestionOptions(const AgentQuestion &q);         // option pills only
+  void drawQuestionCountdown(const AgentQuestion &q);       // bottom line only
+  uint16_t agentColor(const AgentSession &s);
 #endif
 #if FEATURE_BLE_HID
-  void drawControls(const char *mode, const char *value, const char *hint, bool connected);
+  void drawControls(const char *prev, const char *key, const char *next, const char *hint,
+                    bool grabbed, bool connected, bool windows);
 #endif
   void drawMeetingAlert(const CalendarEventItem &ev, int minutes, bool timerPaused);
   void drawMorningBrief();
@@ -185,7 +190,8 @@ public:
   void drawSplashTasky();
   void drawPhrase(int idx);          // Phrases screen
   int phraseCount();                 // Your phrases (web setup) or the built-in ones
-  String phraseAt(int idx);          // Wraps around
+  String phraseAt(int idx);          // Text only; wraps around
+  void phraseAt(int idx, String &text, String &author);
   void drawTour(int step);           // 0 turn, 1 press, 2 MODE, 3 done
   void drawHint(const char *text);   // One-line pill at the bottom
   void drawFinishScreen(const char *msg);

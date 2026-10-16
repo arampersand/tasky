@@ -1,4 +1,7 @@
 #include "ui.h"
+#if FEATURE_AGENTS
+#include "agents_sprites.h"
+#endif
 #include "config_hardware.h"
 #include "config_features.h"
 #include <time.h> // For getLocalTime()
@@ -1110,13 +1113,62 @@ void TaskyUI::drawMore(const char *const labels[], int count) {
 // ==================== HOME / AMBIENT ====================
 // Home (first screen) and the idle Ambient overlay share this glance layout:
 // clock, date, weather, what's next, today's open tasks and a rotating phrase.
-static const char *const PHRASES[] = {
-    "Every second counts",      "One thing at a time",
-    "Done is better than perfect", "Small steps, every day",
-    "Deep work, calm mind",     "Start before you're ready",
-    "Progress, not perfection", "Less, but better",
-    "Breathe. Then begin.",     "Protect your focus",
-    "Make it simple",           "You've got this",
+struct Phrase {
+  const char *text, *author;  // author may be ""
+};
+static const Phrase PHRASES[] = {
+    // Tasky
+    {"One thing at a time", ""},
+    {"Deep work, calm mind", ""},
+    {"Small steps, every day", ""},
+    {"Protect your focus", ""},
+    {"Breathe. Then begin.", ""},
+    {"Done is better than perfect", ""},
+    // Philosophy
+    {"What stands in the way becomes the way.", "Marcus Aurelius"},
+    {"The impediment to action advances action.", "Marcus Aurelius"},
+    {"Waste no more time arguing what a good man should be. Be one.", "Marcus Aurelius"},
+    {"We suffer more often in imagination than in reality.", "Seneca"},
+    {"Luck is what happens when preparation meets opportunity.", "Seneca"},
+    {"He who has a why to live can bear almost any how.", "Friedrich Nietzsche"},
+    {"Amor fati.", "Friedrich Nietzsche"},
+    {"The unexamined life is not worth living.", "Socrates"},
+    {"Well begun is half done.", "Aristotle"},
+    {"We are what we repeatedly do.", "Will Durant"},
+    {"It does not matter how slowly you go as long as you do not stop.", "Confucius"},
+    {"The journey of a thousand miles begins with one step.", "Lao Tzu"},
+    {"Fall seven times, stand up eight.", "Japanese proverb"},
+    // Founders & startups
+    {"Make something people want.", "Paul Graham"},
+    {"Do things that don't scale.", "Paul Graham"},
+    {"Ideas are easy. Execution is everything.", "John Doerr"},
+    {"Real artists ship.", "Steve Jobs"},
+    {"Stay hungry, stay foolish.", "Steve Jobs"},
+    {"Focusing is about saying no.", "Steve Jobs"},
+    {"Move fast and break things.", "Mark Zuckerberg"},
+    {"The biggest risk is not taking any risk.", "Mark Zuckerberg"},
+    {"Your most unhappy customers are your greatest source of learning.", "Bill Gates"},
+    {"Chase the vision, not the money.", "Tony Hsieh"},
+    {"If you are not embarrassed by the first version of your product, you've launched too late.", "Reid Hoffman"},
+    {"The best way to predict the future is to invent it.", "Alan Kay"},
+    {"Be so good they can't ignore you.", "Steve Martin"},
+    // Builders
+    {"Talk is cheap. Show me the code.", "Linus Torvalds"},
+    {"Make it work, make it right, make it fast.", "Kent Beck"},
+    {"Simplicity is prerequisite for reliability.", "Edsger Dijkstra"},
+    {"Less is more.", "Mies van der Rohe"},
+    {"Perfection is achieved when there is nothing left to take away.", "Antoine de Saint-Exupery"},
+    // Motivation
+    {"The secret of getting ahead is getting started.", "Mark Twain"},
+    {"It always seems impossible until it's done.", "Nelson Mandela"},
+    {"Start where you are. Use what you have. Do what you can.", "Arthur Ashe"},
+    {"Discipline equals freedom.", "Jocko Willink"},
+    {"You miss 100% of the shots you don't take.", "Wayne Gretzky"},
+    {"Energy and persistence conquer all things.", "Benjamin Franklin"},
+    {"Lost time is never found again.", "Benjamin Franklin"},
+    {"Hard choices, easy life. Easy choices, hard life.", "Jerzy Gregorek"},
+    {"The way to get started is to quit talking and begin doing.", "Walt Disney"},
+    {"Whether you think you can, or you think you can't, you're right.", "Henry Ford"},
 };
 static const int PHRASES_N = sizeof(PHRASES) / sizeof(PHRASES[0]);
 
@@ -1132,17 +1184,34 @@ int TaskyUI::phraseCount() {
   return n;
 }
 
-String TaskyUI::phraseAt(int idx) {
+// Phrase idx (wraps): text and author. Your own phrases may name an author
+// after " - " ("Stay hungry - Steve Jobs").
+void TaskyUI::phraseAt(int idx, String &text, String &author) {
   int n = phraseCount();
   idx = ((idx % n) + n) % n;
   const String &p = model->cfg.phrases;
-  if (p.length() == 0)
-    return PHRASES[idx];
+  if (p.length() == 0) {
+    text = PHRASES[idx].text;
+    author = PHRASES[idx].author;
+    return;
+  }
   int start = 0;
   for (int k = 0; k < idx; k++)
     start = p.indexOf('\n', start) + 1;
   int end = p.indexOf('\n', start);
-  return p.substring(start, end < 0 ? p.length() : end);
+  text = p.substring(start, end < 0 ? p.length() : end);
+  author = "";
+  int dash = text.lastIndexOf(" - ");
+  if (dash > 0) {
+    author = text.substring(dash + 3);
+    text = text.substring(0, dash);
+  }
+}
+
+String TaskyUI::phraseAt(int idx) {
+  String text, author;
+  phraseAt(idx, text, author);
+  return text;
 }
 
 int TaskyUI::wrapText(const String &s, int maxW, const GFXfont *font,
@@ -1185,37 +1254,40 @@ int TaskyUI::wrapText(const String &s, int maxW, const GFXfont *font,
   return n;
 }
 
-// Phrases screen: one phrase, as big as it fits, centered
+// Phrases screen: one phrase, centered, with its author underneath
 void TaskyUI::drawPhrase(int idx) {
   bool full = !baseDrawn;
   baseDrawn = true;
-  if (full) {
+  if (full)
     tft.fillScreen(C_BG);
-    centerTextFont("\"", 52, C_TEAL, &FreeSansBold24pt7b);
-  } else {
-    tft.fillRect(0, 62, W, 168, C_BG);  // text + counter, keep the quote mark
-  }
-  String phrase = phraseAt(idx);
-  String lines[5];
-  const GFXfont *font = &FreeSansBold18pt7b;
-  int lineH = 36;
-  int n = wrapText(phrase, 200, font, lines, 3);
-  if (n < 0) {  // long phrase: smaller type, up to 5 lines
-    font = &FreeSansBold12pt7b;
-    lineH = 26;
-    n = wrapText(phrase, 200, font, lines, 5);
-    if (n < 0) {  // still too long: last line gets cut with ".."
-      n = 5;
-      lines[4] = fitText(lines[4] + "...", 200, font);
+  else
+    tft.fillRect(0, 20, W, 214, C_BG);  // text, author and counter
+  String phrase, author;
+  phraseAt(idx, phrase, author);
+  String lines[6];
+  const GFXfont *font = &FreeSans12pt7b;
+  int lineH = 26;
+  int n = wrapText(phrase, 200, font, lines, 4);
+  if (n < 0) {  // long quote: regular 9pt, up to 6 lines
+    font = &FreeSans9pt7b;
+    lineH = 20;
+    n = wrapText(phrase, 200, font, lines, 6);
+    if (n < 0) {
+      n = 6;
+      lines[5] = fitText(lines[5] + "...", 200, font);
     }
   }
-  int top = 128 - (n * lineH) / 2 + lineH - 8;  // baseline of the first line
+  int blockH = n * lineH + (author.length() ? 26 : 0);
+  int top = 108 - blockH / 2 + lineH - 6;  // a bit above center; baseline of line 1
   for (int i = 0; i < n; i++)
     centerTextFont(lines[i].c_str(), top + i * lineH, C_TEXT, font);
+  if (author.length())
+    centerTextFont(fitText("- " + author, 200, &FreeSans9pt7b).c_str(), top + (n - 1) * lineH + 28,
+                   C_TEAL, &FreeSans9pt7b);
   char buf[12];
   int count = phraseCount();
-  snprintf(buf, sizeof(buf), "%d / %d", ((idx % count) + count) % count + 1, count);
-  centerTextFont(buf, 222, C_MUTED, &FreeSans9pt7b);
+  snprintf(buf, sizeof(buf), "%d/%d", ((idx % count) + count) % count + 1, count);
+  rightTextFont(buf, 222, 222, C_MUTED, &FreeSans9pt7b);  // bottom-right corner
 }
 
 void TaskyUI::drawAmbientClock() {
@@ -1240,9 +1312,21 @@ void TaskyUI::drawAmbientPhrase() {
   struct tm t;
   uint32_t slot = model->localNow(t) ? (uint32_t)(t.tm_yday * 720 + (t.tm_hour * 60 + t.tm_min) / 2)
                                      : millis() / 120000UL;
-  String phrase = (millis() < 60000UL && !model->hasCurrentTask())
-                      ? String("Press the knob to focus")  // first-minute hint
-                      : phraseAt(slot);
+  String phrase = "Press the knob to focus";  // first-minute hint
+  if (millis() >= 60000UL || model->hasCurrentTask()) {
+    // Home has one line: take the next phrase that fits it
+    int n = phraseCount();
+    for (int k = 0; k < n; k++) {
+      phrase = phraseAt(slot + k);
+      tft.setFont(&FreeSans9pt7b);
+      int16_t x1, y1;
+      uint16_t w, h;
+      tft.getTextBounds(phrase, 0, 0, &x1, &y1, &w, &h);
+      tft.setFont();
+      if (w <= 200)
+        break;
+    }
+  }
   tft.fillRect(0, 204, W, 26, C_BG);
   if (statusLine.length())
     centerTextFont(fitText(statusLine, 200, &FreeSans9pt7b).c_str(), 222,
@@ -1326,71 +1410,155 @@ void TaskyUI::drawAmbient(bool weatherOk, float temp, const char *desc,
 
 #if FEATURE_AGENTS
 // ==================== AGENTS (agents edition) ====================
+// Agents: one card per session with Tasky's little robot, or the permission
+// question a Claude Code hook is waiting on. Turning between cards repaints the
+// card area only; the robot and the countdown repaint just themselves.
+static const int AG_SCALE = 5;
+static const int AG_SPRITE_X = CX - SPRITE_W * AG_SCALE / 2, AG_SPRITE_Y = 40;
+
+// Working = Claude's terracotta, waiting / asking = amber, done = green
+uint16_t TaskyUI::agentColor(const AgentSession &s) {
+  if (s.question.id[0] || s.state == AGENT_WAITING)
+    return 0xFE60;  // amber
+  return s.state == AGENT_DONE ? 0x3E8A : 0xDBAA;  // #39d353 / #D97757
+}
+
+void TaskyUI::drawAgentSprite(const AgentSession &s, int frame) {
+  bool waiting = s.question.id[0] || s.state == AGENT_WAITING;
+  bool done = !waiting && s.state == AGENT_DONE;
+  const char *const *rows = waiting ? SPRITE_WAIT[frame & 1]
+                                    : (done ? SPRITE_DONE[frame & 1] : SPRITE_WORK[frame & 1]);
+  int lift = done && (frame & 1) ? 1 : 0;  // the "done" hop
+  uint16_t col = agentColor(s);
+  // One spare row above for the hop. Every pixel is painted, so a new frame
+  // needs no clear (no flicker).
+  for (int y = -1; y < SPRITE_H; y++) {
+    int src = y + lift;
+    const char *row = src >= 0 && src < SPRITE_H ? rows[src] : nullptr;
+    for (int x = 0; x < SPRITE_W; x++)
+      tft.fillRect(AG_SPRITE_X + x * AG_SCALE, AG_SPRITE_Y + y * AG_SCALE, AG_SCALE, AG_SCALE,
+                   row && row[x] == '#' ? col : C_BG);
+  }
+}
+
+void TaskyUI::drawQuestionOptions(const AgentQuestion &q) {
+  for (int i = 0; i < q.optionCount; i++) {
+    int y = 128 + i * 26;
+    bool sel = i == q.sel;
+    tft.fillRoundRect(30, y, 180, 22, 11, sel ? C_TEAL : C_BG);
+    if (!sel)
+      tft.drawRoundRect(30, y, 180, 22, 11, C_LINE);
+    centerTextFont(q.options[i], y + 16, sel ? C_BG : C_TEXT, &FreeSans9pt7b);
+  }
+}
+
+void TaskyUI::drawQuestionCountdown(const AgentQuestion &q) {
+  int32_t left = (int32_t)(q.deadline - millis()) / 1000;
+  char buf[32];
+  snprintf(buf, sizeof(buf), "Hold: ask in terminal  %lds", (long)max((int32_t)0, left));
+  tft.fillRect(10, 210, 220, 20, C_BG);
+  centerTextFont(buf, 224, C_MUTED, &FreeSans9pt7b);
+}
+
 void TaskyUI::drawAgents(const AgentBoard &board, int sel) {
-  tft.fillScreen(C_BG);
-  centerTextFont("AGENTS", 34, C_TEXT, &FreeSansBold12pt7b);
-  tft.drawFastHLine(40, 44, 160, C_LINE);
+  bool full = !baseDrawn;
+  baseDrawn = true;
+  if (full)
+    tft.fillScreen(C_BG);
+  else
+    tft.fillRect(0, 8, W, H - 8, C_BG);  // keep nothing: a new card
 
   if (board.count == 0) {
+    centerTextFont("AGENTS", 34, C_TEXT, &FreeSansBold12pt7b);
+    tft.drawFastHLine(40, 44, 160, C_LINE);
     centerTextFont("No agents yet", 104, C_TEXT, &FreeSans9pt7b);
-    centerTextFont("Add the Tasky hooks", 136, C_MUTED, &FreeSans9pt7b);
-    centerTextFont("to Claude Code", 158, C_MUTED, &FreeSans9pt7b);
-    centerTextFont("tasky-flash.vercel.app", 196, C_TEAL, &FreeSans9pt7b);
+    centerTextFont("Connect Claude Code:", 136, C_MUTED, &FreeSans9pt7b);
+    centerTextFont("tasky-flash.vercel.app", 160, C_TEAL, &FreeSans9pt7b);
+    centerTextFont("Setup > Agents", 184, C_MUTED, &FreeSans9pt7b);
     return;
   }
 
-  static const char *STATE_TXT[] = {"working", "waiting", "done"};
-  const uint16_t stateColor[] = {C_TEAL, C_ORANGE, C_GREEN};
+  // Which card, as dots at the top
   for (int i = 0; i < board.count; i++) {
-    const AgentSession &s = board.sessions[i];
-    int base = 74 + i * 26;
-    bool isSel = (i == sel);
-    if (isSel)
-      tft.fillRoundRect(14, base - 17, 212, 24, 4, C_LINE);
-    uint16_t col = stateColor[s.state];
-    if (s.state == AGENT_WAITING && !s.acknowledged)
-      tft.fillCircle(26, base - 5, 5, col);
+    int x = CX - (board.count - 1) * 7 + i * 14;
+    if (i == sel)
+      tft.fillCircle(x, 16, 4, agentColor(board.sessions[i]));
     else
-      tft.drawCircle(26, base - 5, 4, col);
-    tft.setFont(&FreeSans9pt7b);
-    tft.setTextColor(C_TEXT);
-    tft.setCursor(40, base);
-    tft.print(fitText(s.label, 110, &FreeSans9pt7b));
-    tft.setTextColor(col);
-    String st = STATE_TXT[s.state];
-    int16_t x1, y1;
-    uint16_t w, h;
-    tft.getTextBounds(st, 0, 0, &x1, &y1, &w, &h);
-    tft.setCursor(218 - (int)w, base);
-    tft.print(st);
-    tft.setFont();
+      tft.drawCircle(x, 16, 3, C_LINE);
   }
 
-  // Detail of the selected session
-  if (sel >= 0 && sel < board.count && board.sessions[sel].msg[0]) {
-    tft.drawFastHLine(40, 184, 160, C_LINE);
-    centerTextFont(fitText(board.sessions[sel].msg, 210, &FreeSans9pt7b).c_str(), 210,
-                   C_MUTED, &FreeSans9pt7b);
+  const AgentSession &s = board.sessions[sel];
+  if (s.question.id[0]) {
+    const AgentQuestion &q = s.question;
+    centerTextFont(fitText(s.label, 200, &FreeSansBold12pt7b).c_str(), 48, C_TEXT,
+                   &FreeSansBold12pt7b);
+    String asks = String("wants to use ") + q.tool;
+    centerTextFont(fitText(asks, 200, &FreeSans9pt7b).c_str(), 70, C_ORANGE, &FreeSans9pt7b);
+    tft.drawRoundRect(14, 80, 212, 42, 8, C_LINE);
+    String lines[2];
+    int n = wrapText(q.detail, 196, &FreeSans9pt7b, lines, 2);
+    if (n < 0) {  // longer than two lines: cut the second
+      n = 2;
+      lines[1] = fitText(lines[1] + "...", 196, &FreeSans9pt7b);
+    }
+    for (int i = 0; i < n; i++)
+      centerTextFont(lines[i].c_str(), (n == 1 ? 106 : 97) + i * 18, C_TEXT, &FreeSans9pt7b);
+    drawQuestionOptions(q);
+    drawQuestionCountdown(q);
+    return;
+  }
+
+  drawAgentSprite(s, 0);
+  if (board.count > 1) {  // more cards: "turn the knob" arrows on both sides
+    const int my = AG_SPRITE_Y + SPRITE_H * AG_SCALE / 2;
+    tft.fillTriangle(30, my, 40, my - 9, 40, my + 9, C_MUTED);
+    tft.fillTriangle(210, my, 200, my - 9, 200, my + 9, C_MUTED);
+  }
+  centerTextFont(fitText(s.label, 200, &FreeSansBold12pt7b).c_str(), 124, C_TEXT,
+                 &FreeSansBold12pt7b);
+  static const char *const STATE_TXT[] = {"Working", "Waiting for you", "Done"};
+  centerTextFont(STATE_TXT[s.state], 148, agentColor(s), &FreeSans9pt7b);
+  if (s.msg[0]) {
+    String lines[2];
+    int n = wrapText(s.msg, 200, &FreeSans9pt7b, lines, 2);
+    if (n < 0) {
+      n = 2;
+      lines[1] = fitText(lines[1] + "...", 200, &FreeSans9pt7b);
+    }
+    for (int i = 0; i < n; i++)
+      centerTextFont(lines[i].c_str(), 176 + i * 20, C_MUTED, &FreeSans9pt7b);
   }
 }
 #endif
 
 #if FEATURE_BLE_HID
 // ==================== CONTROLS (agents edition) ====================
-void TaskyUI::drawControls(const char *mode, const char *value, const char *hint,
-                           bool connected) {
-  tft.fillScreen(C_BG);
-  centerTextFont("CONTROLS", 34, C_TEXT, &FreeSansBold12pt7b);
-  tft.drawFastHLine(40, 44, 160, C_LINE);
-  centerTextFont(mode, 92, C_TEAL, &FreeSansBold18pt7b);
-  centerTextFont(fitText(value, 210, &FreeSans12pt7b).c_str(), 132, C_TEXT, &FreeSans12pt7b);
-  centerTextFont(fitText(hint, 210, &FreeSans9pt7b).c_str(), 170, C_MUTED, &FreeSans9pt7b);
-  if (connected) {
-    tft.fillCircle(72, 205, 4, C_GREEN);
-    centerTextFont("  Bluetooth connected", 210, C_MUTED, &FreeSans9pt7b);
+// Controls: the key list as a wheel (previous / current / next), so it
+// moves the way the knob turns. Turning repaints the wheel only.
+void TaskyUI::drawControls(const char *prev, const char *key, const char *next,
+                           const char *hint, bool grabbed, bool connected, bool windows) {
+  bool full = !baseDrawn;
+  baseDrawn = true;
+  if (full) {
+    tft.fillScreen(C_BG);
+    centerTextFont(windows ? "CONTROLS  -  Windows" : "CONTROLS  -  Mac", 30, C_MUTED,
+                   &FreeSans9pt7b);
+    if (connected) {
+      tft.fillCircle(26, 216, 4, C_GREEN);
+      centerTextFont("  Bluetooth connected", 222, C_MUTED, &FreeSans9pt7b);
+    } else {
+      centerTextFont("Pair \"Tasky\" in Bluetooth", 222, C_ORANGE, &FreeSans9pt7b);
+    }
   } else {
-    centerTextFont("Pair \"Tasky\" in Bluetooth", 210, C_ORANGE, &FreeSans9pt7b);
+    tft.fillRect(0, 54, W, 148, C_BG);
   }
+  centerTextFont(fitText(prev, 200, &FreeSans9pt7b).c_str(), 76, C_LINE, &FreeSans9pt7b);
+  tft.drawFastHLine(40, 92, 160, C_LINE);
+  centerTextFont(fitText(key, 220, &FreeSansBold12pt7b).c_str(), 124,
+                 grabbed ? C_ORANGE : C_TEAL, &FreeSansBold12pt7b);
+  tft.drawFastHLine(40, 140, 160, C_LINE);
+  centerTextFont(fitText(next, 200, &FreeSans9pt7b).c_str(), 164, C_LINE, &FreeSans9pt7b);
+  centerTextFont(hint, 194, grabbed ? C_ORANGE : C_MUTED, &FreeSans9pt7b);
 }
 #endif
 

@@ -48,6 +48,7 @@ struct Config {
   uint8_t ledType = 0;  // 0 = PWM LED(s), 1 = SK6812 RGB chain (see config_hardware.h)
   String screens = "";  // MODE carousel ids, "home,timer,..." ("" = default)
   String phrases = "";  // Your phrases, one per line ("" = built-in)
+  uint8_t hostOs = 0;   // Controls shortcuts: 0 = Mac, 1 = Windows
   bool soundOn = true;
   bool darkMode = true;
   uint32_t totalFocusMin = 0;
@@ -78,6 +79,8 @@ struct Config {
   // Streak Settings
   StreakSource streakSource = STREAK_BOTH;
   uint8_t dailyPomodoroCount = 0;   // Pomodoro sessions completed today
+  uint16_t dailyActivity = 0;       // Today's activity points (streak greens)
+  int32_t lastDayNum = 0;           // Local day number last seen (0 = never)
   uint8_t yesterdayPomodoro = 0;    // Sessions completed yesterday
   uint16_t dailyFocusMin = 0;       // Focus minutes today
   uint8_t githubContribCount = 0;   // GitHub contributions today
@@ -172,7 +175,8 @@ public:
   uint32_t elapsedMs();
   uint32_t remainingMs();
 
-  void streakAddCompletion();
+  void streakAddCompletion();      // a task done
+  void addActivity(uint8_t points);
   void getClockNow(int &h, int &m, int &s);
   uint8_t clampU8(int v, int lo, int hi);
 
@@ -204,6 +208,4 @@ public:
   void clearTodayEvents();
   void clearMonthEvents();
 
-private:
-  int lastKnownDay = -1;  // For day change detection
 };

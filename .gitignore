@@ -24,3 +24,4 @@ node_modules/
 # Python
 __pycache__/
 *.pyc
+web/public/agents/tasky_agent.py

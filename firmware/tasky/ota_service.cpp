@@ -57,7 +57,12 @@ bool OtaService::writeChunk(uint8_t *data, size_t len) {
 
   size_t written = Update.write(data, len);
   if (written != len) {
-    errorMsg = "Write error";
+    // Since 2.12 the app slots are bigger (partitions.csv). A Tasky still on
+    // the old layout can't take a bigger image over Wi-Fi.
+    errorMsg = Update.getError() == UPDATE_ERROR_SPACE
+                   ? "Too big for this Tasky's memory layout. Update once from "
+                     "tasky-flash.vercel.app (keeps your settings)"
+                   : "Write error";
     state = OTA_ERROR;
     Update.printError(Serial);
     return false;

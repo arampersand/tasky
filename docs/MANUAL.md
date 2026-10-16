@@ -471,7 +471,7 @@ You can update Tasky in two ways.
 1. Open **https://tasky-flash.vercel.app** in a Chromium-based browser such as Chrome or Edge (it needs Web Serial).
 2. Connect Tasky over USB-C and follow the steps on the page.
 
-The flasher writes the bootloader, partition table and app, so it also works on a blank board or one with broken firmware. It leaves the settings area alone: your WiFi, integrations, tasks and stats survive an update.
+The flasher writes the bootloader, partition table and app, so it also works on a blank board or one with broken firmware. **Coming from 2.11 or older, update from the web once:** 2.12 has bigger app slots, and a Wi-Fi update can't change the partition table (the portal tells you so if you try). It leaves the settings area alone: your WiFi, integrations, tasks and stats survive an update.
 
 > [!TIP]
 > ESP Web Tools asks whether to **erase the device** first. Choose erase for a clean install, or when moving a board from other firmware; you'll then redo the [Quick start](#quick-start) setup.
@@ -498,39 +498,46 @@ The current version is shown on the Update screen and in the portal.
 The **Tasky for Agents** firmware (pick it in the web flasher) turns Tasky into a companion for your computer. It keeps Home, the focus timer, tasks, agenda and weather, and replaces the AI chat and Notion with two screens:
 
 ```
-Home → Agents → Controls → Timer → Tasks → Agenda → More
+Home → Agents → Controls → Timer → Tasks → Agenda → Weather → Phrases → More
 ```
 
 ### Agents
 
-Shows the AI coding agents running on your computer (for example Claude Code sessions), reported over USB by the [companion hooks](../companion/README.md).
+One card per AI coding agent running on your computer (for example each Claude Code session), reported over USB by the [companion](../companion/README.md). Set it up with one command from the web setup's **Agents** step:
 
-| What you see | Meaning |
+```bash
+curl -fsSL https://tasky-flash.vercel.app/agents/install.sh | sh
+```
+
+Each card shows a little robot, the project, its state and the last message:
+
+| Robot | Meaning |
 |---|---|
-| Teal ring, "working" | The agent is busy |
-| **Orange dot, "waiting"** | The agent needs your approval or input. The **light bar breathes** and Tasky beeps once (not during a focus session); Home says "1 agent needs you" |
-| Green ring, "done" | The agent finished its turn |
+| Teal, looking around, "Working" | The agent is busy |
+| **Orange, waving, "Waiting for you"** | It needs your approval or input. The **light bar breathes** and Tasky beeps once (not during a focus session); Home says "1 agent needs you" |
+| Green, smiling, "Done" | It finished its turn |
 
 | Input | Result |
 |---|---|
-| Turn | Select a session (its last message shows at the bottom) |
-| Short press | Acknowledge: the light stops breathing for that session |
-| Long press | Dismiss the session |
+| Turn | Next / previous card (the dots at the top show which) |
+| Short press | Seen: the light stops breathing for that card |
+| Long press | Remove the card |
 
-Tasky keeps up to 4 sessions and forgets ones with no news for 2 hours.
+**Permission questions.** When Claude Code asks permission (run a command, edit a file, fetch a page), Tasky jumps to that card and shows what it wants to do, with the options and a countdown. **Turn** to pick *Allow*, *Deny* or *Allow edits*, then **press** to answer. **Long press** leaves it to the terminal. If you don't answer within 60 s, the question goes back to the terminal. Tasky then returns to the screen you were on.
+
+Tasky keeps up to 4 cards and forgets ones with no news for 2 hours.
 
 ### Controls (Bluetooth)
 
-The knob becomes a dial for your computer. **Pair once:** on your computer open Bluetooth settings and connect to **Tasky** (it shows up as a keyboard).
+The knob becomes a row of computer keys, like the top row of a Mac keyboard. **Pair once:** on your computer, open Bluetooth settings and connect to **Tasky** (it shows up as a keyboard). macOS may open a window asking to identify the keyboard. Close it: Tasky's keys work anyway.
 
-| Mode | Turn | Short press |
-|---|---|---|
-| **Volume** | Volume up / down | Mute |
-| **Brightness** | Screen brightness up / down | — |
-| **Media** | Next / previous track | Play / pause |
-| **Shortcuts** | Pick: Spotlight, Voice / Siri, Screenshot, Mission Control, Lock screen | Run it |
+**Turn** to pick a key (the previous and next ones show above and below), **press** to send it:
 
-**Long press** switches mode. Shortcuts are macOS key combos; see [CUSTOMIZING.md](CUSTOMIZING.md#shortcuts-tasky-for-agents) to change them.
+Volume · Mute · Play / Pause · Next · Previous · Brightness · Mission Control (Task View) · Spotlight (Search) · Dictation · Desktop left · Desktop right · Screenshot · Lock screen
+
+**Volume** and **Brightness** are dials: press to grab (the name turns orange), turn to adjust, press again to let go.
+
+**Long press** switches between **Mac** and **Windows** shortcuts (shown at the top). Media keys work the same on both. See [CUSTOMIZING.md](CUSTOMIZING.md#shortcuts-tasky-for-agents) to change the keys.
 
 ## Factory reset
 

@@ -297,20 +297,23 @@ Fonts are Adafruit GFX FreeSans fonts (`ui.h`). They only contain ASCII, so acce
 
 ## Shortcuts (Tasky for Agents)
 
-The Controls screen's shortcut list is `SHORTCUTS[]` in `firmware/tasky/agents_screens.h`. Each entry is a keyboard combo (`mods` + HID usage id) or a media usage:
+The Controls screen's keys are `KEYS[]` in `firmware/tasky/agents_screens.h`. Each entry has a name for Mac and for Windows, and either a media usage (same on both) or a keyboard combo per system. Volume and Brightness are dials (`up` / `down` usages):
 
 ```cpp
-{"Spotlight", BleHid::GUI, 0x2C, 0},                   // Cmd+Space
-{"Voice / Siri", 0, 0, BleHid::VOICE},
+//  mac name           win name     media  macMods macKey  winMods winKey  up down
+{"Mission Control", "Task View",    0,     CTRL,   0x52,   GUI,    0x2B,   0, 0},  // Ctrl+Up / Win+Tab
+{"Mute",            "Mute",         BleHid::MUTE, 0, 0, 0, 0, 0, 0},
 ```
 
-Modifiers: `BleHid::CTRL`, `SHIFT`, `ALT`, `GUI` (Cmd/Windows key). Key ids come from the USB HID usage tables (letters `a`=0x04 … `z`=0x1D, `1`=0x1E … `0`=0x27, Space 0x2C, arrows 0x4F–0x52). On Windows, swap `GUI` for `CTRL` where needed (e.g. Win+S for search: `{"Search", BleHid::GUI, 0x16, 0}`).
+Modifiers: `BleHid::CTRL`, `SHIFT`, `ALT`, `GUI` (Cmd / Windows key). Key ids come from the USB HID usage tables (letters `a`=0x04 … `z`=0x1D, `1`=0x1E … `0`=0x27, Tab 0x2B, Space 0x2C, arrows 0x4F–0x52). Long press on Controls switches between the Mac and Windows combos (saved in NVS `os`).
 
 ---
 
 ## Changing the Home phrases
 
-The rotating phrases on Home/Ambient live in `PHRASES[]` near the top of the Home section of `firmware/tasky/ui.cpp`. Add, remove or translate them; keep each under ~24 characters so it fits on one line. A new phrase shows every 2 minutes.
+The easiest way: the web setup's **Phrases** step (up to 12, saved on the device). They replace the built-in ones on Home, Ambient and the Phrases screen.
+
+The built-in phrases live in `PHRASES[]` near the top of the Home section of `firmware/tasky/ui.cpp`. Keep each under ~24 characters so it fits on Home's one line (the Phrases screen wraps longer ones). A new phrase shows every 2 minutes on Home.
 
 ---
 

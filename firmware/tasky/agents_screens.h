@@ -3,8 +3,15 @@
 // tasky.ino (needs its globals: model, ui, agents, buzzer helpers).
 
 #if FEATURE_AGENTS
-// "TASKY AGENT {json}" from companion/tasky-agent.py (Claude Code hooks)
+// "TASKY AGENT {json}" from companion/tasky_agent.py (Claude Code hooks)
+int agentsSel = 0;
+static char agentsSelId[40] = "";           // the card you're on, by id: indexes shift
+bool agentsRedraw = false;                  // news arrived: repaint the card
+static Screen questionReturn = SCR_AGENTS;  // where to go back after answering
+static bool handleAsk(const String &cmd);
 bool handleAgentCommand(const String &cmd) {
+  if (cmd.startsWith("TASKY ASK"))
+    return handleAsk(cmd);
   if (!cmd.startsWith("TASKY AGENT "))
     return false;
   JsonDocument d;
@@ -40,101 +47,280 @@ void refreshAgentStatus() {
   lastWaiting = waiting;
 }
 
-// Agents: turn = select, press = acknowledge (stop the light), long = dismiss
-int agentsSel = 0;
+// Agents: one card per session. Turn = next card, press = seen (stops the
+// light), long press = remove. A card with a question: turn = pick an option,
+// press = answer, long press = leave it to the terminal.
+static void selectAgent(int i) {
+  agentsSel = i;
+  strlcpy(agentsSelId, i >= 0 && i < agents.count ? agents.sessions[i].id : "",
+          sizeof(agentsSelId));
+}
+
+// Find the selected card again after sessions came and went. False if it's
+// gone (the screen must repaint before any input applies to another card).
+static bool resolveSelection() {
+  int i = agentsSelId[0] ? agents.find(agentsSelId) : -1;
+  if (i >= 0) {
+    agentsSel = i;
+    return true;
+  }
+  bool hadOne = agentsSelId[0] != 0;
+  selectAgent(agents.count ? constrain(agentsSel, 0, agents.count - 1) : 0);
+  return !hadOne;
+}
+
+static int firstQuestion() {
+  for (int i = 0; i < agents.count; i++)
+    if (agents.sessions[i].question.id[0])
+      return i;
+  return -1;
+}
+
+// After the last question is gone, go back to what you were doing
+static void leaveQuestions() {
+  int next = firstQuestion();
+  if (next >= 0) {
+    selectAgent(next);
+    agentsRedraw = true;
+  } else if (questionReturn != SCR_AGENTS) {
+    Screen back = questionReturn;
+    questionReturn = SCR_AGENTS;
+    if (screen == SCR_AGENTS)
+      goTo(back);
+  }
+}
+
+void answerQuestion(int i, int choice) {
+  AgentSession &s = agents.sessions[i];
+  char id[sizeof(s.question.id)];
+  strlcpy(id, s.question.id, sizeof(id));
+  JsonDocument d;
+  d["answer"]["id"] = id;
+  d["answer"]["choice"] = choice;
+  Serial.print("@tasky ");
+  serializeJson(d, Serial);
+  Serial.println();
+  if (choice >= 0) {
+    snprintf(s.msg, sizeof(s.msg), "You chose: %s", s.question.options[choice]);
+    s.state = AGENT_WORKING;
+    model.addActivity(1);  // greener streak square
+  } else {
+    strlcpy(s.msg, "Answer in the terminal", sizeof(s.msg));
+  }
+  s.acknowledged = true;
+  agents.clearQuestion(id);
+  agents.changed = true;
+  leaveQuestions();
+}
+
+// "TASKY ASK {json}": a Claude Code PermissionRequest hook waits on the knob.
+// Jump to its card (unless the tour runs); "TASKY ASK-CANCEL" takes it back.
+static bool handleAsk(const String &cmd) {
+  bool cancel = cmd.startsWith("TASKY ASK-CANCEL ");
+  if (!cancel && !cmd.startsWith("TASKY ASK "))
+    return false;
+  JsonDocument d;
+  if (deserializeJson(d, cmd.substring(cancel ? 17 : 10))) {
+    Serial.println("@tasky {\"ok\":false,\"error\":\"bad json\"}");
+    return true;
+  }
+  const char *id = d["id"] | "";
+  if (cancel) {
+    agents.clearQuestion(id);
+    Serial.println("@tasky {\"ok\":true}");
+    leaveQuestions();
+    return true;
+  }
+  const char *opts[3];
+  int n = 0;
+  for (JsonVariantConst o : d["options"].as<JsonArrayConst>())
+    if (n < 3)
+      opts[n++] = o | "";
+  int i = agents.ask(id, d["session"] | "", d["label"] | "", d["tool"] | "Tool",
+                     d["detail"] | "", opts, n, d["timeout"] | 60);
+  if (i < 0) {
+    Serial.println("@tasky {\"ok\":false,\"error\":\"need id and options\"}");
+    return true;
+  }
+  Serial.println("@tasky {\"ok\":true}");
+  if (screen == SCR_TOUR)
+    return true;
+  resolveSelection();
+  bool showingQuestion = screen == SCR_AGENTS && agentsSel < agents.count &&
+                         agents.sessions[agentsSel].question.id[0] &&
+                         agentsSel != i;
+  if (showingQuestion)
+    return true;  // you're answering another one; this card waits its turn
+  selectAgent(i);
+  if (screen == SCR_AGENTS) {
+    agentsRedraw = true;
+  } else {
+    if (screen == SCR_NOTICE)
+      buzzerOff();  // a meeting alert may be mid-beep
+    questionReturn = (screen == SCR_AMBIENT || screen == SCR_NOTICE) ? screenBeforeOverlay : screen;
+    goTo(SCR_AGENTS);
+  }
+  return true;
+}
+
 void handleAgents(int step, EncClickType click) {
-  agentsSel = agents.count ? constrain(agentsSel, 0, agents.count - 1) : 0;
-  if (!ui.baseDrawn) {
+  static uint32_t lastTickAt = 0;
+  static int frame = 0;
+  if (!resolveSelection())
+    agentsRedraw = true;  // your card is gone: show where you are first
+  if (agentsRedraw && (step != 0 || click != ENC_NONE)) {
+    // The card changed under your finger: show it and drop this input, which
+    // was meant for what you saw before (never answer the wrong question).
+    agentsRedraw = false;
     ui.drawAgents(agents, agentsSel);
-    ui.baseDrawn = true;
+    return;
+  }
+  if (!ui.baseDrawn || agentsRedraw) {
+    agentsRedraw = false;
+    ui.drawAgents(agents, agentsSel);
   }
   if (agents.count == 0)
     return;
-  if (step != 0) {
-    agentsSel = (agentsSel + step + agents.count * 4) % agents.count;
-    ui.uiTick(false);
-    ui.baseDrawn = false;
+  AgentSession &s = agents.sessions[agentsSel];
+  AgentQuestion &q = s.question;
+
+  if (q.id[0]) {
+    if (step != 0) {
+      q.sel = (q.sel + step + q.optionCount * 8) % q.optionCount;
+      ui.uiTick(false);
+      ui.drawQuestionOptions(q);
+    }
+    if (click == ENC_SHORT || click == ENC_LONG) {
+      ui.uiTick(true);
+      answerQuestion(agentsSel, click == ENC_SHORT ? q.sel : -1);
+      return;
+    }
+  } else {
+    if (step != 0) {
+      // knob up = next card on the right (the knob's steps count the other way)
+      selectAgent((agentsSel - step + agents.count * 4) % agents.count);
+      ui.uiTick(false);
+      ui.drawAgents(agents, agentsSel);
+      return;
+    }
+    if (click == ENC_SHORT) {
+      ui.uiTick(true);
+      s.acknowledged = true;
+      agents.changed = true;
+    }
+    if (click == ENC_LONG) {
+      ui.uiTick(true);
+      agents.remove(s.id);
+      return;
+    }
   }
-  if (click == ENC_SHORT) {
-    ui.uiTick(true);
-    agents.sessions[agentsSel].acknowledged = true;
-    agents.changed = true;
-  }
-  if (click == ENC_LONG) {
-    ui.uiTick(true);
-    agents.remove(agents.sessions[agentsSel].id);
+
+  // The robot moves twice a second; a question counts down instead
+  if (millis() - lastTickAt >= 500) {
+    lastTickAt = millis();
+    frame++;
+    if (q.id[0])
+      ui.drawQuestionCountdown(q);
+    else
+      ui.drawAgentSprite(s, frame);
   }
 }
 #endif
 
 #if FEATURE_BLE_HID
-// Controls: the knob becomes a volume / brightness / media / shortcut dial.
-struct Shortcut {
-  const char *name;
-  uint8_t mods;
-  uint8_t key;     // HID keyboard usage, 0 = send `media` instead
-  uint16_t media;
+// Controls: a row of computer keys like the Mac's top row. Turn = pick a key,
+// press = send it. Volume and Brightness are dials: press to grab, turn to
+// adjust, press to let go. Long press = switch Mac / Windows shortcuts.
+struct ComputerKey {
+  const char *mac, *win;   // names
+  uint16_t media;          // consumer usage (both systems), 0 = keyboard shortcut
+  uint8_t macMods, macKey; // HID keyboard usage ids
+  uint8_t winMods, winKey;
+  uint16_t up, down;       // dial: consumer usages for each knob direction
 };
-// macOS shortcuts; edit to taste (HID usage ids: https://usb.org/hid)
-static const Shortcut SHORTCUTS[] = {
-    {"Spotlight", BleHid::GUI, 0x2C, 0},                   // Cmd+Space
-    {"Voice / Siri", 0, 0, BleHid::VOICE},
-    {"Screenshot", BleHid::GUI | BleHid::SHIFT, 0x21, 0},  // Cmd+Shift+4
-    {"Mission Control", BleHid::CTRL, 0x52, 0},            // Ctrl+Up
-    {"Lock screen", BleHid::CTRL | BleHid::GUI, 0x14, 0},  // Ctrl+Cmd+Q
+using BleHid::CTRL;
+using BleHid::SHIFT;
+using BleHid::GUI;
+static const ComputerKey KEYS[] = {
+    {"Volume", "Volume", 0, 0, 0, 0, 0, BleHid::VOL_UP, BleHid::VOL_DOWN},
+    {"Mute", "Mute", BleHid::MUTE, 0, 0, 0, 0, 0, 0},
+    {"Play / Pause", "Play / Pause", BleHid::PLAY_PAUSE, 0, 0, 0, 0, 0, 0},
+    {"Next", "Next", BleHid::NEXT, 0, 0, 0, 0, 0, 0},
+    {"Previous", "Previous", BleHid::PREV, 0, 0, 0, 0, 0, 0},
+    {"Brightness", "Brightness", 0, 0, 0, 0, 0, BleHid::BRIGHT_UP, BleHid::BRIGHT_DOWN},
+    {"Mission Control", "Task View", 0, CTRL, 0x52, GUI, 0x2B, 0, 0},     // Ctrl+Up / Win+Tab
+    {"Spotlight", "Search", 0, GUI, 0x2C, GUI, 0x16, 0, 0},              // Cmd+Space / Win+S
+    {"Dictation", "Dictation", 0, 0, 0, GUI, 0x0B, 0, 0},                // Voice key / Win+H
+    {"Desktop left", "Desktop left", 0, CTRL, 0x50, CTRL | GUI, 0x50, 0, 0},
+    {"Desktop right", "Desktop right", 0, CTRL, 0x4F, CTRL | GUI, 0x4F, 0, 0},
+    {"Screenshot", "Screenshot", 0, GUI | SHIFT, 0x21, GUI | SHIFT, 0x16, 0, 0},  // Cmd+Shift+4 / Win+Shift+S
+    {"Lock screen", "Lock screen", 0, CTRL | GUI, 0x14, GUI, 0x0F, 0, 0},  // Ctrl+Cmd+Q / Win+L
 };
-static const int SHORTCUTS_N = sizeof(SHORTCUTS) / sizeof(SHORTCUTS[0]);
-enum ControlMode { CTL_VOLUME, CTL_BRIGHTNESS, CTL_MEDIA, CTL_SHORTCUTS, CTL_COUNT };
-int controlMode = CTL_VOLUME;
-int shortcutSel = 0;
+static const int KEYS_N = sizeof(KEYS) / sizeof(KEYS[0]);
+static const int KEY_DICTATION = 8;
+int keySel = 0;
+bool dialGrabbed = false;
 
-void drawControlsScreen() {
-  static const char *MODE[] = {"Volume", "Brightness", "Media", "Shortcuts"};
-  static const char *HINT[] = {"Turn: volume  Press: mute", "Turn: screen brightness",
-                               "Turn: next/prev  Press: play", "Turn: pick  Press: run"};
-  const char *value = controlMode == CTL_SHORTCUTS ? SHORTCUTS[shortcutSel].name : "";
-  ui.drawControls(MODE[controlMode], value, HINT[controlMode], BleHid::connected());
+static const char *keyName(int i) {
+  i = (i + KEYS_N) % KEYS_N;
+  return model.cfg.hostOs ? KEYS[i].win : KEYS[i].mac;
 }
 
-// Long press = next mode
+void drawControlsScreen() {
+  const ComputerKey &k = KEYS[keySel];
+  const char *hint = dialGrabbed  ? "Turn: adjust  Press: done"
+                     : k.up       ? "Press: grab the dial"
+                                  : "Press: send";
+  ui.drawControls(keyName(keySel - 1), keyName(keySel), keyName(keySel + 1), hint,
+                  dialGrabbed, BleHid::connected(), model.cfg.hostOs == 1);
+}
+
+static void sendKey(const ComputerKey &k) {
+  if (k.media) {
+    BleHid::media(k.media);
+  } else if (&k == &KEYS[KEY_DICTATION] && !model.cfg.hostOs) {
+    BleHid::media(BleHid::VOICE);  // macOS maps the consumer Voice key
+  } else if (model.cfg.hostOs) {
+    BleHid::keys(k.winMods, k.winKey);
+  } else {
+    BleHid::keys(k.macMods, k.macKey);
+  }
+}
+
 void handleControls(int step, EncClickType click) {
   static bool wasConnected = false;
-  if (!ui.baseDrawn || BleHid::connected() != wasConnected) {
+  if (BleHid::connected() != wasConnected) {
     wasConnected = BleHid::connected();
-    drawControlsScreen();
-    ui.baseDrawn = true;
+    ui.baseDrawn = false;
   }
+  if (!ui.baseDrawn)
+    drawControlsScreen();
+  const ComputerKey &k = KEYS[keySel];
   if (click == ENC_LONG) {
     ui.uiTick(true);
-    controlMode = (controlMode + 1) % CTL_COUNT;
+    model.cfg.hostOs = model.cfg.hostOs ? 0 : 1;
+    model.save();
+    dialGrabbed = false;
     ui.baseDrawn = false;
     return;
   }
-  for (int i = 0; i < abs(step); i++) {
-    bool up = step > 0;
-    switch (controlMode) {
-    case CTL_VOLUME: BleHid::media(up ? BleHid::VOL_UP : BleHid::VOL_DOWN); break;
-    case CTL_BRIGHTNESS: BleHid::media(up ? BleHid::BRIGHT_UP : BleHid::BRIGHT_DOWN); break;
-    case CTL_MEDIA: BleHid::media(up ? BleHid::NEXT : BleHid::PREV); break;
-    case CTL_SHORTCUTS:
-      shortcutSel = (shortcutSel + (up ? 1 : SHORTCUTS_N - 1)) % SHORTCUTS_N;
-      ui.baseDrawn = false;
-      break;
-    }
-  }
   if (click == ENC_SHORT) {
     ui.uiTick(true);
-    if (controlMode == CTL_VOLUME)
-      BleHid::media(BleHid::MUTE);
-    else if (controlMode == CTL_MEDIA)
-      BleHid::media(BleHid::PLAY_PAUSE);
-    else if (controlMode == CTL_SHORTCUTS) {
-      const Shortcut &sc = SHORTCUTS[shortcutSel];
-      if (sc.media)
-        BleHid::media(sc.media);
-      else
-        BleHid::keys(sc.mods, sc.key);
-    }
+    if (k.up)
+      dialGrabbed = !dialGrabbed;
+    else
+      sendKey(k);
+    drawControlsScreen();
   }
+  if (step == 0)
+    return;
+  if (dialGrabbed) {  // clockwise = up (the knob's steps count the other way, as on the Timer)
+    for (int i = 0; i < abs(step); i++)
+      BleHid::media(step < 0 ? k.up : k.down);
+    return;
+  }
+  keySel = (keySel + step + KEYS_N * 4) % KEYS_N;
+  ui.uiTick(false);
+  drawControlsScreen();
 }
 #endif

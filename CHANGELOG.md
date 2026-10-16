@@ -2,6 +2,28 @@
 
 All notable changes to the Tasky firmware. Versions match `firmware/tasky/version.h` and git tags.
 
+## v2.12.0 — 2026-10-16 · Computer companion
+
+> **Upgrading from 2.11 or older: update once from https://tasky-flash.vercel.app** (keeps your settings). This version has bigger app slots, which only the web flasher can set up. A Wi-Fi update is refused with a message that says so.
+
+### Added
+- **Approve Claude Code from the knob** (Tasky for Agents): a `PermissionRequest` hook shows what Claude wants to do on its card. Turn to pick *Allow*, *Deny* or *Allow edits*, press to answer, long press to leave it to the terminal. If nobody answers in 60 s, or Tasky isn't plugged in, the normal terminal prompt appears. Protocol: `TASKY ASK` / `ASK-CANCEL` and `@tasky {"answer":...}`.
+- **Agent cards with Claude Code's pixel character**: one card per session. It walks while working (terracotta), waves while waiting for you (amber) and hops when done (green). Arrows and dots show there are more cards; turn the knob up for the next one.
+- **About 50 quotes with their authors** on the Phrases screen (Stoics, founders, builders, motivation), in smaller type with the author underneath. Your own phrases can name an author: `Stay hungry - Steve Jobs`.
+- **Streak gets greener as you use Tasky**: a finished focus session = 3 points, a task done = 2, an agent question answered = 1 (1 / 4 / 8 points for the three greens; GitHub contributions count too).
+- Setup (QR) is a screen you can put in the carousel. Streak and Setup (QR) are in both editions' default carousel.
+- **Controls is a row of computer keys** with **Mac / Windows** shortcuts (long press to switch): volume and brightness dials, mute, play/pause, next/previous, Mission Control / Task View, Spotlight / Search, dictation, desktop left/right, screenshot, lock.
+- **One-command setup for agents**: `curl -fsSL https://tasky-flash.vercel.app/agents/install.sh | sh` adds the hooks to `~/.claude/settings.json` (with a backup; `--uninstall` removes them). The web setup has an **Agents** step with the command, a test card, and a Disconnect button that frees the USB port.
+- Companion tests (`python3 -m unittest discover companion/tests`).
+
+### Changed
+- The companion runs a small background process that owns the USB port (hooks talk to it over `~/.tasky/agent.sock`), so a question can wait for the knob while other sessions keep reporting. No more `pyserial` dependency, and it never toggles DTR/RTS.
+- Flash layout: two 1.9375 MiB app slots (`firmware/partitions.csv`, the unused SPIFFS removed). That's +64 KB for each firmware.
+- Controls dials (volume, brightness): turning the knob up raises them.
+
+### Fixed
+- Days that passed while Tasky was off didn't move the streak on, so the next day's activity landed on yesterday's square. The day is now saved and caught up at boot.
+
 ## v2.11.0 — 2026-10-16 · Your screens & phrases
 
 ### Added

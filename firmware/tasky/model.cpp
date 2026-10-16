@@ -33,6 +33,7 @@ void TaskyModel::load() {
   cfg.ledType = pref.getUChar("ledT", 0);
   cfg.screens = pref.getString("scr", "");
   cfg.phrases = pref.getString("phr", "");
+  cfg.hostOs = pref.getUChar("os", 0);
   cfg.soundOn = pref.getBool("snd", true);
   cfg.darkMode = pref.getBool("dark", true);
   cfg.totalFocusMin = pref.getUInt("focus", 0);
@@ -63,6 +64,8 @@ void TaskyModel::load() {
   // Streak Settings
   cfg.streakSource = (StreakSource)pref.getUChar("sks", STREAK_BOTH);
   cfg.dailyPomodoroCount = pref.getUChar("dpc", 0);
+  cfg.dailyActivity = pref.getUShort("dac", 0);
+  cfg.lastDayNum = pref.getInt("lday", 0);
   cfg.yesterdayPomodoro = pref.getUChar("ypc", 0);
   cfg.dailyFocusMin = pref.getUShort("dfm", 0);
   cfg.githubContribCount = pref.getUChar("ghc", 0);
@@ -184,6 +187,7 @@ void TaskyModel::save() {
   pref.putUChar("ledT", cfg.ledType);
   pref.putString("scr", cfg.screens);
   pref.putString("phr", cfg.phrases);
+  pref.putUChar("os", cfg.hostOs);
   pref.putBool("snd", cfg.soundOn);
   pref.putBool("dark", cfg.darkMode);
   pref.putUInt("focus", cfg.totalFocusMin);
@@ -214,6 +218,8 @@ void TaskyModel::save() {
   // Streak Settings
   pref.putUChar("sks", (uint8_t)cfg.streakSource);
   pref.putUChar("dpc", cfg.dailyPomodoroCount);
+  pref.putUShort("dac", cfg.dailyActivity);
+  pref.putInt("lday", cfg.lastDayNum);
   pref.putUChar("ypc", cfg.yesterdayPomodoro);
   pref.putUShort("dfm", cfg.dailyFocusMin);
   pref.putUChar("ghc", cfg.githubContribCount);
@@ -293,8 +299,7 @@ void TaskyModel::finishTimer() {
     if (hasCurrentTask())
       taskFocusMin[currentTask] += cfg.workMin;
     cfg.dailyPomodoroCount++;  // Track daily sessions
-    updateStreakIntensity();    // Update streak based on source
-    save();
+    addActivity(3);             // greener streak square (saves)
   }
 }
 
@@ -320,11 +325,15 @@ uint32_t TaskyModel::remainingMs() {
   return (el >= dur) ? 0 : (dur - el);
 }
 
-void TaskyModel::streakAddCompletion() {
-  if (streak[currentDayIndex] < 3)
-    streak[currentDayIndex]++;
+// Using Tasky makes today's square greener: a finished focus session = 3,
+// a task done = 2, an agent question answered = 1 (see updateStreakIntensity)
+void TaskyModel::addActivity(uint8_t points) {
+  cfg.dailyActivity += points;
+  updateStreakIntensity();
   save();
 }
+
+void TaskyModel::streakAddCompletion() { addActivity(2); }
 
 void TaskyModel::getClockNow(int &h, int &m, int &s) {
   uint32_t deltaMs = (millis() - clockSetAtMs);
@@ -377,52 +386,44 @@ int TaskyModel::calculateTotalActiveDays() {
 void TaskyModel::checkDayChange() {
   // Non-blocking time check using time() instead of getLocalTime()
   time_t nowTime = time(nullptr);
+  if (nowTime < 1577836800)
+    return;  // no valid time yet (NTP / browser clock)
 
-  // Check if time is valid (after year 2020 means NTP synced)
-  if (nowTime < 1577836800) {
-    // No valid time yet - NTP hasn't synced
-    return;
-  }
-
-  struct tm now;
-  localtime_r(&nowTime, &now);  // Non-blocking conversion
-
-  int today = now.tm_yday;  // Day of year (0-365)
-
-  // First call - just store the day
-  if (lastKnownDay == -1) {
-    lastKnownDay = today;
-    return;
-  }
-
-  // Check if day changed
-  if (today != lastKnownDay) {
-    // Day changed! Advance streak index
-    currentDayIndex = (currentDayIndex + 1) % STREAK_N;
-    streak[currentDayIndex] = 0;  // Reset new day to 0
-
-    // Reset daily counters
-    cfg.yesterdayPomodoro = cfg.dailyPomodoroCount;
-    cfg.dailyPomodoroCount = 0;
-    cfg.dailyFocusMin = 0;
-    cfg.githubContribCount = 0;
-    cfg.llmDailyCount = 0;
-    cfg.llmHourlyCount = 0;
-
-    // Clear calendar events for refresh
-    for (int i = 0; i < 31; i++) {
-      calendarEvents[i] = 0;
-    }
-
-    // Clear today's events and month events
-    clearTodayEvents();
-    clearMonthEvents();
-
-    lastKnownDay = today;
+  // Local day number, saved in NVS, so days that pass while Tasky is off
+  // still move the streak on (and today's counters start from zero).
+  int32_t today = (int32_t)((nowTime + (time_t)cfg.timezone * 3600) / 86400);
+  if (cfg.lastDayNum == 0) {  // first run ever
+    cfg.lastDayNum = today;
     save();
-
-    Serial.println("[Model] Day changed, streak index advanced to " + String(currentDayIndex));
+    return;
   }
+  if (today <= cfg.lastDayNum)
+    return;
+
+  int days = min((int32_t)STREAK_N, today - cfg.lastDayNum);
+  for (int d = 0; d < days; d++) {
+    currentDayIndex = (currentDayIndex + 1) % STREAK_N;
+    streak[currentDayIndex] = 0;  // a new (or missed) day starts empty
+  }
+
+  // Reset daily counters
+  cfg.yesterdayPomodoro = days == 1 ? cfg.dailyPomodoroCount : 0;
+  cfg.dailyPomodoroCount = 0;
+  cfg.dailyActivity = 0;
+  cfg.dailyFocusMin = 0;
+  cfg.githubContribCount = 0;
+  cfg.llmDailyCount = 0;
+  cfg.llmHourlyCount = 0;
+
+  // Clear calendar events for refresh
+  for (int i = 0; i < 31; i++)
+    calendarEvents[i] = 0;
+  clearTodayEvents();
+  clearMonthEvents();
+
+  cfg.lastDayNum = today;
+  save();
+  Serial.println("[Model] New day (" + String(days) + "), streak index " + String(currentDayIndex));
 }
 
 bool TaskyModel::isFocusModeActive() {
@@ -499,11 +500,11 @@ bool TaskyModel::localNow(struct tm &out) {
 }
 
 void TaskyModel::updateStreakIntensity() {
-  // Calculate Tasky intensity based on Pomodoro sessions
+  // Tasky intensity from today's activity points (addActivity)
   uint8_t taskyIntensity = 0;
-  if (cfg.dailyPomodoroCount >= 5) taskyIntensity = 3;
-  else if (cfg.dailyPomodoroCount >= 3) taskyIntensity = 2;
-  else if (cfg.dailyPomodoroCount >= 1) taskyIntensity = 1;
+  if (cfg.dailyActivity >= 8) taskyIntensity = 3;
+  else if (cfg.dailyActivity >= 4) taskyIntensity = 2;
+  else if (cfg.dailyActivity >= 1) taskyIntensity = 1;
 
   // Calculate GitHub intensity based on contributions
   uint8_t githubIntensity = 0;

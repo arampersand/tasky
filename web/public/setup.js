@@ -2,7 +2,7 @@
 // firmware/tasky/usb_setup.h ("TASKY?", "TASKY SCAN", "TASKY SET {json}").
 // Replies start with "@tasky "; everything else on the port is debug log.
 
-let STEPS = ["connect", "wifi", "calendar", "tasks", "github", "ai", "place", "screens", "phrases", "light", "done"];
+let STEPS = ["connect", "wifi", "calendar", "tasks", "github", "ai", "place", "screens", "phrases", "light", "agents", "done"];
 const MIN_VERSION = [2, 6, 0];
 
 const $ = (id) => document.getElementById(id);
@@ -31,7 +31,9 @@ class TaskyLink {
   }
 
   async readLoop() {
-    const reader = this.port.readable.pipeThrough(new TextDecoderStream()).getReader();
+    const decoder = new TextDecoderStream();
+    this.piped = this.port.readable.pipeTo(decoder.writable).catch(() => {});  // close() waits on it
+    const reader = decoder.readable.getReader();
     this.reader = reader;
     try {
       for (;;) {
@@ -66,6 +68,13 @@ class TaskyLink {
       waiter.reject = done(reject);
       this.writer.write(new TextEncoder().encode(cmd + "\n")).catch(reject);
     });
+  }
+
+  async close() {
+    try { await this.reader?.cancel(); } catch { /* already gone */ }
+    await this.piped;  // the port's readable stream is unlocked once the pipe ends
+    try { this.writer.releaseLock(); } catch { /* already released */ }
+    await this.port.close().catch(() => {});
   }
 
   status() { return this.send("TASKY?"); }
@@ -153,6 +162,8 @@ $("wz-connect").addEventListener("click", (e) => busy(e.currentTarget, async () 
     STEPS = STEPS.filter((s) => s !== "light");
     wizard.querySelector('.wz-progress li[data-step="light"]').hidden = true;
   }
+  if (state.edition !== "agents") STEPS = STEPS.filter((s) => s !== "agents");
+  else wizard.querySelector('.wz-progress li[data-step="agents"]').hidden = false;
   if (state.edition === "agents") {
     // The Agents edition has no on-device AI chat: skip that step, explain hooks instead
     STEPS = STEPS.filter((s) => s !== "ai");
@@ -207,6 +218,39 @@ function renderScreens(choices, picked) {
     box.append(li);
   }
 }
+
+// ---------- Agents ----------
+$("wz-copy").addEventListener("click", async () => {
+  try {
+    await navigator.clipboard.writeText($("wz-agents-cmd").textContent);
+    $("wz-copy").textContent = "Copied";
+  } catch {
+    setStatus("wz-agents-status", "Select the command and copy it by hand.", "error");
+  }
+});
+const testCard = (state) => "TASKY AGENT " + JSON.stringify({ id: "web-test", label: "Test", state, msg: "Hello from the setup page" });
+let testCardTimer = null;
+const removeTestCard = async () => {
+  clearTimeout(testCardTimer);
+  testCardTimer = null;
+  await link?.send(testCard("end")).catch(() => {});
+};
+$("wz-agent-test").addEventListener("click", (e) => busy(e.currentTarget, async () => {
+  try {
+    await link.send(testCard("waiting"));
+    setStatus("wz-agents-status", "Look at Tasky: a \"Test\" card on the Agents screen. It goes away in 10 seconds.", "ok");
+    clearTimeout(testCardTimer);
+    testCardTimer = setTimeout(removeTestCard, 10000);
+  } catch {
+    setStatus("wz-agents-status", "Tasky didn't answer. Is it the Tasky for Agents firmware?", "error");
+  }
+}));
+$("wz-disconnect").addEventListener("click", (e) => busy(e.currentTarget, async () => {
+  if (testCardTimer) await removeTestCard();  // don't leave the test card behind
+  await link?.close();
+  link = null;
+  e.currentTarget.textContent = "Disconnected. Claude Code can use Tasky now.";
+}));
 
 // ---------- Wi-Fi ----------
 async function scanNetworks() {
