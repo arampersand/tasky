@@ -27,6 +27,15 @@ volatile bool isConnected = false;
 uint64_t peerAddr = 0;  // set on the NimBLE task: read and write under peerMux
 portMUX_TYPE peerMux = portMUX_INITIALIZER_UNLOCKED;
 
+// A peer we can recognize next time: its identity address. A private
+// (resolvable) address changes every few minutes, so it counts as unknown.
+uint64_t identityOf(const NimBLEConnInfo &info) {
+  NimBLEAddress a = info.getIdAddress();
+  if (a.getType() == BLE_ADDR_RANDOM && (a.getVal()[5] & 0xC0) == 0x40)
+    return 0;
+  return (uint64_t)a;
+}
+
 void setPeer(uint64_t a) {
   portENTER_CRITICAL(&peerMux);
   peerAddr = a;
@@ -36,11 +45,11 @@ void setPeer(uint64_t a) {
 // The identity address is known once bonding resolves a phone's private one
 class ServerCallbacks : public NimBLEServerCallbacks {
   void onConnect(NimBLEServer *, NimBLEConnInfo &info) override {
-    setPeer((uint64_t)info.getIdAddress());
+    setPeer(identityOf(info));
     isConnected = true;
   }
   void onAuthenticationComplete(NimBLEConnInfo &info) override {
-    setPeer((uint64_t)info.getIdAddress());
+    setPeer(identityOf(info));
   }
   void onDisconnect(NimBLEServer *, NimBLEConnInfo &, int) override {
     isConnected = false;
@@ -55,6 +64,10 @@ namespace BleHid {
 void begin(const char *name) {
   NimBLEDevice::init(name);
   NimBLEDevice::setSecurityAuth(true, false, true);  // bond, "just works", secure connections
+  // Exchange identity keys when bonding, so a Mac or phone that changes its
+  // Bluetooth address is still recognized (Controls remembers its mode)
+  NimBLEDevice::setSecurityInitKey(BLE_SM_PAIR_KEY_DIST_ENC | BLE_SM_PAIR_KEY_DIST_ID);
+  NimBLEDevice::setSecurityRespKey(BLE_SM_PAIR_KEY_DIST_ENC | BLE_SM_PAIR_KEY_DIST_ID);
   NimBLEServer *server = NimBLEDevice::createServer();
   server->setCallbacks(new ServerCallbacks());
   server->advertiseOnDisconnect(true);

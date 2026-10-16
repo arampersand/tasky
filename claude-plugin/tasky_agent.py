@@ -58,7 +58,7 @@ HOME = os.path.join(os.path.expanduser("~"), ".tasky")
 SOCK = os.environ.get("TASKY_SOCK", os.path.join(HOME, "agent.sock"))
 LINK = os.path.join(HOME, "link.json")  # Wi-Fi pairing, saved over USB
 FIND_ADDR = os.environ.get("TASKY_FIND_ADDR", "255.255.255.255")  # where to look for Tasky
-WIFI_RETRY_S = 10
+WIFI_RETRY_S = float(os.environ.get("TASKY_WIFI_RETRY", "10"))
 IDLE_EXIT_S = 2 * 3600
 ASK_TIMEOUT_S = int(os.environ.get("TASKY_ASK_TIMEOUT", "60"))
 EDIT_TOOLS = ("Edit", "Write", "MultiEdit", "NotebookEdit")
@@ -340,6 +340,7 @@ class Daemon:
         self.last_activity = time.time()
         self.scanned = threading.Event()  # first port search finished
         self.wifi_tried = 0.0
+        self.cards = {}  # session id -> (time, last TASKY AGENT line): replayed after a reconnect
 
     def connected(self):
         # A hook that started the daemon must not lose its message while the
@@ -369,6 +370,24 @@ class Daemon:
                 self.broken = True  # only the reader closes it (its fd could be reused)
                 return False
 
+    def remember(self, line):
+        """Keep each session's last card, so a Tasky that restarted (or a
+        new connection) gets them back without waiting for the next event."""
+        try:
+            card = json.loads(line[len("TASKY AGENT "):])
+        except ValueError:
+            return
+        if card.get("state") == "end":
+            self.cards.pop(card.get("id"), None)
+        else:
+            self.cards[card.get("id")] = (time.time(), line)
+
+    def replay(self):
+        fresh = time.time() - IDLE_EXIT_S  # Tasky forgets cards after 2 hours too
+        for when, line in sorted(self.cards.values()):
+            if when > fresh:
+                self.write(line)
+
     def serial_loop(self):
         while True:
             if not self.port:
@@ -386,6 +405,8 @@ class Daemon:
                 with self.lock:
                     self.port, self.status, self.broken = port, status or {}, False
                 self.scanned.set()
+                if port:
+                    self.replay()
                 if not port:
                     time.sleep(2)
                     continue
@@ -423,6 +444,8 @@ class Daemon:
             req = json.loads(data.split(b"\n", 1)[0])
             self.last_activity = time.time()
             if req.get("op") == "send":
+                if req["line"].startswith("TASKY AGENT "):
+                    self.remember(req["line"])
                 reply = {"ok": self.agents_edition() and self.write(req["line"])}
             elif req.get("op") == "ask":
                 reply = {"choice": self.ask(conn, req) if self.can_ask() else None}

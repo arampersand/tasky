@@ -28,7 +28,7 @@ enum Mod : uint8_t { CTRL = 0x01, SHIFT = 0x02, ALT = 0x04, GUI = 0x08 };
 
 void begin(const char *name);
 bool connected();
-uint64_t peer();  // identity address of the connected device (0 = none)
+uint64_t peer();  // identity address of the connected device (0 = none or not recognizable)
 void media(uint16_t usage);              // press + release
 void keys(uint8_t modifiers, uint8_t key);  // press + release (HID usage id)
 

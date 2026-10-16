@@ -135,6 +135,7 @@
         <li data-step="screens">Screens</li>
         <li data-step="phrases">Phrases</li>
         <li data-step="light">Light</li>
+        <li data-step="bluetooth" hidden>Bluetooth</li>
         <li data-step="agents" hidden>Agents</li>
         <li data-step="done">Done</li>
       </ol>
@@ -274,6 +275,20 @@
           <p class="small">Hand-built and v1.1 boards have plain LEDs. The v3.1 board has the RGB bar along the top.</p>
           <p class="wz-status" role="status"></p>
           <div class="wz-actions"><button class="btn ghost" data-skip>Skip</button><button class="btn primary" data-save="light">Save</button></div>
+        </div>
+
+        <!-- Bluetooth keys (Tasky 3.0+) -->
+        <div class="wz-step" data-step="bluetooth" hidden>
+          <h3>Bluetooth keys</h3>
+          <p>Tasky can also be a row of keys for your computer or phone: volume, play / pause, screenshot, lock, your assistant… Pair it once.</p>
+          <button class="btn primary" id="wz-bt-on" type="button">Turn on Bluetooth on Tasky</button>
+          <ol class="wz-guide">
+            <li>Open Bluetooth settings: <a href="x-apple.systempreferences:com.apple.BluetoothSettings">on a Mac</a> · <a href="ms-settings:bluetooth">on Windows</a> · on a phone, Settings → Bluetooth.</li>
+            <li>Connect to <strong>Tasky</strong> (it shows up as a keyboard). On a Mac, close the “Keyboard Setup Assistant” window if it opens: the keys work anyway.</li>
+            <li>On Tasky, <strong>hold the knob</strong> to pick Mac, Windows or Phone. It remembers each device.</li>
+          </ol>
+          <p class="wz-status" id="wz-bt-status" role="status"></p>
+          <div class="wz-actions"><button class="btn primary" data-skip>Next</button></div>
         </div>
 
         <!-- Agents (Tasky 3.0+ and the 2.x Agents builds) -->

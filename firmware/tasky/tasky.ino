@@ -1632,10 +1632,30 @@ bool handleUsbCommand(const String &cmd) {
     } else {
       d["error"] = calendar.lastError;
     }
-    taskyOut->print("@tasky ");
-    serializeJson(d, *taskyOut);
-    taskyOut->println();
+    String out;  // one write: a packet over Wi-Fi
+    serializeJson(d, out);  // replaces the string's content
+    out = "@tasky " + out;
+    taskyOut->println(out);
     ui.baseDrawn = false;  // show the fresh agenda
+    return true;
+  }
+#endif
+#if FEATURE_BLE_HID
+  // The web setup's Bluetooth step: "TASKY BT" turns it on and shows
+  // Controls (where you pick Mac / Windows / Phone); "TASKY BT?" polls
+  if (cmd == "TASKY BT" || cmd == "TASKY BT?") {
+    if (cmd == "TASKY BT") {
+      ensureBluetooth();
+      goTo(SCR_CONTROLS);
+    }
+    JsonDocument d;
+    d["ok"] = true;
+    d["on"] = model.cfg.btOn;
+    d["connected"] = BleHid::connected();
+    String out;  // one write: a packet over Wi-Fi
+    serializeJson(d, out);  // replaces the string's content
+    out = "@tasky " + out;
+    taskyOut->println(out);
     return true;
   }
 #endif

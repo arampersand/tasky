@@ -95,6 +95,7 @@ class FakeWifiTasky:
         self.udp.bind(("127.0.0.1", self.port))
         self.choice = choice
         self.lines = []
+        self.conns = []
         self.stop = False
         threading.Thread(target=self.accept_loop, daemon=True).start()
         threading.Thread(target=self.udp_loop, daemon=True).start()
@@ -116,10 +117,27 @@ class FakeWifiTasky:
                 return
             threading.Thread(target=self.client, args=(conn,), daemon=True).start()
 
+    def drop(self):
+        """Tasky restarted: every connection closes."""
+        for conn in list(self.conns):
+            try:
+                conn.shutdown(socket.SHUT_RDWR)
+                conn.close()
+            except OSError:
+                pass
+
     def client(self, conn):
+        self.conns.append(conn)
         f = conn.makefile("rwb")
         authed = False
         send = lambda obj: (f.write(("@tasky " + json.dumps(obj) + "\n").encode()), f.flush())
+        try:
+            self.serve(conn, f, send)
+        except (OSError, ValueError):
+            pass
+
+    def serve(self, conn, f, send):
+        authed = False
         for raw in f:
             line = raw.decode().strip()
             self.lines.append(line)
@@ -200,6 +218,20 @@ class AgentTest(unittest.TestCase):
         self.assertTrue(any('"w2"' in l for l in self.wifi.lines))
         with open(os.path.join(self.home, ".tasky", "link.json")) as f:
             self.assertEqual(json.load(f)["ip"], "127.0.0.1")
+
+    def test_cards_come_back_after_a_reconnect(self):
+        # Tasky restarted: its cards are gone, the daemon sends them again
+        self.pair()
+        self.env["TASKY_WIFI_RETRY"] = "0.5"
+        self.run_agent("hook", "working", stdin={"session_id": "r1", "cwd": "/x/app"})
+        self.run_agent("hook", "end", stdin={"session_id": "gone"})
+        self.wifi.drop()
+        for _ in range(80):
+            if sum('"r1"' in l for l in self.wifi.lines) >= 2:
+                break
+            time.sleep(0.1)
+        self.assertEqual(sum('"r1"' in l for l in self.wifi.lines), 2, self.wifi.lines)
+        self.assertEqual(sum(l.startswith("TASKY AUTH ") for l in self.wifi.lines), 2)
 
     def test_wifi_wrong_token_gets_nothing(self):
         self.pair(token="not-the-token-at-all")

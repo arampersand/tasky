@@ -113,8 +113,9 @@ void answerQuestion(int i, int choice) {
   JsonDocument d;
   d["answer"]["id"] = id;
   d["answer"]["choice"] = choice;
-  String out = "@tasky ";
-  serializeJson(d, out);
+  String out;
+  serializeJson(d, out);  // replaces the string's content
+  out = "@tasky " + out;
   taskyBroadcast(out);  // the companion may be on USB or Wi-Fi
   if (choice >= 0) {
     snprintf(s.msg, sizeof(s.msg), "You chose: %s", s.question.options[choice]);
@@ -345,8 +346,10 @@ static void rememberHostOs(uint64_t addr) {
   model.cfg.hostAddrOs[0] = model.cfg.hostOs;
 }
 
+static bool newDevice = false;  // first time this device connects: say how to set its mode
+
 void drawControlsScreen() {
-  bool unknown = BleHid::connected() && knownHostOs(BleHid::peer()) < 0;
+  bool unknown = BleHid::connected() && newDevice;
   const char *hint = dialGrabbed    ? "Turn: adjust  Press: done"
                      : unknown      ? "Hold: Mac / Windows / Phone"
                      : isDial(keySel) ? "Press: grab the dial"
@@ -394,12 +397,17 @@ void handleControls(int step, EncClickType click) {
   if (BleHid::connected() != wasConnected || BleHid::peer() != lastPeer) {
     wasConnected = BleHid::connected();
     lastPeer = BleHid::peer();
+    newDevice = false;
     int os = knownHostOs(lastPeer);  // a device you set before: its mode
     if (os >= 0 && os != model.cfg.hostOs) {
       model.cfg.hostOs = os;
       model.save();
       keySel = 0;
       dialGrabbed = false;
+    } else if (os < 0 && lastPeer) {  // new: it keeps the current mode until you change it
+      rememberHostOs(lastPeer);
+      model.save();
+      newDevice = true;
     }
     ui.baseDrawn = false;
   }
@@ -409,6 +417,7 @@ void handleControls(int step, EncClickType click) {
     ui.uiTick(true);
     model.cfg.hostOs = (model.cfg.hostOs + 1) % 3;
     rememberHostOs(BleHid::peer());
+    newDevice = false;
     model.save();
     dialGrabbed = false;
     keySel = 0;

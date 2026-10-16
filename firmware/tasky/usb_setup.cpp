@@ -12,10 +12,13 @@ static const unsigned MAX_PHRASE_LEN = 60;  // up to 4 lines on the Phrases scre
 
 static const size_t MAX_LINE = 2048;
 
+// One write per reply: over Wi-Fi every write is a network packet, and
+// serializing straight into the socket would send the JSON byte by byte
 static void reply(const JsonDocument &doc) {
-  taskyOut->print("@tasky ");
-  serializeJson(doc, *taskyOut);
-  taskyOut->println();
+  String out;
+  serializeJson(doc, out);  // replaces the string's content
+  out = "@tasky " + out;
+  taskyOut->println(out);
 }
 
 static void replyError(const char *msg) {

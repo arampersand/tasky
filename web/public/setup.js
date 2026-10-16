@@ -2,7 +2,7 @@
 // firmware/tasky/usb_setup.h ("TASKY?", "TASKY SCAN", "TASKY SET {json}").
 // Replies start with "@tasky "; everything else on the port is debug log.
 
-let STEPS = ["connect", "wifi", "calendar", "tasks", "github", "ai", "place", "screens", "phrases", "light", "agents", "done"];
+let STEPS = ["connect", "wifi", "calendar", "tasks", "github", "ai", "place", "screens", "phrases", "light", "bluetooth", "agents", "done"];
 const MIN_VERSION = [2, 6, 0];
 
 const $ = (id) => document.getElementById(id);
@@ -168,9 +168,11 @@ $("wz-connect").addEventListener("click", (e) => busy(e.currentTarget, async () 
   // Claude Code cards: Tasky 3.0+ reports "agents":true; 2.7–2.13 Agents builds report edition "agents".
   const oldAgents = state.edition === "agents";
   const hasAgents = state.agents === true || oldAgents;
-  if (!hasAgents) STEPS = STEPS.filter((s) => s !== "agents");
+  // Bluetooth keys: every Tasky 3.0+ (the 2.x Agents builds had them too)
+  if (!hasAgents) STEPS = STEPS.filter((s) => s !== "agents" && s !== "bluetooth");
   else {
     wizard.querySelector('.wz-progress li[data-step="agents"]').hidden = false;
+    wizard.querySelector('.wz-progress li[data-step="bluetooth"]').hidden = false;
     $("wz-agents-tip").hidden = false;
   }
   if (oldAgents) {
@@ -240,6 +242,37 @@ for (const btn of wizard.querySelectorAll("[data-copy]")) {
     }
   });
 }
+// Bluetooth step: "TASKY BT" (3.1+) turns it on and opens Controls; then
+// watch for the pairing. Older firmware: Bluetooth starts when you open Controls.
+let btPoll = null;
+$("wz-bt-on").addEventListener("click", (e) => busy(e.currentTarget, async () => {
+  let r;
+  try {
+    r = await link.send("TASKY BT");
+  } catch {
+    r = null;
+  }
+  if (!r?.ok) {
+    setStatus("wz-bt-status", "On Tasky, open the Controls screen (MODE): Bluetooth turns on there. Then follow the steps below.", "ok");
+    return;
+  }
+  setStatus("wz-bt-status", r.connected ? "Connected ✓" : "Bluetooth is on. Now connect to “Tasky” in your Bluetooth settings…", "ok");
+  clearInterval(btPoll);
+  const until = Date.now() + 180000;
+  btPoll = setInterval(async () => {
+    if (!link || Date.now() > until) return clearInterval(btPoll);
+    try {
+      const s = await link.send("TASKY BT?");
+      if (s?.connected) {
+        clearInterval(btPoll);
+        setStatus("wz-bt-status", "Connected ✓ Hold the knob on Tasky to pick Mac, Windows or Phone.", "ok");
+      }
+    } catch {
+      clearInterval(btPoll);
+    }
+  }, 2000);
+}));
+
 const testCard = (state) => "TASKY AGENT " + JSON.stringify({ id: "web-test", label: "Test", state, msg: "Hello from the setup page" });
 let testCardTimer = null;
 const removeTestCard = async () => {
