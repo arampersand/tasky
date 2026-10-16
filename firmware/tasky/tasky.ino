@@ -333,6 +333,8 @@ void rebuildMenus() {
   }
   if (ui.moreSel >= moreN)
     ui.moreSel = 0;
+  if (screen == SCR_MORE)
+    ui.baseDrawn = false;  // the list changed under you
 }
 
 static int carouselIndex(Screen s) {
@@ -342,7 +344,11 @@ static int carouselIndex(Screen s) {
   return -1;
 }
 
+bool screensEditorFresh = false;  // More > Screens loads your list on entry
+
 void goTo(Screen next) {
+  if (next == SCR_SCREENS)
+    screensEditorFresh = true;
   if (next == SCR_QR || next == SCR_WIFI_INFO || next == SCR_UPDATE) {
     if (!portal.wifiOn) portal.begin();
   }
@@ -576,13 +582,26 @@ static int edN = 0, edSel = 0;
 static bool edGrabbed = false;
 
 static void loadScreensEditor() {
+  // Your saved list, not the carousel: Agents / Controls may be waiting to be
+  // unlocked and must keep their place
   edN = 0;
-  for (int c = 1; c < carouselN - 1; c++)  // carousel order first (skip Home, More)
-    for (int i = 1; i < SCREEN_DEFS_N; i++)
-      if (SCREEN_DEFS[i].screen == carousel[c]) {
-        edOrder[edN] = i;
-        edIncluded[edN++] = true;
-      }
+  String list = model.cfg.screens.length() ? model.cfg.screens : String(defaultCarousel());
+  for (int pos = 0; pos < (int)list.length();) {
+    int comma = list.indexOf(',', pos);
+    if (comma < 0)
+      comma = list.length();
+    const ScreenDef *d = findScreen(list.substring(pos, comma));
+    pos = comma + 1;
+    if (!d || d == &SCREEN_DEFS[0])
+      continue;  // unknown, or Home (always first)
+    bool dup = false;
+    for (int k = 0; k < edN; k++)
+      dup |= edOrder[k] == d - SCREEN_DEFS;
+    if (dup)
+      continue;
+    edOrder[edN] = d - SCREEN_DEFS;
+    edIncluded[edN++] = true;
+  }
   for (int i = 1; i < SCREEN_DEFS_N; i++) {  // then the rest, unticked
     bool seen = false;
     for (int k = 0; k < edN; k++)
@@ -616,12 +635,14 @@ static void drawScreensEditor() {
 }
 
 void handleScreensEditor(int step, EncClickType click) {
-  if (!ui.baseDrawn) {
+  if (screensEditorFresh) {  // just opened from More (not a redraw)
+    screensEditorFresh = false;
     loadScreensEditor();
     edSel = 0;
     edGrabbed = false;
-    drawScreensEditor();
   }
+  if (!ui.baseDrawn)
+    drawScreensEditor();
   int rows = edN + 1;
   if (step != 0) {
     ui.uiTick(false);
@@ -657,7 +678,10 @@ void handleScreensEditor(int step, EncClickType click) {
       edGrabbed = false;
       saveScreensEditor();
     } else {
-      edIncluded[edSel - 1] = !edIncluded[edSel - 1];
+      int k = edSel - 1;
+      edIncluded[k] = !edIncluded[k];
+      if (!edIncluded[k] && model.cfg.startScreen == SCREEN_DEFS[edOrder[k]].id)
+        model.cfg.startScreen = "home";  // can't start on a screen you took out
       saveScreensEditor();
     }
     drawScreensEditor();
@@ -1181,15 +1205,18 @@ void checkDayBriefs() {
     c.lastMorningDay = t.tm_yday;
     model.save();
     morningBrief = "";
+    showNotice(NOTICE_MORNING);
 #if FEATURE_LLM
-    // Your day in three lines, if you added an AI key (cached for the day)
-    if (llm.isConfigured() && llm.getTodayMode() == MODE_TODAY) {
+    // Your day in three lines, if you added an AI key (cached for the day).
+    // The notice is up first; this can take a few seconds online.
+    if (llm.isConfigured() && llm.getTodayMode() == MODE_TODAY && net.isConnected()) {
+      ui.drawMorningBrief();
       llm.sendDailyPrompt();
-      if (llm.getState() == LLM_DONE)
+      if (llm.getState() == LLM_DONE && !llm.usedFallback)
         morningBrief = llm.response;
+      ui.baseDrawn = false;  // redraw with the brief
     }
 #endif
-    showNotice(NOTICE_MORNING);
   } else if (h >= c.dayEndHour && c.lastEveningDay != t.tm_yday) {
     c.lastEveningDay = t.tm_yday;
     model.save();

@@ -2518,12 +2518,12 @@ void TaskyUI::drawAgentModeSelect(int selection, int8_t currentOverride) {
   centerTextFont("SELECT MODE", 28, C_TEXT, &FreeSansBold12pt7b);
   tft.drawFastHLine(40, 38, 160, C_LINE);
 
-  // 10 items: AUTO + 9 modes
-  static const int TOTAL_MODES = 10;
-  static const char* modeLabels[10] = {
+  // AUTO (= TODAY, the daily brief) + every mode
+  static const int TOTAL_MODES = LLM_MODE_COUNT + 1;
+  static const char* modeLabels[TOTAL_MODES] = {
     "AUTO", "FOCUS", "KICKSTART", "TIME",
     "CLARITY", "ORDER", "CLOSING", "MOVEMENT",
-    "GYM", "RECIPES"
+    "GYM", "RECIPES", "TODAY"
   };
 
   // Determine which item is currently active
@@ -2651,10 +2651,12 @@ void TaskyUI::drawQRFull(String ssid, String pass) {
 #if FEATURE_QR_CODE
   String payload = "WIFI:S:" + ssid + ";T:WPA;P:" + pass + ";;";
   qrcodegen::QrCode qr =
-      qrcodegen::QrCode::encodeText(payload.c_str(), ECC_LOW);
+      qrcodegen::QrCode::encodeText(payload.c_str(), ECC_MEDIUM);
 
+  // Phones need a white "quiet zone" around the code (4 modules by the
+  // spec) and like some error correction on a small, glossy screen
   int size = qr.getSize();
-  int border = 1;
+  int border = 4;
   int totalModules = size + (border * 2);
 
   // QR fills most of the screen; one text line below shows the credentials

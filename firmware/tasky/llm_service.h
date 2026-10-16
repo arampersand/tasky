@@ -75,6 +75,7 @@ public:
   char response[LLM_RESPONSE_MAX];
   int responseLen = 0;
   char errorMsg[64];
+  bool usedFallback = false;  // response is the canned offline text
 
 private:
   TaskyModel* model;

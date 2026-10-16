@@ -27,6 +27,11 @@ jobs:
       - name: Build
         run: pio run -e ${{ matrix.env }}
         working-directory: firmware
+      - name: App fits its flash slot (partitions.csv app0, 0x1F0000)
+        run: |
+          SIZE=$(stat -c%s firmware/.pio/build/${{ matrix.env }}/firmware.bin)
+          echo "app: $SIZE of 2031616 bytes ($((2031616 - SIZE)) free)" >> "$GITHUB_STEP_SUMMARY"
+          [ "$SIZE" -le 2031616 ] || { echo "::error::firmware.bin is $SIZE bytes, the app slot is 2031616"; exit 1; }
       - name: Size report
         run: |
           BIN=firmware/.pio/build/${{ matrix.env }}/release/tasky-${{ matrix.env }}-merged.bin

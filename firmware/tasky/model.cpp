@@ -39,6 +39,15 @@ void TaskyModel::load() {
   cfg.hostOs = pref.getUChar("os", 0);
   cfg.btOn = pref.getBool("bt", false);
   cfg.agentsSeen = pref.getBool("agS", false);
+  if (!pref.isKey("bt")) {
+    // First boot on 3.0. A Tasky for Agents 2.x has Bluetooth bonds saved:
+    // keep its Bluetooth on and its Agents / Controls screens in the carousel.
+    Preferences bonds;
+    bool bonded = bonds.begin("nimble_bond", true);
+    if (bonded)
+      bonds.end();
+    cfg.btOn = cfg.agentsSeen = bonded;
+  }
   cfg.soundOn = pref.getBool("snd", true);
   cfg.darkMode = pref.getBool("dark", true);
   cfg.totalFocusMin = pref.getUInt("focus", 0);

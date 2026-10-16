@@ -271,6 +271,7 @@ void LlmService::loadFallback() {
   strncpy(response, fb, LLM_RESPONSE_MAX - 1);
   response[LLM_RESPONSE_MAX - 1] = '\0';
   responseLen = strlen(response);
+  usedFallback = true;
   Serial.println("[LLM] Using offline fallback");
   // Don't cache fallbacks - next time with internet, get real response
 }
@@ -290,6 +291,7 @@ void LlmService::sendDailyPrompt() {
   memset(response, 0, sizeof(response));
   responseLen = 0;
   memset(errorMsg, 0, sizeof(errorMsg));
+  usedFallback = false;
 
   // 1. Check per-mode cache first
   if (loadCachedResponse(currentMode)) {
@@ -455,8 +457,12 @@ String LlmService::buildToolContext() {
 String LlmService::buildSystemPrompt() {
   String sys = "Eres Tasky AI, un coach de productividad en un dispositivo pequeno. ";
   sys += "Responde SOLO en espanol. ";
-  sys += "Reglas estrictas: maximo 180 caracteres, una sola frase, ";
-  sys += "sin emojis, sin comillas, sin listas, sin viñetas. ";
+  if (todayMode == MODE_TODAY)  // the daily brief: three short phrases
+    sys += "Reglas estrictas: exactamente 3 frases muy cortas separadas por ' / ', "
+           "maximo 180 caracteres en total, sin emojis, sin comillas, sin viñetas. ";
+  else
+    sys += "Reglas estrictas: maximo 180 caracteres, una sola frase, "
+           "sin emojis, sin comillas, sin listas, sin viñetas. ";
   sys += "Se directo, especifico y accionable basandote en los datos reales del usuario. ";
   sys += "Contexto del usuario:\n";
   sys += buildToolContext();
