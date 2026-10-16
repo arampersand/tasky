@@ -23,7 +23,7 @@ Una perilla, una pantalla y una barra de luz: temporizador de foco, tus tareas d
 
 ## Un firmware con todo
 
-Desde la **3.0** hay un solo firmware para las dos placas (XIAO C3 y C6) con todo: Home de un vistazo, Pomodoro, tareas, calendario, clima, racha de GitHub, Notion, pregúntale a ChatGPT/Claude, **tarjetas de agentes de Claude Code** (la luz respira cuando un agente te necesita y apruebas o rechazas permisos con la perilla) y una **fila de teclas Bluetooth** (volumen, brillo, música y atajos para Mac o Windows). Agents y Controls entran al carrusel de MODE la primera vez que los usas; mientras tanto esperan en **More**. El Bluetooth solo arranca la primera vez que abres Controls.
+Desde la **3.0** hay un solo firmware para las dos placas (XIAO C3 y C6) con todo: Home de un vistazo, Pomodoro, tareas, calendario, clima, racha de GitHub, Notion, pregúntale a ChatGPT/Claude, **tarjetas de agentes de Claude Code** (la luz respira cuando un agente te necesita y apruebas o rechazas permisos con la perilla) y una **fila de teclas Bluetooth** (volumen, brillo, música y atajos para Mac o Windows). Agents y Controls están en el carrusel desde el inicio; el Bluetooth solo arranca la primera vez que abres Controls.
 
 **Conecta Claude Code**: dentro de Claude Code, corre
 

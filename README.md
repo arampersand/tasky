@@ -32,7 +32,7 @@ A knob, a screen and a light bar: focus timer, today's tasks, your streak, your 
 
 ## One firmware, everything
 
-Since **3.0** there is a single firmware for both boards (XIAO C3 and C6) with everything: Home at a glance, focus timer, tasks, calendar, weather, GitHub streak, Notion, ask ChatGPT/Claude, **Claude Code agent cards** (the light breathes when an agent needs you, and you allow or deny permission prompts with the knob) and a **Bluetooth key row** (volume, brightness, media and shortcuts for Mac or Windows). Agents and Controls join the MODE carousel the first time you use them; until then they wait in **More**. Bluetooth only starts the first time you open Controls.
+Since **3.0** there is a single firmware for both boards (XIAO C3 and C6) with everything: Home at a glance, focus timer, tasks, calendar, weather, GitHub streak, Notion, ask ChatGPT/Claude, **Claude Code agent cards** (the light breathes when an agent needs you, and you allow or deny permission prompts with the knob) and a **Bluetooth key row** (volume, brightness, media and shortcuts for Mac or Windows). Agents and Controls are in the MODE carousel from the start; Bluetooth only starts the first time you open Controls.
 
 **Connect Claude Code**: in Claude Code, run
 
