@@ -8,6 +8,10 @@
 // Return false to stop reading early
 typedef bool (*LineCallback)(const char* line, void* userData);
 
+// "https://host/path?query" -> "https://host/…" for logs: paths and queries can
+// carry secrets (e.g. the private iCal address), and users paste logs in issues.
+String redactUrl(const String &url);
+
 class ApiClient {
 public:
   ApiClient();

@@ -6,7 +6,7 @@ You only need this guide if you want to change the firmware. To install a releas
 | --- | --- |
 | Firmware source | `firmware/tasky/` (Arduino sketch `tasky.ino` + `.cpp/.h` modules) |
 | Build config | `firmware/platformio.ini` |
-| Version | `firmware/tasky/version.h` → `TASKY_VERSION` (currently `2.4.0`) |
+| Version | `firmware/tasky/version.h` → `TASKY_VERSION` |
 | Core | Arduino-ESP32 **3.3.x** (via the [pioarduino](https://github.com/pioarduino/platform-espressif32) platform) |
 | Targets | `xiao_c3` (Seeed XIAO ESP32-C3), `xiao_c6` (Seeed XIAO ESP32-C6) |
 | Partitions | `min_spiffs.csv`: two 1.875 MB OTA app slots (the app is about 1.5 MB) |
@@ -114,7 +114,7 @@ Then fill in the values you need:
 - **Gitignored:** `config_secrets.h` is listed in `.gitignore`. **Never commit it.**
 - **Optional:** without the file, the build still succeeds. It prints a warning and uses empty defaults.
 - **Defaults only:** these values apply only when the matching setting on the device is empty. Anything you later save in the portal takes precedence.
-- **Readable on the device:** the WiFi portal shows the saved values to anyone who joins its network.
+- **Not readable from the portal:** saved secrets are never sent back to the browser; the portal only shows that a value is set.
 
 ### Feature flags: `config_features.h`
 
@@ -136,7 +136,7 @@ Code for a disabled feature isn't compiled at all, which keeps the firmware smal
 
 - **Pins:** pin map, `ACTIVE_BUZZER`, `ROW_OFFSET` / `COL_OFFSET`, `DISPLAY_BRINGUP`. See [HARDWARE.md](HARDWARE.md).
 - **Round display:** `DISPLAY_CIRCULAR` in `ui.h`.
-- **Setup network credentials:** `apSSID` / `apPass` in `wifi_portal.h` (defaults `Tasky` / `GetItDone`).
+- **Setup network credentials:** SSID `apSSID` in `wifi_portal.h` (default `Tasky`); the password is generated per device on first boot (see [CUSTOMIZING.md](CUSTOMIZING.md#changing-the-wifi-setup-network-name-and-password)).
 
 ---
 

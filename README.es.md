@@ -13,7 +13,7 @@ Una perilla, una pantalla y una barra de luz: temporizador de foco, tus tareas d
 
 ### [⚡ Flashéalo desde el navegador →](https://tasky-flash.vercel.app)
 
-[Manual](docs/MANUAL.md) · [Hardware](docs/HARDWARE.md) · [Compilar](docs/BUILDING.md) · [Haz el tuyo](docs/CUSTOMIZING.md) · [Arquitectura](docs/ARCHITECTURE.md) · [Roadmap](docs/IMPROVEMENTS.md) · [English](README.md)
+[Manual](docs/MANUAL.md) · [Hardware](docs/HARDWARE.md) · [Compilar](docs/BUILDING.md) · [Haz el tuyo](docs/CUSTOMIZING.md) · [Arquitectura](docs/ARCHITECTURE.md) · [Roadmap](docs/ROADMAP.md) · [English](README.md)
 
 <sub>La documentación detallada está en inglés.</sub>
 
@@ -43,7 +43,7 @@ Tu celular es la peor herramienta de foco que tienes. Tasky es un objeto de un s
 1. Abre **[tasky-flash.vercel.app](https://tasky-flash.vercel.app)** en Chrome o Edge desde una computadora.
 2. Elige **XIAO ESP32-C3** o **C6** y conecta la placa con un cable USB-C *de datos*. Si no aparece el puerto, mantén `BOOT` presionado al conectarla.
 3. Click en **Connect & flash**.
-4. En Tasky, doble click en **MODE** → **More** → **Setup (QR)**. Escanea el QR (o conéctate a la red **`Tasky`**, contraseña **`GetItDone`**) y se abre la página de configuración (o entra a `192.168.4.1`).
+4. En Tasky, doble click en **MODE** → **More** → **Setup (QR)**. Escanea el QR (o conéctate a la red **`Tasky`** con la contraseña que aparece en pantalla; cada Tasky tiene la suya) y se abre la página de configuración (o entra a `192.168.4.1`).
 
 La página siempre sirve la [release](https://github.com/arampersand/tasky/releases/latest) más nueva y conserva tus ajustes al reinstalar.
 
@@ -59,6 +59,10 @@ pio run -e xiao_c3 -t upload && pio device monitor
 ## Haz tu propia versión
 
 **[docs/CUSTOMIZING.md](docs/CUSTOMIZING.md)** explica cómo activar y desactivar features, cambiar a pantalla redonda, remapear pines, cambiar colores y textos, **agregar tu propia pantalla o integración** y **publicar tu fork con su propio flasher web** (tag → release → Vercel).
+
+## Lo que viene
+
+**Tasky 3.0**: configuración completa desde el navegador (WiFi → calendario → GitHub → IA), una pantalla principal para ver todo de un vistazo con frases, y dos variantes: **Tasky Desk** (compañero de tu compu: volumen, agentes de Claude Code) y **Tasky Go** (con batería y notificaciones del celular). Detalles en **[docs/ROADMAP.md](docs/ROADMAP.md)**.
 
 ## Contribuir
 

@@ -545,7 +545,7 @@ void handleQR(int step, EncClickType click) {
   if (!ui.baseDrawn) {
     if (!portal.wifiOn)
       portal.begin();
-    ui.drawQRFull(portal.apSSID, portal.apPass);
+    ui.drawQRFull(portal.apSSID, model.cfg.apPass);
     ui.baseDrawn = true;
   }
   if (click == ENC_SHORT) {
@@ -563,7 +563,7 @@ void handleWifi(int step, EncClickType click) {
     if (ip == "0.0.0.0")
       ip = WiFi.softAPIP().toString();
     String status = "Status: " + net.getStatusString();
-    ui.drawWifi(portal.wifiOn, status, portal.apPass, ip);
+    ui.drawWifi(portal.wifiOn, status, model.cfg.apPass, ip);
     ui.baseDrawn = true;
   }
   static String lastStatus = "";
@@ -626,10 +626,10 @@ void handleUpdate(int step, EncClickType click) {
     String url, hint;
     if (net.isConnected()) {
       url = "http://" + net.getIP() + "/";
-      hint = "Same WiFi as this Tasky";
+      hint = "Login: tasky / " + model.cfg.apPass;
     } else {
       url = "http://" + WiFi.softAPIP().toString() + "/";
-      hint = "WiFi " + portal.apSSID + " / " + portal.apPass;
+      hint = "WiFi " + portal.apSSID + " / " + model.cfg.apPass;
     }
     ui.drawUpdate(shownArmed, url, hint, ota.getVersion());
     ui.baseDrawn = true;
@@ -1241,6 +1241,7 @@ void loop() {
       pref.begin("tasky", false);
       pref.clear();
       pref.end();
+      WiFi.disconnect(true, true);  // also erase the WiFi driver's saved credentials
       delay(500);
       ESP.restart();
     }

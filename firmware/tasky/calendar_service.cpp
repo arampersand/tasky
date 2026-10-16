@@ -315,7 +315,7 @@ void CalendarService::forceUpdate() {
     Serial.printf("[Cal] Next: %s at %s\n", state.nextSummary, state.nextTime);
   } else {
     Serial.println("[Cal] Stream failed - will retry in 30s");
-    Serial.printf("[Cal] URL: %s\n", model->cfg.calendarUrl.c_str());
+    Serial.printf("[Cal] URL: %s\n", redactUrl(model->cfg.calendarUrl).c_str());
     lastUpdate = millis() - (15UL * 60 * 1000) + 30000;  // Retry in 30s
   }
 }

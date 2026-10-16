@@ -14,7 +14,7 @@ A knob, a screen and a light bar: focus timer, today's tasks, your streak, your 
 
 ### [⚡ Flash it from your browser →](https://tasky-flash.vercel.app)
 
-[Manual](docs/MANUAL.md) · [Hardware](docs/HARDWARE.md) · [Build](docs/BUILDING.md) · [Make your own](docs/CUSTOMIZING.md) · [Architecture](docs/ARCHITECTURE.md) · [Roadmap](docs/IMPROVEMENTS.md) · [Español](README.es.md)
+[Manual](docs/MANUAL.md) · [Hardware](docs/HARDWARE.md) · [Build](docs/BUILDING.md) · [Make your own](docs/CUSTOMIZING.md) · [Architecture](docs/ARCHITECTURE.md) · [Roadmap](docs/ROADMAP.md) · [Español](README.es.md)
 
 </div>
 
@@ -52,7 +52,7 @@ Your phone is the worst focus tool you own. Tasky is a single-purpose object tha
 1. Open **[tasky-flash.vercel.app](https://tasky-flash.vercel.app)** in Chrome or Edge on a computer.
 2. Pick **XIAO ESP32-C3** or **C6** and plug the board in with a USB-C *data* cable. If no port shows up, hold `BOOT` while plugging in.
 3. Click **Connect & flash**.
-4. On Tasky, double-press **MODE** → **More** → **Setup (QR)**. Scan the QR (or join Wi-Fi **`Tasky`**, password **`GetItDone`**) and the setup page opens (or go to `192.168.4.1`).
+4. On Tasky, double-press **MODE** → **More** → **Setup (QR)**. Scan the QR (or join Wi-Fi **`Tasky`** with the password shown on screen; every Tasky has its own) and the setup page opens (or go to `192.168.4.1`).
 
 The page always serves the newest [release](https://github.com/arampersand/tasky/releases/latest) and keeps your settings when you reinstall. Prefer the command line? (full image, erases settings)
 
@@ -112,7 +112,7 @@ Deep dive: **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**.
 
 ## Roadmap
 
-Tasky works today, and there's plenty to make better. **[docs/IMPROVEMENTS.md](docs/IMPROVEMENTS.md)** is the prioritized list of what's next (security hardening, tests, refactors, power, Wi-Fi provisioning from the flasher). It's the best place to pick a first contribution.
+Next up is **Tasky 3.0**: set up entirely from the browser (Wi-Fi → calendar → GitHub → AI), a glance-first home screen, and two variants: **Tasky Desk** (a companion for your computer: volume, Claude Code agents) and **Tasky Go** (battery, phone notifications). See **[docs/ROADMAP.md](docs/ROADMAP.md)**. Code-level fixes and good first issues live in **[docs/IMPROVEMENTS.md](docs/IMPROVEMENTS.md)**.
 
 ## Contributing
 

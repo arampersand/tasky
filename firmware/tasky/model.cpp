@@ -2,7 +2,18 @@
 #include "config_features.h"
 #include <time.h>  // For getLocalTime()
 
-void TaskyModel::begin() { load(); }
+void TaskyModel::begin() {
+  load();
+  // Every device gets its own setup-network password, shown on screen and in
+  // the QR code, so a password published in the repo can't open any Tasky.
+  if (cfg.apPass.length() < 8) {
+    const char *alphabet = "abcdefghjkmnpqrstuvwxyz23456789";  // no 0/o/1/l/i
+    cfg.apPass = "";
+    for (int i = 0; i < 10; i++)
+      cfg.apPass += alphabet[esp_random() % 31];
+    save();
+  }
+}
 
 uint8_t TaskyModel::clampU8(int v, int lo, int hi) {
   if (v < lo)
@@ -24,6 +35,7 @@ void TaskyModel::load() {
   cfg.bestStreak = pref.getUShort("best", 0);
   cfg.wifiSSID = pref.getString("wss", "");
   cfg.wifiPass = pref.getString("wps", "");
+  cfg.apPass = pref.getString("app", "");
   cfg.timezone = pref.getChar("tz", -5);
   cfg.githubUser = pref.getString("ghu", "");
   cfg.githubToken = pref.getString("ght", "");
@@ -171,6 +183,7 @@ void TaskyModel::save() {
   pref.putUShort("best", cfg.bestStreak);
   pref.putString("wss", cfg.wifiSSID);
   pref.putString("wps", cfg.wifiPass);
+  pref.putString("app", cfg.apPass);
   pref.putChar("tz", cfg.timezone);
   pref.putString("ghu", cfg.githubUser);
   pref.putString("ght", cfg.githubToken);

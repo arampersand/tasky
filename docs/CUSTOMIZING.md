@@ -297,18 +297,19 @@ Fonts are Adafruit GFX FreeSans fonts (`ui.h`). They only contain ASCII, so acce
 
 ## Changing the WiFi setup network name and password
 
-The setup network (soft AP plus captive portal) is defined in `wifi_portal.h`:
+The network name is `apSSID` in `wifi_portal.h`:
 
 ```cpp
 String apSSID = "Tasky";
-String apPass = "GetItDone";
 ```
 
-Rules:
+The password is **not** in the source: `TaskyModel::begin()` (`model.cpp`) generates 10 random characters on first boot, stores them in NVS (`app`) and the QR/WiFi/Update screens show them. A factory reset generates a new one. The same password, with user `tasky`, logs in to the portal from your home network.
 
-- The WPA2 password must be **8 to 63 characters**. A shorter one makes `WiFi.softAP()` fail.
-- The Setup (QR) and Update screens read `portal.apSSID` / `portal.apPass`, so the QR code and the on-screen hints update automatically.
-- If you sell or give away devices, consider a per-device password (for example, derived from the MAC address) instead of a shared one.
+To change the scheme (length, alphabet), edit `TaskyModel::begin()`. Rules:
+
+- The WPA2 password must be **8 to 63 characters**, or `WiFi.softAP()` fails.
+- Avoid `\ ; , : "` in the alphabet: they need escaping in the `WIFI:` QR payload.
+- Don't go back to a fixed password in a public fork: anyone could join your setup network.
 
 ---
 

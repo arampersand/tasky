@@ -2023,14 +2023,16 @@ void TaskyUI::drawQRFull(String ssid, String pass) {
   int border = 1;
   int totalModules = size + (border * 2);
 
-  // QR fills entire screen
-  int scale = 220 / totalModules; // Use almost full 240px
+  // QR fills most of the screen; one text line below shows the credentials
+  // (the password is unique per device, so people need to be able to read it)
+  const int TEXT_H = 22;
+  int scale = (220 - TEXT_H) / totalModules;
   if (scale < 1)
     scale = 1;
 
   int dimension = totalModules * scale;
   int startX = (W - dimension) / 2;
-  int startY = (H - dimension) / 2; // Perfectly centered
+  int startY = (H - dimension - TEXT_H) / 2;
 
   for (int y = -border; y < size + border; y++) {
     for (int x = -border; x < size + border; x++) {
@@ -2046,6 +2048,8 @@ void TaskyUI::drawQRFull(String ssid, String pass) {
                    scale, scale, color);
     }
   }
+  String creds = ssid + " / " + pass;
+  centerTextFont(creds.c_str(), startY + dimension + 17, 0x0000, &FreeSans9pt7b);
 #else
   // Text-only fallback when QR disabled to save ~35-50 KB
   centerTextFont("WiFi Setup", 50, 0x0000, &FreeSansBold12pt7b);

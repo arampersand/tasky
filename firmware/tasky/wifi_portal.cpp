@@ -30,7 +30,7 @@ void WiFiPortal::begin() {
     return;
 
   WiFi.mode(WIFI_AP_STA);
-  WiFi.softAP(apSSID.c_str(), apPass.c_str());
+  WiFi.softAP(apSSID.c_str(), model->cfg.apPass.c_str());
 
   IPAddress ip = WiFi.softAPIP();
 
@@ -49,14 +49,21 @@ void WiFiPortal::addRoutes() {
     return;
   routesAdded = true;
 
+  static const char *headerKeys[] = {"Origin", "Referer"};
+  server.collectHeaders(headerKeys, 2);
+
   server.on("/", HTTP_GET, [this]() { handleRoot(); });
   server.on("/save", HTTP_POST, [this]() { handleSave(); });
 
   // OTA update routes
-  server.on("/ota/status", HTTP_GET, [this]() { handleOtaStatus(); });
+  server.on("/ota/status", HTTP_GET, [this]() {
+    if (authorized()) handleOtaStatus();
+  });
   server.on("/ota/upload", HTTP_POST,
     [this]() {
       // Upload complete handler
+      if (!authorized())
+        return;
       if (ota && ota->getState() == OTA_SUCCESS) {
         server.send(200, "application/json", "{\"success\":true,\"message\":\"Update successful! Rebooting...\"}");
         delay(500);
@@ -84,8 +91,7 @@ void WiFiPortal::addRoutes() {
   server.on("/connecttest.txt", HTTP_GET, redirect);
   server.on("/redirect", HTTP_GET, redirect);
   server.on("/canonical.html", HTTP_GET, redirect);
-  server.on("/hotspot-detect.html", HTTP_GET,
-            [this]() { server.send(200, "text/html", htmlPage()); });
+  server.on("/hotspot-detect.html", HTTP_GET, [this]() { handleRoot(); });
   server.on("/ncsi.txt", HTTP_GET,
             [this]() { server.send(200, "text/plain", "Microsoft NCSI"); });
   server.onNotFound(redirect);
@@ -609,7 +615,48 @@ void WiFiPortal::applySecret(const char *name, String &stored) {
     stored = server.arg(name);  // empty submit keeps the stored value
 }
 
+// Blocks CSRF (another site POSTing to Tasky with the browser's cached login)
+// and DNS rebinding: on the LAN the Host must be Tasky's own IP, and an
+// Origin/Referer, when present, must point at that same host.
+bool WiFiPortal::sameOrigin() {
+  String host = server.hostHeader();
+  int colon = host.indexOf(':');
+  if (colon >= 0)
+    host = host.substring(0, colon);
+  if (host != WiFi.localIP().toString())
+    return false;
+  for (const char *h : {"Origin", "Referer"}) {
+    String v = server.header(h);
+    if (v.length() == 0)
+      continue;
+    int start = v.indexOf("://");
+    start = start < 0 ? 0 : start + 3;
+    int end = start;
+    while (end < (int)v.length() && v[end] != '/' && v[end] != ':')
+      end++;
+    if (v.substring(start, end) != host)
+      return false;
+  }
+  return true;
+}
+
+bool WiFiPortal::authorized() {
+  if (server.client().localIP() == WiFi.softAPIP())
+    return true;  // connected through the setup AP
+  if (!sameOrigin()) {
+    server.send(403, "text/plain", "Forbidden");
+    return false;
+  }
+  if (server.authenticate(LAN_USER, model->cfg.apPass.c_str()))
+    return true;
+  server.requestAuthentication(BASIC_AUTH, "Tasky",
+                               "Login: tasky + the password shown on Tasky (More > Settings > WiFi)");
+  return false;
+}
+
 void WiFiPortal::handleRoot() {
+  if (!authorized())
+    return;
   touch();
   server.send(200, "text/html", htmlPage());
 }
@@ -638,6 +685,13 @@ void WiFiPortal::handleOtaUpload() {
   touch();
   if (upload.status == UPLOAD_FILE_START) {
     Serial.printf("[OTA] Upload started: %s\n", upload.filename.c_str());
+
+    // Unauthenticated LAN uploads are dropped (the final handler replies 401)
+    if (server.client().localIP() != WiFi.softAPIP() &&
+        (!sameOrigin() || !server.authenticate(LAN_USER, model->cfg.apPass.c_str()))) {
+      ota->abortUpdate();
+      return;
+    }
 
     // Validate file extension
     if (!upload.filename.endsWith(".bin")) {
@@ -670,6 +724,8 @@ void WiFiPortal::handleOtaUpload() {
 }
 
 void WiFiPortal::handleSave() {
+  if (!authorized())
+    return;
   touch();
   for (int i = 0; i < 3; i++) {
     String k = "t" + String(i);

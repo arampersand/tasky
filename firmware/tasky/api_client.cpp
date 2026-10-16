@@ -3,6 +3,13 @@
 #include "api_client.h"
 #include <WiFi.h>
 
+String redactUrl(const String &url) {
+  int scheme = url.indexOf("://");
+  int start = scheme >= 0 ? scheme + 3 : 0;
+  int slash = url.indexOf('/', start);
+  return slash < 0 ? url : url.substring(0, slash) + "/…";
+}
+
 ApiClient::ApiClient() {
   // By default, for simplicity on ESP32 without CA bundle management:
   client.setInsecure();
@@ -18,7 +25,7 @@ String ApiClient::get(String url, String token) {
   HTTPClient http;
 
   Serial.print("[API] GET ");
-  Serial.println(url);
+  Serial.println(redactUrl(url));
 
   // Use the secure client
   http.begin(client, url);
@@ -54,7 +61,7 @@ bool ApiClient::getStreaming(const String& url, LineCallback callback, void* use
   HTTPClient http;
 
   Serial.print("[API] GET (streaming) ");
-  Serial.println(url);
+  Serial.println(redactUrl(url));
 
   http.begin(client, url);
 
@@ -176,7 +183,7 @@ String ApiClient::post(const String& url, const String& body, const String& toke
   HTTPClient http;
 
   Serial.print("[API] POST ");
-  Serial.println(url);
+  Serial.println(redactUrl(url));
 
   http.begin(client, url);
 

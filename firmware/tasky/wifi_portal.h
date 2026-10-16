@@ -18,7 +18,9 @@ public:
   TaskyNetManager *net;
   bool wifiOn = false;
   String apSSID = "Tasky";
-  String apPass = "GetItDone";
+  // Password: model->cfg.apPass (unique per device, shown on screen + in the QR).
+  // Same password + user "tasky" log in to the portal from the home network.
+  static constexpr const char *LAN_USER = "tasky";
 
   // The setup AP + web server shut down after this long without activity
   // (HTTP requests, connected phones, or a setup screen open on the device).
@@ -39,6 +41,10 @@ private:
   uint32_t lastActivityAt = 0;
 
   void addRoutes();
+  // Clients on the setup AP already proved they saw the device (its password is
+  // only shown there). Clients on the home LAN must log in; sends the 401 itself.
+  bool authorized();
+  bool sameOrigin();
   void handleRoot();
   void handleSave();
   void handleOtaUpload();

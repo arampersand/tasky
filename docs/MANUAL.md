@@ -1,6 +1,6 @@
 # Tasky User Manual
 
-Firmware version: **2.4.1**
+Firmware version: **2.5.0**
 
 Tasky is a small desk device that keeps your focus sessions, your three tasks for the day, your calendar and your streak in front of you. You operate it with one knob and one button.
 
@@ -24,9 +24,9 @@ Tasky is a small desk device that keeps your focus sessions, your three tasks fo
 2. **Turn on the setup network.** Tasky doesn't broadcast its setup network until you ask it to. Double-press **MODE** to jump to **More**, turn the knob to **Setup (QR)** and press the knob. The screen fills with a QR code.
 3. **Join the network.** Scan the QR code with your phone's camera, or join this WiFi network by hand:
 
-   | Network (SSID) | Password    |
-   | -------------- | ----------- |
-   | `Tasky`        | `GetItDone` |
+   | Network (SSID) | Password                                   |
+   | -------------- | ------------------------------------------ |
+   | `Tasky`        | Shown on the screen (unique to your Tasky) |
 
 4. **Open the portal.** Most phones open the setup page on their own (captive portal). If yours doesn't, browse to **http://192.168.4.1**.
 5. **Enter your WiFi details.** Fill in your home network name, its password and your **UTC offset** (for example `-6`). Then tap **Guardar y Conectar** (Save and connect).
@@ -259,7 +259,7 @@ Opening this screen also starts the portal. The URL shown is the device's IP on 
 
 ### Setup (QR)
 
-This screen starts the setup network and shows a full-screen QR code that joins your phone to it (`Tasky` / `GetItDone`). **Short press** returns to the Timer.
+This screen starts the setup network and shows a full-screen QR code that joins your phone to it (`Tasky` + this device's password, also printed under the QR). **Short press** returns to the Timer.
 
 ### Settings
 
@@ -341,17 +341,17 @@ Both notices wait at least 2 minutes after boot, so WiFi and the calendar have t
 
 ### Starting the portal
 
-The setup network (`Tasky` / `GetItDone`) and the web portal start the **first time** you open **Setup (QR)**, **Settings → WiFi** or **Update**, or select **Add task...**. They stay on while one of those screens is open, while a phone is connected to the setup network or while an update is allowed, and **turn off by themselves after 10 minutes without activity**. Your home WiFi connection is not affected.
+The setup network (`Tasky` + your device's password) and the web portal start the **first time** you open **Setup (QR)**, **Settings → WiFi** or **Update**, or select **Add task...**. They stay on while one of those screens is open, while a phone is connected to the setup network or while an update is allowed, and **turn off by themselves after 10 minutes without activity**. Your home WiFi connection is not affected.
 
 You can reach the portal in two ways:
 
 - On the setup network: **http://192.168.4.1**
-- On your home WiFi: **http://&lt;device IP&gt;/** (the IP is shown on the WiFi info and Update screens)
+- On your home WiFi: **http://&lt;device IP&gt;/** (the IP is shown on the WiFi info and Update screens). Your browser asks for a login: user **`tasky`**, password = the setup-network password shown on the device.
 
 **Saved secrets are never shown.** The WiFi password, calendar URL and API keys appear as empty fields marked **Configurada**. Leave a field empty to keep the saved value, type a new one to replace it, or tick **borrar** to delete it.
 
 > [!WARNING]
-> The setup network password (`GetItDone`) is public, and the portal has no login: while it's on, anyone who joins can change the settings (but can't read your secrets). It turns off after 10 idle minutes. For a private password, build your own firmware with a different `apPass` in `firmware/tasky/wifi_portal.h` (see [BUILDING.md](BUILDING.md)).
+> Anyone who can see Tasky's screen can learn its password and change its settings (never read your saved secrets). The page is plain HTTP, so on a shared network the login can be sniffed while you use it; the portal turns off after 10 idle minutes. A factory reset generates a new password.
 
 ### Portal fields
 

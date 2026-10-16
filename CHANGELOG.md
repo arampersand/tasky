@@ -2,6 +2,20 @@
 
 All notable changes to the Tasky firmware. Versions match `firmware/tasky/version.h` and git tags.
 
+## v2.5.0 — 2026-10-15 · Portal login
+
+### Security
+- **Per-device setup-network password**: 10 random characters generated on first boot, shown under the QR code and on the WiFi/Update screens. The fixed `GetItDone` password is gone; a factory reset generates a new one.
+- **Portal login from the home network**: HTTP Basic auth (`tasky` + the device password). Clients on the setup network don't need it.
+- Requests from the home network must target the device IP and come from the same origin (blocks CSRF from other web pages and DNS rebinding).
+- URLs in serial logs are trimmed to the host, so the private iCal address no longer leaks into logs.
+- Factory reset also erases the WiFi driver's stored credentials.
+
+### Added
+- `docs/ROADMAP.md`: Tasky 3.0 plan, Desk and Go variants, early user feedback.
+
+> **Upgrading:** after updating, your Tasky's setup-network password changes. Read it under the QR code (More → Setup (QR)).
+
 ## v2.4.1 — 2026-10-15 · Portal hardening
 
 ### Security

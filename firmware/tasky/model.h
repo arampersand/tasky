@@ -51,6 +51,7 @@ struct Config {
   uint16_t bestStreak = 0;  // Best consecutive days with activity
   String wifiSSID = "";
   String wifiPass = "";
+  String apPass = "";   // Per-device setup-network password (generated on first boot)
   int8_t timezone = -5; // UTC Offset
   String githubUser = "";
   String githubToken = "";
