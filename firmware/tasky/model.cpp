@@ -9,11 +9,18 @@ void TaskyModel::begin() {
     save();
   // Every device gets its own setup-network password, shown on screen and in
   // the QR code, so a password published in the repo can't open any Tasky.
+  const char *alphabet = "abcdefghjkmnpqrstuvwxyz23456789";  // no 0/o/1/l/i
   if (cfg.apPass.length() < 8) {
-    const char *alphabet = "abcdefghjkmnpqrstuvwxyz23456789";  // no 0/o/1/l/i
     cfg.apPass = "";
     for (int i = 0; i < 10; i++)
       cfg.apPass += alphabet[esp_random() % 31];
+    save();
+  }
+  // The computer companion pairs with this over USB, then talks over Wi-Fi
+  if (cfg.linkToken.length() < 16) {
+    cfg.linkToken = "";
+    for (int i = 0; i < 20; i++)
+      cfg.linkToken += alphabet[esp_random() % 31];
     save();
   }
 }
@@ -37,6 +44,8 @@ void TaskyModel::load() {
   cfg.startScreen = pref.getString("start", "home");
   cfg.phrases = pref.getString("phr", "");
   cfg.hostOs = pref.getUChar("os", 0);
+  pref.getBytes("hostA", cfg.hostAddr, sizeof(cfg.hostAddr));
+  pref.getBytes("hostO", cfg.hostAddrOs, sizeof(cfg.hostAddrOs));
   cfg.btOn = pref.getBool("bt", false);
   cfg.agentsSeen = pref.getBool("agS", false);
   if (!pref.isKey("bt")) {
@@ -55,6 +64,7 @@ void TaskyModel::load() {
   cfg.wifiSSID = pref.getString("wss", "");
   cfg.wifiPass = pref.getString("wps", "");
   cfg.apPass = pref.getString("app", "");
+  cfg.linkToken = pref.getString("lnk", "");
   cfg.timezone = pref.getChar("tz", -5);
   cfg.githubUser = pref.getString("ghu", "");
   cfg.githubToken = pref.getString("ght", "");
@@ -218,6 +228,8 @@ void TaskyModel::save() {
   pref.putString("start", cfg.startScreen);
   pref.putString("phr", cfg.phrases);
   pref.putUChar("os", cfg.hostOs);
+  pref.putBytes("hostA", cfg.hostAddr, sizeof(cfg.hostAddr));
+  pref.putBytes("hostO", cfg.hostAddrOs, sizeof(cfg.hostAddrOs));
   pref.putBool("bt", cfg.btOn);
   pref.putBool("agS", cfg.agentsSeen);
   pref.putBool("snd", cfg.soundOn);
@@ -227,6 +239,7 @@ void TaskyModel::save() {
   pref.putString("wss", cfg.wifiSSID);
   pref.putString("wps", cfg.wifiPass);
   pref.putString("app", cfg.apPass);
+  pref.putString("lnk", cfg.linkToken);
   pref.putChar("tz", cfg.timezone);
   pref.putString("ghu", cfg.githubUser);
   pref.putString("ght", cfg.githubToken);

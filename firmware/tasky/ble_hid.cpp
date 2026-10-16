@@ -24,10 +24,28 @@ const uint8_t REPORT_MAP[] = {
 NimBLECharacteristic *keyboardReport = nullptr;
 NimBLECharacteristic *consumerReport = nullptr;
 volatile bool isConnected = false;
+uint64_t peerAddr = 0;  // set on the NimBLE task: read and write under peerMux
+portMUX_TYPE peerMux = portMUX_INITIALIZER_UNLOCKED;
 
+void setPeer(uint64_t a) {
+  portENTER_CRITICAL(&peerMux);
+  peerAddr = a;
+  portEXIT_CRITICAL(&peerMux);
+}
+
+// The identity address is known once bonding resolves a phone's private one
 class ServerCallbacks : public NimBLEServerCallbacks {
-  void onConnect(NimBLEServer *, NimBLEConnInfo &) override { isConnected = true; }
-  void onDisconnect(NimBLEServer *, NimBLEConnInfo &, int) override { isConnected = false; }
+  void onConnect(NimBLEServer *, NimBLEConnInfo &info) override {
+    setPeer((uint64_t)info.getIdAddress());
+    isConnected = true;
+  }
+  void onAuthenticationComplete(NimBLEConnInfo &info) override {
+    setPeer((uint64_t)info.getIdAddress());
+  }
+  void onDisconnect(NimBLEServer *, NimBLEConnInfo &, int) override {
+    isConnected = false;
+    setPeer(0);
+  }
 };
 
 }  // namespace
@@ -61,6 +79,14 @@ void begin(const char *name) {
 }
 
 bool connected() { return isConnected; }
+uint64_t peer() {
+  if (!isConnected)
+    return 0;
+  portENTER_CRITICAL(&peerMux);
+  uint64_t a = peerAddr;
+  portEXIT_CRITICAL(&peerMux);
+  return a;
+}
 
 void media(uint16_t usage) {
   if (!isConnected || !consumerReport)

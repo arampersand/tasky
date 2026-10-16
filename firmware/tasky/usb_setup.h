@@ -26,6 +26,7 @@ public:
   UsbSetup(TaskyModel *model, TaskyNetManager *net) : model(model), net(net) {}
 
   void loop();
+  void handle(const String &cmd);  // one "TASKY ..." line (USB or Wi-Fi)
   // Called after a successful SET (e.g. to refresh weather/calendar).
   std::function<void()> onChanged;
   // Edition-specific commands ("TASKY AGENT {...}"): return true if handled.
@@ -38,7 +39,6 @@ private:
   TaskyNetManager *net;
   String line;
 
-  void handle(const String &cmd);
   void sendStatus();
   void sendScan();
   void applySet(const String &json);

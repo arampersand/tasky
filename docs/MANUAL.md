@@ -511,11 +511,13 @@ Tasky is also a companion for your computer: it shows your Claude Code sessions 
 
 ### Agents
 
-One card per AI coding agent running on your computer (for example each Claude Code session), reported over USB by the [companion](../companion/README.md). Set it up with one command from the web setup's **Agents** step:
+One card per AI coding agent running on your computer (for example each Claude Code session), reported by the [Claude Code plugin](../companion/README.md). Set it up in one step at [tasky-flash.vercel.app/claude](https://tasky-flash.vercel.app/claude):
 
 ```bash
-curl -fsSL https://tasky-flash.vercel.app/agents/install.sh | sh
+claude plugin marketplace add arampersand/tasky && claude plugin install tasky@tasky
 ```
+
+**USB or Wi-Fi.** The first time Tasky is plugged into the computer, the plugin pairs with it. From then on it also works **unplugged, on battery**, as long as Tasky and the computer are on the same Wi-Fi network. If Tasky's address changes, the plugin finds it again.
 
 Each card shows a little robot, the project, its state and the last message:
 
@@ -541,13 +543,13 @@ The knob becomes a row of computer keys, like the top row of a Mac keyboard. Blu
 
 **Turn** to pick a key (the previous and next ones show above and below), **press** to send it:
 
-Volume · Mute · Play / Pause · Next · Previous · Brightness · Mission Control (Task View) · Spotlight (Search) · Dictation · Desktop left · Desktop right · Screenshot · Lock screen
+Volume · Mute · Play / Pause · Next · Previous · Brightness · Mission Control (Task View) · Spotlight (Search) · Assistant (Mac: voice key · Windows: Copilot) · Desktop left · Desktop right · Screenshot · Lock screen
 
 **Volume** and **Brightness** are dials: press to grab (the name turns orange), turn to adjust, press again to let go.
 
-**Long press** switches between **Mac**, **Windows** and **Phone** (shown at the top). Media keys work the same everywhere.
+**Long press** switches between **Mac**, **Windows** and **Phone** (shown at the top). Tasky remembers the mode for each device you pair (up to 4), so going from your Mac to your phone switches by itself. A device it hasn't seen yet shows "Hold: Mac / Windows / Phone". Media keys work the same everywhere.
 
-**Phone** mode is for an iPhone or Android phone paired with Tasky (it sees a Bluetooth keyboard, no app needed): **Volume** and **Scroll** dials (scroll = next / previous reel, list or page), **Play / Pause**, **Next**, **Previous**, **Mute**, **Take photo** (the volume-up key that fires the camera's shutter, for a group photo from across the room) and **Next / Previous page** (arrow keys: e-books, PDFs, sheet music, slides). Some phones hide the on-screen keyboard while a Bluetooth keyboard is connected; turn Bluetooth off on Tasky's side by unpairing if you need to type.
+**Phone** mode is for an iPhone or Android phone paired with Tasky (it sees a Bluetooth keyboard, no app needed): **Volume** and **Scroll** dials (scroll = next / previous reel, list or page), **Play / Pause**, **Next**, **Previous**, **Mute**, **Home** (back to the home screen), **Assistant** (Siri or Google Assistant), **Take photo** (the volume-up key that fires the camera's shutter, for a group photo from across the room) and **Next / Previous page** (arrow keys: e-books, PDFs, sheet music, slides). Some phones hide the on-screen keyboard while a Bluetooth keyboard is connected; turn Bluetooth off on Tasky's side by unpairing if you need to type.
 
 See [CUSTOMIZING.md](CUSTOMIZING.md#shortcuts-tasky-for-agents) to change the keys.
 

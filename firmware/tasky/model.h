@@ -49,7 +49,10 @@ struct Config {
   String screens = "";  // MODE carousel ids, "home,timer,..." ("" = default)
   String startScreen = "home";  // the screen Tasky opens on
   String phrases = "";  // Your phrases, one per line ("" = built-in)
-  uint8_t hostOs = 0;   // Controls shortcuts: 0 = Mac, 1 = Windows
+  uint8_t hostOs = 0;   // Controls shortcuts: 0 = Mac, 1 = Windows, 2 = Phone
+  // The last 4 Bluetooth devices and the mode each one uses
+  uint64_t hostAddr[4] = {0};
+  uint8_t hostAddrOs[4] = {0};
   bool btOn = false;    // Bluetooth started (you opened Controls once)
   bool agentsSeen = false;  // an agent reported once: Agents joins the carousel
   bool soundOn = true;
@@ -59,6 +62,7 @@ struct Config {
   String wifiSSID = "";
   String wifiPass = "";
   String apPass = "";   // Per-device setup-network password (generated on first boot)
+  String linkToken = "";  // Wi-Fi companion pairing token (generated on first boot)
   int8_t timezone = -5; // UTC Offset
   String githubUser = "";
   String githubToken = "";

@@ -2,6 +2,20 @@
 
 All notable changes to the Tasky firmware. Versions match `firmware/tasky/version.h` and git tags.
 
+## v3.1.0 — 2026-10-16 · Claude Code over Wi-Fi
+
+### Added
+- **Claude Code over Wi-Fi.** Plug Tasky into your computer once and the plugin pairs with it; from then on your session cards and knob approvals also work unplugged, on battery, anywhere on the same network. Tasky listens on TCP 7778 with a per-device token and answers a UDP broadcast so the plugin finds it when its address changes. Over Wi-Fi it only takes cards and questions, never settings.
+
+### Changed
+- About 215 KB smaller firmware on both boards: the QR library no longer pulls in C++ string streams.
+- **Calmer Home:** the date in the top-left corner, the weather in the top-right, the clock in the middle, today's focus bar and **one** task (the one you're on, or the next open one). The next calendar event is on Agenda and Calendar.
+- **GitHub streak shows all your contributions**, private ones included (when your profile shows them): Tasky reads your profile's contribution graph instead of the public events feed, which missed most days.
+- **Controls remembers each device's mode** (Mac, Windows or Phone, up to 4 devices): switch from your Mac to your phone and the keys follow. A new device shows "Hold: Mac / Windows / Phone".
+- **Phone mode: Home and Assistant keys** (home screen; Siri or Google Assistant). On computers, *Dictation* is now **Assistant** (Mac: the voice key; Windows: Copilot, Win+C).
+- **tasky-flash.vercel.app/claude**: connect Claude Code step by step (English and Spanish), with a one-line Terminal command. The Agents screen and the setup point there.
+- Calendar setup (web and phone) links straight to Google Calendar's settings page.
+
 ## v3.0.1 — 2026-10-16 · More in Settings
 
 ### Changed

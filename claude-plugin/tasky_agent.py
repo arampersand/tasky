@@ -21,11 +21,16 @@ Something not working?
     tasky_agent.py doctor         # checks everything and says what to fix
 
 How it talks to Tasky: one small background process (`tasky_agent.py daemon`,
-started on demand) owns the USB serial port; hooks talk to it over a Unix
-socket in ~/.tasky/. That lets a permission question wait for the knob while
-other sessions keep reporting. The daemon quits after 2 hours without news.
+started on demand) owns the connection; hooks talk to it over a Unix socket in
+~/.tasky/. That lets a permission question wait for the knob while other
+sessions keep reporting. The daemon quits after 2 hours without news.
 
-Never fails loudly: if Tasky isn't plugged in, hooks exit 0 at once and Claude
+USB or Wi-Fi: the first time Tasky (3.1+) is plugged in, the daemon saves its
+pairing token in ~/.tasky/link.json. From then on, when Tasky isn't on USB,
+it reaches it over Wi-Fi on the same network (TCP 7778, found again by a UDP
+broadcast if its address changed), so Tasky can run on battery.
+
+Never fails loudly: if Tasky isn't reachable, hooks exit 0 at once and Claude
 Code carries on (permission prompts then show in the terminal as usual).
 
 Needs only Python 3 on macOS / Linux. Port: auto-detected (Espressif USB,
@@ -51,6 +56,9 @@ STATES = ("working", "waiting", "done", "end")
 HOOK_STATES = STATES + ("start",)  # start = a new Claude Code session
 HOME = os.path.join(os.path.expanduser("~"), ".tasky")
 SOCK = os.environ.get("TASKY_SOCK", os.path.join(HOME, "agent.sock"))
+LINK = os.path.join(HOME, "link.json")  # Wi-Fi pairing, saved over USB
+FIND_ADDR = os.environ.get("TASKY_FIND_ADDR", "255.255.255.255")  # where to look for Tasky
+WIFI_RETRY_S = 10
 IDLE_EXIT_S = 2 * 3600
 ASK_TIMEOUT_S = int(os.environ.get("TASKY_ASK_TIMEOUT", "60"))
 EDIT_TOOLS = ("Edit", "Write", "MultiEdit", "NotebookEdit")
@@ -163,6 +171,155 @@ def open_tasky():
     return None, None
 
 
+# ---------------------------------------------------------------------- Wi-Fi
+class NetPort:
+    """Tasky over Wi-Fi: the same lines as the serial port, on TCP."""
+
+    def __init__(self, sock):
+        self.sock = sock
+        self.sock.settimeout(2)  # reads only after select() says data is there
+        self.buf = b""
+        self.path = "wifi"
+        self.last_rx = time.time()
+        self.pinged = False
+        self.on_quiet = lambda: self.write_line("TASKY?")  # the daemon routes it through its lock
+
+    def write_line(self, line):
+        try:
+            self.sock.sendall((line + "\n").encode("utf-8"))
+        except socket.timeout:
+            raise OSError("write timeout")
+
+    def read_lines(self, timeout):
+        ready, _, _ = select.select([self.sock], [], [], timeout)
+        if ready:
+            chunk = self.sock.recv(4096)  # socket.timeout is an OSError too
+            if not chunk:
+                raise OSError("Tasky closed the connection")
+            if chunk:
+                self.buf += chunk
+                self.last_rx, self.pinged = time.time(), False
+        # A Tasky that lost power or Wi-Fi never closes the socket: ask it
+        # something now and then, and give up when it stays quiet. Generous:
+        # Tasky's loop pauses up to ~40 s while it downloads a calendar.
+        quiet = time.time() - self.last_rx
+        if quiet > 30 and not self.pinged:
+            self.pinged = True
+            self.on_quiet()
+        elif quiet > 90:
+            raise OSError("Tasky stopped answering")
+        lines = []
+        while b"\n" in self.buf:
+            raw, self.buf = self.buf.split(b"\n", 1)
+            lines.append(raw.decode("utf-8", "replace").strip())
+        return lines
+
+    def close(self):
+        try:
+            self.sock.close()
+        except OSError:
+            pass
+
+
+def save_link(status):
+    """Remember how to reach this Tasky over Wi-Fi (its TASKY? reply on USB)."""
+    link = status.get("link")
+    if not isinstance(link, dict) or not link.get("token"):
+        return
+    data = {"id": link.get("id"), "port": link.get("port", 7778), "token": link["token"],
+            "ip": (status.get("wifi") or {}).get("ip")}
+    if load_link() == data:
+        return
+    os.makedirs(HOME, exist_ok=True)
+    tmp = LINK + ".tmp"
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)  # the token is a secret
+    os.fchmod(fd, 0o600)  # also when a leftover .tmp had looser permissions
+    with os.fdopen(fd, "w") as f:
+        json.dump(data, f)
+    os.replace(tmp, LINK)
+
+
+def load_link():
+    try:
+        with open(LINK) as f:
+            link = json.load(f)
+        return link if isinstance(link, dict) and link.get("token") else None
+    except (OSError, ValueError):
+        return None
+
+
+def find_tasky(link, timeout=1.5):
+    """Ask the network where this Tasky is now: its IP, or None."""
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        s.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+        s.settimeout(timeout)
+        s.sendto(f"TASKY FIND {link.get('id')}\n".encode(), (FIND_ADDR, int(link["port"])))
+        end = time.time() + timeout
+        while time.time() < end:
+            data, addr = s.recvfrom(512)
+            text = data.decode("utf-8", "replace").strip()
+            if not text.startswith("@tasky "):
+                continue
+            msg = json.loads(text[7:])
+            if isinstance(msg, dict) and msg.get("id") == link.get("id"):
+                return addr[0]
+    except (OSError, ValueError, TypeError, KeyError):
+        pass
+    finally:
+        s.close()
+    return None
+
+
+def open_wifi():
+    """Tasky over Wi-Fi with the saved pairing: (port, status) or (None, None)."""
+    link = load_link()
+    if not link:
+        return None, None
+    try:
+        port_no = int(link["port"])
+    except (TypeError, ValueError, KeyError):
+        return None, None
+    hosts = [link["ip"]] if link.get("ip") else []
+    for attempt in range(2):
+        for host in hosts:
+            try:
+                sock = socket.create_connection((host, port_no), timeout=1.5)
+            except OSError:
+                continue
+            port = NetPort(sock)
+            try:
+                port.write_line("TASKY AUTH " + link["token"])
+                port.write_line("TASKY?")
+                end = time.time() + 2
+                authed = False
+                while time.time() < end:
+                    for line in port.read_lines(0.2):
+                        if not line.startswith("@tasky "):
+                            continue
+                        msg = json.loads(line[7:])
+                        if not isinstance(msg, dict):
+                            continue
+                        if msg.get("ok") is True:
+                            authed = True
+                        elif msg.get("ok") is False:
+                            raise OSError(msg.get("error", "refused"))
+                        elif authed and "v" in msg:
+                            if host != link.get("ip"):
+                                link["ip"] = host
+                                save_link({"link": link, "wifi": {"ip": host}})
+                            return port, msg
+            except (OSError, ValueError):
+                pass
+            port.close()
+        if attempt == 0:  # the saved address didn't answer: look for it
+            found = find_tasky(link)
+            if not found or found in hosts:
+                break
+            hosts = [found]
+    return None, None
+
+
 def version_tuple(v):
     try:
         return tuple(int(x) for x in str(v).split(".")[:3])
@@ -182,11 +339,12 @@ class Daemon:
         self.asking = {}  # question key -> request id on Tasky now
         self.last_activity = time.time()
         self.scanned = threading.Event()  # first port search finished
+        self.wifi_tried = 0.0
 
     def connected(self):
         # A hook that started the daemon must not lose its message while the
-        # first search for Tasky is still running.
-        self.scanned.wait(3)
+        # first search for Tasky (USB, then Wi-Fi) is still running.
+        self.scanned.wait(5)
         return self.port is not None
 
     def agents_edition(self):
@@ -215,6 +373,16 @@ class Daemon:
         while True:
             if not self.port:
                 port, status = open_tasky()
+                try:
+                    if port:
+                        save_link(status)  # pair for Wi-Fi while it's on USB
+                    elif time.time() - self.wifi_tried > WIFI_RETRY_S:
+                        self.wifi_tried = time.time()
+                        port, status = open_wifi()
+                        if port:
+                            port.on_quiet = lambda: self.write("TASKY?")
+                except Exception as e:  # never let the reader thread die
+                    print(f"tasky: connection search failed: {e!r}", file=sys.stderr)
                 with self.lock:
                     self.port, self.status, self.broken = port, status or {}, False
                 self.scanned.set()
@@ -260,7 +428,8 @@ class Daemon:
                 reply = {"choice": self.ask(conn, req) if self.can_ask() else None}
             elif req.get("op") == "ping":
                 reply = {"ok": True, "connected": self.agents_edition(), "asks": self.can_ask(),
-                         "version": self.status.get("v"), "edition": self.status.get("edition")}
+                         "version": self.status.get("v"), "edition": self.status.get("edition"),
+                         "via": "wifi" if isinstance(self.port, NetPort) else "usb" if self.port else None}
             else:
                 reply = {"ok": False}
             conn.sendall((json.dumps(reply) + "\n").encode())
@@ -371,7 +540,7 @@ def agent_line(payload):
 
 
 def send(payload):
-    reply = request({"op": "send", "line": agent_line(payload)})
+    reply = request({"op": "send", "line": agent_line(payload)}, timeout=7)
     return bool(reply and reply.get("ok"))
 
 
@@ -559,16 +728,25 @@ def doctor(settings_path):
 
     ping = request({"op": "ping"}, timeout=8) or {}
     if ping.get("edition"):
-        check(bool(ping.get("connected")), f"Tasky found: {ping.get('edition')} {ping.get('version')}",
+        via = " over Wi-Fi" if ping.get("via") == "wifi" else ""
+        check(bool(ping.get("connected")), f"Tasky found{via}: {ping.get('edition')} {ping.get('version')}",
               "Update Tasky at https://tasky-flash.vercel.app (keeps your settings)")
         if ping.get("connected"):
             check(bool(ping.get("asks")), "Firmware answers permission prompts (2.12+)",
                   "Update Tasky at https://tasky-flash.vercel.app")
+            if load_link():
+                print("  ✓ Paired for Wi-Fi: works unplugged on the same network")
+            else:
+                print("  · Wi-Fi: plug Tasky (3.1+) in once to pair it, then it works unplugged")
     else:
         ports = candidate_ports()
         busy = {p: port_holders(p) for p in ports}
         held = [f"{p} (in use by {', '.join(h)})" for p, h in busy.items() if h]
-        if not ports:
+        link = load_link()
+        if not ports and link:
+            check(False, "Tasky not found on USB or Wi-Fi",
+                  "Check that Tasky is on and on the same Wi-Fi network as this computer, or plug it in")
+        elif not ports:
             check(False, "No Tasky on USB", "Plug Tasky in with a data USB-C cable (charge-only cables don't work)")
         elif held:
             check(False, "Tasky's USB port is busy: " + "; ".join(held),
@@ -642,7 +820,7 @@ def main():
     elif args.cmd == "status":
         reply = request({"op": "ping"}, timeout=6)
         if reply and reply.get("connected"):
-            print(f"Tasky for Agents {reply.get('version')} connected"
+            print(f"Tasky {reply.get('version')} connected" + (" over Wi-Fi" if reply.get("via") == "wifi" else "")
                   + ("" if reply.get("asks") else " (update to 2.12 to answer permission prompts)"))
         elif reply and reply.get("edition"):
             print("This Tasky's firmware has no agent cards: update it at tasky-flash.vercel.app")
@@ -652,7 +830,7 @@ def main():
             sys.exit(1)
     else:
         ok = send({"id": args.id, "label": args.label, "state": args.state, "msg": args.msg})
-        print("sent" if ok else "No Tasky found (plug it in, close the web setup page, or set TASKY_PORT)")
+        print("sent" if ok else "No Tasky found (plug it in or check its Wi-Fi, close the web setup page, or set TASKY_PORT)")
         sys.exit(0 if ok else 1)
 
 

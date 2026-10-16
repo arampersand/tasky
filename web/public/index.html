@@ -27,6 +27,7 @@
     <a href="#flash">Flash</a>
     <a href="#setup">Set up</a>
     <a href="#tasky">What it does</a>
+    <a href="/claude">Claude Code</a>
     <a href="#build">Build your own</a>
     <a class="gh" href="https://github.com/arampersand/tasky" rel="noopener">GitHub</a>
   </nav>
@@ -171,8 +172,8 @@
             <label><input type="radio" name="wz-calprov" value="outlook"><span>Outlook</span></label>
           </div>
           <ol class="wz-guide" data-prov="google" hidden>
-            <li>Open <a href="https://calendar.google.com/" target="_blank" rel="noopener">calendar.google.com</a> on a computer.</li>
-            <li>In the list on the left, click <strong>⋮</strong> next to your calendar → <strong>Settings and sharing</strong>.</li>
+            <li>Open <a href="https://calendar.google.com/calendar/r/settings" target="_blank" rel="noopener">Google Calendar settings</a> on a computer.</li>
+            <li>On the left, under <em>Settings for my calendars</em>, click your calendar.</li>
             <li>Scroll to <em>Integrate calendar</em> and copy <strong>Secret address in iCal format</strong>.</li>
           </ol>
           <ol class="wz-guide" data-prov="icloud" hidden>
@@ -278,12 +279,12 @@
         <!-- Agents (Tasky 3.0+ and the 2.x Agents builds) -->
         <div class="wz-step" data-step="agents" hidden>
           <h3 class="wz-title-icon"><svg viewBox="0 0 24 24" width="28" height="28" aria-hidden="true"><path fill="#D97757" fill-rule="evenodd" clip-rule="evenodd" d="M20.998 10.949H24v3.102h-3v3.028h-1.487V20H18v-2.921h-1.487V20H15v-2.921H9V20H7.488v-2.921H6V20H4.487v-2.921H3V14.05H0V10.95h3V5h17.998v5.949zM6 10.949h1.488V8.102H6v2.847zm10.51 0H18V8.102h-1.49v2.847z"/></svg>Connect Claude Code</h3>
-          <p>Install the Tasky plugin. In Claude Code, run these two commands:</p>
-          <div class="wz-cmd"><code>/plugin marketplace add arampersand/tasky</code><button class="btn ghost" data-copy type="button">Copy</button></div>
-          <div class="wz-cmd"><code>/plugin install tasky@tasky</code><button class="btn ghost" data-copy type="button">Copy</button></div>
-          <p>Then restart Claude Code: Tasky shows a <strong>Ready</strong> card.</p>
+          <p>Paste this in Terminal to install the Tasky plugin:</p>
+          <div class="wz-cmd"><code>claude plugin marketplace add arampersand/tasky &amp;&amp; claude plugin install tasky@tasky</code><button class="btn ghost" data-copy type="button">Copy</button></div>
+          <p>Then start (or restart) Claude Code: Tasky shows a <strong>Ready</strong> card. Step by step: <a href="/claude" target="_blank" rel="noopener">tasky-flash.vercel.app/claude</a></p>
           <p class="small">Tasky shows each session, breathes its light when one needs you, and lets you allow or deny permission prompts with the knob. Needs Python 3 (macOS or Linux). Something not working? Run <code>/tasky:status</code> in Claude Code. <a href="https://github.com/arampersand/tasky/blob/main/companion/README.md" target="_blank" rel="noopener">What it does</a></p>
-          <details class="wz-help"><summary>Other ways (terminal)</summary>
+          <details class="wz-help"><summary>Other ways</summary>
+            <p>From inside Claude Code: <code>/plugin marketplace add arampersand/tasky</code>, then <code>/plugin install tasky@tasky</code>.</p>
             <p>Without the plugin, run this in a terminal. It adds Tasky's hooks to <code>~/.claude/settings.json</code> (backed up first):</p>
             <div class="wz-cmd"><code>curl -fsSL https://tasky-flash.vercel.app/agents/install.sh | sh</code><button class="btn ghost" data-copy type="button">Copy</button></div>
             <p>Use the plugin or this, not both. To remove this one: <code>curl -fsSL https://tasky-flash.vercel.app/agents/install.sh | sh -s -- --uninstall</code></p>
@@ -345,7 +346,7 @@
             <li>Bluetooth controls for Mac and Windows: volume, brightness, media</li>
             <li>One-press shortcuts: search, screenshot, lock</li>
           </ul>
-          <a class="small-link" href="https://github.com/arampersand/tasky/blob/main/companion/README.md">How the Claude Code plugin works →</a>
+          <a class="small-link" href="/claude">Connect Claude Code in one step →</a>
         </div>
       </article>
     </div>

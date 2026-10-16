@@ -1,5 +1,6 @@
 #include "usb_setup.h"
 #include "config_features.h"
+#include "net_link.h"
 #include "network_manager.h"
 #include "screens.h"
 #include "version.h"
@@ -12,9 +13,9 @@ static const unsigned MAX_PHRASE_LEN = 60;  // up to 4 lines on the Phrases scre
 static const size_t MAX_LINE = 2048;
 
 static void reply(const JsonDocument &doc) {
-  Serial.print("@tasky ");
-  serializeJson(doc, Serial);
-  Serial.println();
+  taskyOut->print("@tasky ");
+  serializeJson(doc, *taskyOut);
+  taskyOut->println();
 }
 
 static void replyError(const char *msg) {
@@ -63,6 +64,12 @@ void UsbSetup::sendStatus() {
   wifi["status"] = net->getStatusString();
   if (net->isConnected())
     wifi["ip"] = net->getIP();
+  if (taskyOut == &Serial) {  // pairing for the Wi-Fi companion: USB only
+    JsonObject link = doc["link"].to<JsonObject>();
+    link["id"] = NetLink::deviceId();
+    link["port"] = NetLink::PORT;
+    link["token"] = model->cfg.linkToken;
+  }
   JsonObject cfg = doc["cfg"].to<JsonObject>();
   cfg["cal"] = model->cfg.calendarUrl.length() > 0;
   cfg["ghu"] = model->cfg.githubUser;

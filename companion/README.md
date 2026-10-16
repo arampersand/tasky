@@ -7,7 +7,7 @@ For **Tasky 3.0** or newer (or the 2.12+ **Tasky for Agents** firmware). Your co
 - The **light bar breathes** while an agent waits for you, plus a short beep (muted during focus sessions).
 - **Home** says "1 agent needs you" instead of the phrase.
 
-Tasky talks over the same USB cable, so it has to be plugged into the computer running the agents.
+Tasky talks over the USB cable or, once paired, **over Wi-Fi**: plug it into the computer once and from then on it also works unplugged, on battery, anywhere on the same network (Tasky 3.1+).
 
 ## Set up (macOS / Linux)
 
@@ -55,6 +55,8 @@ Sessions are named after the project folder. Tasky keeps up to 4 and forgets one
 - Anyone who can press the knob can approve. Keep that in mind on a shared desk.
 
 ## How it works
+
+**Wi-Fi.** When Tasky 3.1+ is on USB, the daemon saves its pairing (device id and a random token) in `~/.tasky/link.json`, readable only by you. When Tasky isn't on USB, the daemon connects to it over TCP port 7778 and sends the token first; if Tasky's address changed, a UDP broadcast on the same port finds it again. Over Wi-Fi Tasky only accepts agent cards and questions, never settings. The token travels unencrypted on your local network, like most smart-home devices: anyone on that network who captures it could send cards to your Tasky, but approving still takes the knob. Unplug and replug to re-pair after a factory reset.
 
 `tasky_agent.py daemon` (started on demand, quits after 2 hours without news) is the only program that opens Tasky's USB port. Hooks talk to it over a Unix socket in `~/.tasky/` that only you can open. That way a question can wait for the knob while other sessions keep reporting. It never toggles the port's DTR/RTS lines, so it never resets Tasky.
 

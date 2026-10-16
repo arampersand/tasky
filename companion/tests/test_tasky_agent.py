@@ -8,6 +8,7 @@ import pty
 import select
 import shutil
 import signal
+import socket
 import subprocess
 import sys
 import tempfile
@@ -23,7 +24,8 @@ SCRIPT = os.path.abspath(os.path.join(HERE, "..", "..", "claude-plugin", "tasky_
 class FakeTasky:
     """Answers like the firmware: TASKY? status, TASKY AGENT ok, TASKY ASK -> answer."""
 
-    def __init__(self, choice=0, answer_after=0.3, version="2.12.0", edition="agents", agents=None):
+    def __init__(self, choice=0, answer_after=0.3, version="2.12.0", edition="agents", agents=None,
+                 link=None):
         self.master, slave = pty.openpty()
         tty.setraw(slave)
         self.path = os.ttyname(slave)
@@ -31,6 +33,7 @@ class FakeTasky:
         self.choice = choice  # None = never answer
         self.answer_after = answer_after
         self.version, self.edition, self.agents = version, edition, agents
+        self.link = link  # 3.1+: Wi-Fi pairing in the TASKY? reply
         self.lines = []
         self.stop = False
         threading.Thread(target=self.loop, daemon=True).start()
@@ -57,6 +60,9 @@ class FakeTasky:
                     status = {"v": self.version, "edition": self.edition}
                     if self.agents is not None:
                         status["agents"] = self.agents
+                    if self.link:
+                        status["link"] = self.link
+                        status["wifi"] = {"ip": "127.0.0.1"}
                     self.reply(status)
                 elif line.startswith("TASKY AGENT ") and (self.edition == "agents" or self.agents):
                     self.reply({"ok": True})
@@ -72,6 +78,71 @@ class FakeTasky:
         self.stop = True
         os.close(self.master)
         os.close(self.slave)
+
+
+class FakeWifiTasky:
+    """Tasky 3.1 on Wi-Fi: TCP with "TASKY AUTH <token>" first, UDP discovery."""
+
+    TOKEN = "abcdefghjkmnpqrstuvw"
+
+    def __init__(self, choice=0):
+        self.server = socket.socket()
+        self.server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        self.server.bind(("127.0.0.1", 0))
+        self.port = self.server.getsockname()[1]
+        self.server.listen(2)
+        self.udp = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        self.udp.bind(("127.0.0.1", self.port))
+        self.choice = choice
+        self.lines = []
+        self.stop = False
+        threading.Thread(target=self.accept_loop, daemon=True).start()
+        threading.Thread(target=self.udp_loop, daemon=True).start()
+
+    def udp_loop(self):
+        while not self.stop:
+            try:
+                data, addr = self.udp.recvfrom(512)
+            except OSError:
+                return
+            if data.decode().strip() == "TASKY FIND 3f7757":
+                self.udp.sendto(b'@tasky {"id":"3f7757","port":%d}\n' % self.port, addr)
+
+    def accept_loop(self):
+        while not self.stop:
+            try:
+                conn, _ = self.server.accept()
+            except OSError:
+                return
+            threading.Thread(target=self.client, args=(conn,), daemon=True).start()
+
+    def client(self, conn):
+        f = conn.makefile("rwb")
+        authed = False
+        send = lambda obj: (f.write(("@tasky " + json.dumps(obj) + "\n").encode()), f.flush())
+        for raw in f:
+            line = raw.decode().strip()
+            self.lines.append(line)
+            if not authed:
+                if line != "TASKY AUTH " + self.TOKEN:
+                    send({"ok": False, "error": "pair over USB first"})
+                    conn.close()
+                    return
+                authed = True
+                send({"ok": True})
+            elif line == "TASKY?":
+                send({"v": "3.1.0", "edition": "tasky", "agents": True})
+            elif line.startswith("TASKY AGENT "):
+                send({"ok": True})
+            elif line.startswith("TASKY ASK "):
+                send({"ok": True})
+                ask = json.loads(line[10:])
+                threading.Timer(0.3, send, [{"answer": {"id": ask["id"], "choice": self.choice}}]).start()
+
+    def close(self):
+        self.stop = True
+        self.server.close()
+        self.udp.close()
 
 
 class AgentTest(unittest.TestCase):
@@ -92,6 +163,49 @@ class AgentTest(unittest.TestCase):
         if self.tasky:
             self.tasky.close()
         shutil.rmtree(self.home, ignore_errors=True)
+
+    def pair(self, ip="127.0.0.1", token=FakeWifiTasky.TOKEN):
+        """link.json as the daemon saves it over USB; Tasky itself not on USB."""
+        self.wifi = FakeWifiTasky()
+        self.addCleanup(self.wifi.close)
+        os.makedirs(os.path.join(self.home, ".tasky"), exist_ok=True)
+        with open(os.path.join(self.home, ".tasky", "link.json"), "w") as f:
+            json.dump({"id": "3f7757", "port": self.wifi.port, "token": token, "ip": ip}, f)
+        self.env["TASKY_PORT"] = "/dev/does-not-exist"
+        self.env["TASKY_FIND_ADDR"] = "127.0.0.1"
+
+    def test_usb_pairs_for_wifi(self):
+        link = {"id": "3f7757", "port": 7778, "token": "abcdefghjkmnpqrstuvw"}
+        self.plug(version="3.1.0", edition="tasky", agents=True, link=link)
+        self.assertEqual(self.run_agent("hook", "working", stdin={"session_id": "a"}).returncode, 0)
+        path = os.path.join(self.home, ".tasky", "link.json")
+        with open(path) as f:
+            self.assertEqual(json.load(f), dict(link, ip="127.0.0.1"))
+        self.assertEqual(os.stat(path).st_mode & 0o777, 0o600)  # the token is a secret
+
+    def test_wifi_cards_and_questions(self):
+        self.pair()
+        r = self.run_agent("hook", "working", stdin={"session_id": "w1", "cwd": "/x/app"})
+        self.assertEqual(r.returncode, 0)
+        self.assertEqual(self.wifi.lines[0], "TASKY AUTH " + FakeWifiTasky.TOKEN)
+        self.assertTrue(any(l.startswith("TASKY AGENT ") and '"w1"' in l for l in self.wifi.lines))
+        out = json.loads(self.run_agent("ask", stdin=self.ask_event()).stdout)
+        self.assertEqual(out["hookSpecificOutput"]["decision"]["behavior"], "allow")
+        self.assertIn("over Wi-Fi", self.run_agent("status").stdout)
+
+    def test_wifi_finds_a_new_address(self):
+        self.pair(ip="192.0.2.1")  # an old DHCP lease: nobody answers there
+        r = self.run_agent("hook", "working", stdin={"session_id": "w2"})
+        self.assertEqual(r.returncode, 0)
+        self.assertTrue(any('"w2"' in l for l in self.wifi.lines))
+        with open(os.path.join(self.home, ".tasky", "link.json")) as f:
+            self.assertEqual(json.load(f)["ip"], "127.0.0.1")
+
+    def test_wifi_wrong_token_gets_nothing(self):
+        self.pair(token="not-the-token-at-all")
+        r = self.run_agent("ask", stdin=self.ask_event())
+        self.assertEqual((r.returncode, r.stdout), (0, ""))
+        self.assertFalse(any(l.startswith("TASKY AGENT") for l in self.wifi.lines))
 
     def plug(self, **kw):
         self.tasky = FakeTasky(**kw)

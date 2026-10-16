@@ -53,7 +53,8 @@ String ApiClient::get(String url, String token) {
   return payload;
 }
 
-bool ApiClient::getStreaming(const String& url, LineCallback callback, void* userData, const String& token) {
+bool ApiClient::getStreaming(const String& url, LineCallback callback, void* userData, const String& token,
+                             int maxBytes) {
   if (WiFi.status() != WL_CONNECTED) {
     return false;
   }
@@ -90,12 +91,13 @@ bool ApiClient::getStreaming(const String& url, LineCallback callback, void* use
   }
 
   // SAFETY LIMITS - prevent infinite loops
-  const int MAX_BYTES = 100000;       // Max 100KB
-  const uint32_t MAX_TIME_MS = 20000; // Max 20 seconds total
+  const int MAX_BYTES = maxBytes;     // 100 KB unless the caller needs more
+  const uint32_t MAX_TIME_MS = 30000; // Max 30 seconds total
   const uint32_t IDLE_TIMEOUT_MS = 3000; // Max 3 seconds without data
 
-  // Line buffer - 256 bytes max per line (iCal lines are typically short)
-  const int LINE_BUF_SIZE = 256;
+  // Line buffer - 384 bytes max per line (iCal lines are short; a GitHub
+  // contribution cell is ~300)
+  const int LINE_BUF_SIZE = 384;
   char lineBuf[LINE_BUF_SIZE];
   int linePos = 0;
   bool success = true;

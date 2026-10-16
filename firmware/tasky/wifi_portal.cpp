@@ -355,10 +355,10 @@ String WiFiPortal::htmlPage() {
     s += "</li></ol></details>";
   };
   guide("Google",
-        T("Open <a href='https://calendar.google.com/' target='_blank'>calendar.google.com</a> on a computer.",
-          "Abre <a href='https://calendar.google.com/' target='_blank'>calendar.google.com</a> en una computadora."),
-        T("In the list on the left, click <b>⋮</b> next to your calendar → <b>Settings and sharing</b>.",
-          "En la lista de la izquierda, haz clic en <b>⋮</b> junto a tu calendario → <b>Configuración y uso compartido</b>."),
+        T("Open <a href='https://calendar.google.com/calendar/r/settings' target='_blank'>Google Calendar settings</a> on a computer.",
+          "Abre la <a href='https://calendar.google.com/calendar/r/settings' target='_blank'>configuración de Google Calendar</a> en una computadora."),
+        T("On the left, under <i>Settings for my calendars</i>, click your calendar.",
+          "A la izquierda, en <i>Configuración de mis calendarios</i>, haz clic en tu calendario."),
         T("Scroll to <i>Integrate calendar</i> and copy <b>Secret address in iCal format</b>.",
           "Baja a <i>Integrar el calendario</i> y copia la <b>Dirección secreta en formato iCal</b>."));
   guide("iCloud",

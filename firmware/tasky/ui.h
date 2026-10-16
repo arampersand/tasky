@@ -155,6 +155,8 @@ public:
   void drawAgenda();          // Today's calendar events + Notion tasks
   void drawAmbient(bool weatherOk, float temp, const char *desc, bool celsius);
   void drawAmbientClock();    // Only the clock digits (called each minute)
+  static const int HOME_CLOCK_Y = 118;  // clock baseline on Home (rest: 66)
+  int clockY = 66;
   void drawAmbientPhrase();   // Only the rotating phrase line
   void drawDayBar();          // Home: today's streak square + focus-goal bar
   void drawRest();            // Ambient: clock, date and a quote with author

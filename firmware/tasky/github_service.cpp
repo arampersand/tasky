@@ -18,98 +18,78 @@ void GithubService::loop() {
   }
 }
 
+// The contribution graph on your profile page (the same one github.com
+// shows, private contributions included when your profile shows them). One
+// line per day: <td ... data-date="2026-10-16" ... data-level="0-4" ...>
+// The public events API only had public activity, so most days were missing.
+struct GhParse {
+  time_t today;  // noon today
+  uint8_t level[STREAK_N];
+  int days;      // cells parsed
+};
+
+static bool parseContribLine(const char *line, void *user) {
+  GhParse *p = (GhParse *)user;
+  const char *d = strstr(line, "data-date=\"");
+  const char *l = d ? strstr(d, "data-level=\"") : nullptr;
+  if (!l)
+    return true;
+  d += 11;
+  struct tm t = {0};
+  t.tm_year = atoi(d) - 1900;
+  t.tm_mon = atoi(d + 5) - 1;
+  t.tm_mday = atoi(d + 8);
+  t.tm_hour = 12;  // noon: no DST edge cases
+  // + half a day: a DST hour can't round a day away
+  int daysAgo = (int)((p->today - mktime(&t) + 43200) / 86400);
+  int level = l[12] - '0';
+  if (level < 0 || level > 4)
+    return true;
+  level = level > 3 ? 3 : level;  // GitHub has 4 shades, Tasky 3
+  // The page counts days in UTC: west of it, tonight's work is "tomorrow"
+  if (daysAgo == -1)
+    p->level[0] = max(p->level[0], (uint8_t)level);
+  else if (daysAgo >= 0 && daysAgo < STREAK_N)
+    p->level[daysAgo] = max(p->level[daysAgo], (uint8_t)level);
+  p->days++;
+  return true;
+}
+
 void GithubService::forceUpdate() {
   if (model->cfg.githubUser.length() == 0)
     return;
+  time_t nowTime = time(nullptr);
+  if (nowTime < 1577836800)
+    return;  // NTP not synced
 
   Serial.println("[GH] Updating...");
-
-  // Fetch 100 events for better 30-day coverage
-  String url = "https://api.github.com/users/" + model->cfg.githubUser +
-               "/events?per_page=100";
-
-  String payload = api.get(url, model->cfg.githubToken);
-
-  if (payload.length() > 0) {
-    parseContribs(payload);
-    lastUpdate = millis();  // Only set on success
-  } else {
-    Serial.println("[GH] Failed - will retry in 30s");
-    lastUpdate = millis() - (30UL * 60 * 1000) + 30000;  // Retry in 30s
-  }
-}
-
-void GithubService::parseContribs(String data) {
-  // Parse ALL event dates and map to last 30 days for streak grid
-  time_t nowTime = time(nullptr);
-  if (nowTime < 1577836800) return;  // NTP not synced
-
+  GhParse p = {};
   struct tm now;
   localtime_r(&nowTime, &now);
+  now.tm_hour = 12;
+  now.tm_min = now.tm_sec = 0;
+  p.today = mktime(&now);
 
-  // Events per day for the whole grid (the API returns up to ~90 days)
-  // dailyCounts[0] = today, [1] = yesterday, etc.
-  int dailyCounts[STREAK_N] = {0};
-
-  int searchStart = 0;
-  int totalEvents = 0;
-  int oldestDaysAgo = 0;
-
-  while (true) {
-    int idx = data.indexOf("\"created_at\":\"", searchStart);
-    if (idx < 0) break;
-
-    // Parse YYYY-MM-DD from created_at
-    String dateStr = data.substring(idx + 14, idx + 24);
-    int eYear = dateStr.substring(0, 4).toInt();
-    int eMonth = dateStr.substring(5, 7).toInt();
-    int eDay = dateStr.substring(8, 10).toInt();
-
-    // Calculate days ago using mktime
-    struct tm eventTm = {0};
-    eventTm.tm_year = eYear - 1900;
-    eventTm.tm_mon = eMonth - 1;
-    eventTm.tm_mday = eDay;
-    eventTm.tm_hour = 12;  // Noon to avoid DST edge cases
-    time_t eventTime = mktime(&eventTm);
-
-    // Use midnight of today for comparison
-    struct tm todayTm = now;
-    todayTm.tm_hour = 12;
-    todayTm.tm_min = 0;
-    todayTm.tm_sec = 0;
-    time_t todayTime = mktime(&todayTm);
-
-    int daysAgo = (todayTime - eventTime) / 86400;
-    if (daysAgo >= 0 && daysAgo < STREAK_N) {
-      dailyCounts[daysAgo]++;
-    }
-    if (daysAgo > oldestDaysAgo)
-      oldestDaysAgo = daysAgo;
-
-    totalEvents++;
-    searchStart = idx + 24;
+  // ~230 KB of HTML for a year of cells, read line by line
+  bool ok = api.getStreaming("https://github.com/users/" + model->cfg.githubUser + "/contributions",
+                             parseContribLine, &p, "", 400000);
+  if (!ok || p.days < STREAK_N) {
+    Serial.printf("[GH] Failed (%d days) - will retry in 30s\n", p.days);
+    lastUpdate = millis() - (30UL * 60 * 1000) + 30000;  // Retry in 30s
+    return;
   }
+  lastUpdate = millis();
 
-  // The GitHub grid (currentDayIndex = today, backwards). Your own grid is
-  // Tasky activity only; the Streak screen shows both. A full page (100
-  // events) may stop short of 84 days: older days keep what was saved.
-  int covered = totalEvents >= 100 ? oldestDaysAgo + 1 : STREAK_N;
-  for (int d = 0; d < covered && d < STREAK_N; d++) {
-    int streakIdx = (model->currentDayIndex - d + STREAK_N) % STREAK_N;
-    uint8_t ghIntensity = 0;
-    if (dailyCounts[d] >= 8) ghIntensity = 3;
-    else if (dailyCounts[d] >= 4) ghIntensity = 2;
-    else if (dailyCounts[d] >= 1) ghIntensity = 1;
-    model->ghStreak[streakIdx] = ghIntensity;
-  }
+  // The GitHub grid: currentDayIndex = today, backwards. Your own grid is
+  // Tasky activity only; the Streak screen shows both.
+  for (int d = 0; d < STREAK_N; d++)
+    model->ghStreak[(model->currentDayIndex - d + STREAK_N) % STREAK_N] = p.level[d];
 
-  // Store today's count for updateStreakIntensity()
-  model->cfg.githubContribCount = dailyCounts[0];
+  // updateStreakIntensity() turns today's count back into the same shade
+  static const uint8_t COUNT_FOR_LEVEL[4] = {0, 1, 4, 8};
+  model->cfg.githubContribCount = COUNT_FOR_LEVEL[p.level[0]];
   model->updateStreakIntensity();
   model->save();
-
-  Serial.printf("[GH] Parsed %d events, today: %d contributions\n",
-                totalEvents, dailyCounts[0]);
+  Serial.printf("[GH] %d days parsed, today level %d\n", p.days, p.level[0]);
 }
 #endif

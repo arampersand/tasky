@@ -16,5 +16,4 @@ private:
   ApiClient api;
   uint32_t lastUpdate = 0;
 
-  void parseContribs(String payload);
 };

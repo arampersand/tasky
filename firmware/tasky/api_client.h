@@ -24,7 +24,8 @@ public:
   // Streaming GET - processes response line by line
   // Much more memory efficient for large files (iCal, etc.)
   // Returns true if completed successfully
-  bool getStreaming(const String& url, LineCallback callback, void* userData, const String& token = "");
+  bool getStreaming(const String& url, LineCallback callback, void* userData, const String& token = "",
+                    int maxBytes = 100000);
   int lastStatus = 0;  // HTTP status of the last request (<= 0: no connection)
 
   // POST request with JSON body (for APIs like Notion)

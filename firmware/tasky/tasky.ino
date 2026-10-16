@@ -4,6 +4,7 @@
 #include "network_manager.h"
 #include "ota_service.h"
 #include "usb_setup.h"
+#include "net_link.h"
 #include "encoder.h"
 #include "screens.h"
 #if FEATURE_BLE_HID
@@ -829,6 +830,7 @@ void handleSettings(int step, EncClickType click) {
     }
     if (click == ENC_SHORT) {
       ui.uiTick(true);
+      item = ui.settingsSel - 1;  // the row a turn in this same pass landed on
       if (item < 0) {  // More: every other screen
         goTo(SCR_MORE);
         return;
@@ -1630,9 +1632,9 @@ bool handleUsbCommand(const String &cmd) {
     } else {
       d["error"] = calendar.lastError;
     }
-    Serial.print("@tasky ");
-    serializeJson(d, Serial);
-    Serial.println();
+    taskyOut->print("@tasky ");
+    serializeJson(d, *taskyOut);
+    taskyOut->println();
     ui.baseDrawn = false;  // show the fresh agenda
     return true;
   }
@@ -1728,6 +1730,13 @@ void setup() {
   if (model.cfg.btOn)
     ensureBluetooth();
   usbSetup.onCommand = handleUsbCommand;
+  // Over Wi-Fi only what the computer companion needs: no settings changes
+  netLink.begin(&model, [](const String &cmd) {
+    if (cmd == "TASKY?" || cmd.startsWith("TASKY AGENT ") || cmd.startsWith("TASKY ASK"))
+      usbSetup.handle(cmd);
+    else
+      taskyOut->println("@tasky {\"ok\":false,\"error\":\"USB only\"}");
+  });
   usbSetup.onChanged = []() {
     rebuildMenus();  // the carousel may have changed
     if (usbSetup.lightSet) {  // switch driver and blink so the user sees it work
@@ -1758,6 +1767,7 @@ void loop() {
   portal.loop();
   usbSetup.loop();
   net.loop();
+  netLink.loop(net.isConnected());
 
 #if TFT_BL >= 0
   // Mantener backlight encendido (evita que se apague tras inactividad)

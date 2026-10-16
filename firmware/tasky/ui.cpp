@@ -1369,13 +1369,13 @@ void TaskyUI::drawAmbientClock() {
   if (model->localNow(t))
     snprintf(buf, sizeof(buf), "%02d:%02d", t.tm_hour, t.tm_min);
 
-  tft.fillRect(20, 22, 200, 50, C_BG);
+  tft.fillRect(20, clockY - 44, 200, 50, C_BG);
   tft.setFont(&FreeSansBold24pt7b);
   int16_t x1, y1;
   uint16_t w, h;
   tft.getTextBounds(buf, 0, 0, &x1, &y1, &w, &h);
   tft.setTextColor(C_TEXT);
-  tft.setCursor((W - (int)w) / 2 - x1, 66);
+  tft.setCursor((W - (int)w) / 2 - x1, clockY);
   tft.print(buf);
   tft.setFont();
 }
@@ -1409,10 +1409,10 @@ void TaskyUI::drawAmbientPhrase() {
                    &FreeSans9pt7b);
 }
 
-// Today at a glance under the date: your streak square for today and a bar
+// Today at a glance under the clock: your streak square for today and a bar
 // of focus minutes toward the daily goal (it turns green when you reach it)
 void TaskyUI::drawDayBar() {
-  const int y = 110, x0 = 52, x1 = 200;
+  const int y = 142, x0 = 52, x1 = 200;
   tft.fillRect(20, y - 6, 200, 12, C_BG);
   tft.fillRoundRect(32, y - 5, 10, 10, 2, streakColor(model->streak[model->currentDayIndex]));
   int goal = max(1, (int)model->cfg.dailyGoalMin);
@@ -1427,6 +1427,7 @@ void TaskyUI::drawDayBar() {
 // Calm on purpose; Home has the full glance.
 void TaskyUI::drawRest() {
   clearScreen();
+  clockY = 66;
   drawAmbientClock();
   struct tm t;
   if (model->localNow(t))
@@ -1459,83 +1460,69 @@ void TaskyUI::drawRestQuote() {
                    C_TEAL, &FreeSans9pt7b);
 }
 
+// Home: date top-left, weather top-right, the clock in the middle, today's
+// focus bar, one task (the one you're on, or the next open one) and the
+// phrase / status line at the bottom
 void TaskyUI::drawAmbient(bool weatherOk, float temp, const char *desc,
                           bool celsius) {
   clearScreen();
+  clockY = HOME_CLOCK_Y;
   drawAmbientClock();
 
   struct tm t;
-  bool hasTime = model->localNow(t);
-
-  // "Wed 15 Oct  ·  21°C Cloudy" (the font has no degree glyph: draw a ring)
-  String date = hasTime ? formatDate(t) : String("");
-  if (weatherOk) {
-    String num = String((int)lroundf(temp));
-    String rest = String(celsius ? "C " : "F ") + desc;
-    tft.setFont(&FreeSans9pt7b);
+  int dateW = 0;
+  tft.setFont(&FreeSans9pt7b);
+  if (model->localNow(t)) {
+    String date = formatDate(t);
     int16_t x1, y1;
-    uint16_t wd = 0, wn, wr, h;
-    String datePart = date.length() ? date + "   " : String("");
-    if (datePart.length())
-      tft.getTextBounds(datePart, 0, 0, &x1, &y1, &wd, &h);
-    tft.getTextBounds(num, 0, 0, &x1, &y1, &wn, &h);
-    rest = fitText(rest, max(40, 200 - (int)wd - (int)wn - 7), &FreeSans9pt7b);
-    tft.getTextBounds(rest, 0, 0, &x1, &y1, &wr, &h);
-    int x = (W - (int)(wd + wn + 7 + wr)) / 2;
+    uint16_t w, h;
+    tft.getTextBounds(date, 0, 0, &x1, &y1, &w, &h);
+    dateW = w;
     tft.setTextColor(C_MUTED);
-    tft.setCursor(x, 96);
-    tft.print(datePart);
-    x += wd;
-    tft.setTextColor(C_TEAL);
-    tft.setCursor(x, 96);
-    tft.print(num);
-    tft.drawCircle(x + wn + 3, 85, 2, C_TEAL);
-    tft.setCursor(x + wn + 7, 96);
-    tft.print(rest);
-    tft.setFont();
-  } else if (date.length()) {
-    centerTextFont(date.c_str(), 96, C_MUTED, &FreeSans9pt7b);
+    tft.setCursor(14, 26);
+    tft.print(date);
   }
+  // "21C Cloudy", right-aligned
+  if (weatherOk) {
+    String t = String((int)lroundf(temp)) + (celsius ? "C" : "F");
+    int16_t x1, y1;
+    uint16_t wt, wd = 0, h;
+    tft.getTextBounds(t, 0, 0, &x1, &y1, &wt, &h);
+    int room = 226 - (14 + dateW + 12) - (int)wt - 6;
+    String d = room >= 30 ? fitText(desc, room, &FreeSans9pt7b) : String("");
+    if (d.length())
+      tft.getTextBounds(d, 0, 0, &x1, &y1, &wd, &h);
+    tft.setTextColor(C_TEAL);
+    tft.setCursor(226 - (int)wt - (d.length() ? (int)wd + 6 : 0), 26);
+    tft.print(t);
+    if (d.length()) {
+      tft.setTextColor(C_MUTED);
+      tft.setCursor(226 - wd, 26);
+      tft.print(d);
+    }
+  }
+  tft.setFont();
   drawDayBar();
 
-  // Not set up yet: say where to do it, instead of an empty agenda
+  // Not set up yet: say where to do it
   if (model->cfg.wifiSSID.length() == 0) {
-    centerTextFont("Set me up", 140, C_TEXT, &FreeSansBold12pt7b);
-    centerTextFont("tasky-flash.vercel.app", 166, C_TEAL, &FreeSans9pt7b);
-    centerTextFont("Phone: More > Setup (QR)", 190, C_MUTED, &FreeSans9pt7b);
+    centerTextFont("Set me up", 166, C_TEXT, &FreeSansBold12pt7b);
+    centerTextFont("tasky-flash.vercel.app", 190, C_TEAL, &FreeSans9pt7b);
     drawAmbientPhrase();
     return;
   }
 
-  // What's next on the calendar
-  int y = 134;
-  if (hasTime) {
-    const CalendarEventItem *ev = model->nextEventToday(t.tm_hour * 60 + t.tm_min);
-    if (ev) {
-      String next = String(ev->startTime) + "  " + ev->title;
-      centerTextFont(fitText(next, 200, &FreeSans9pt7b).c_str(), y, C_TEXT,
-                     &FreeSans9pt7b);
-      y += 24;
-    }
-  }
-
-  // Today's open tasks (up to what fits above the phrase)
-  int shown = 0;
-  tft.setFont(&FreeSans9pt7b);
-  for (int i = 0; i < 3 && y <= 188; i++) {
-    if (model->taskDone[i] || model->tasks[i] == "Empty" || model->tasks[i].length() == 0)
-      continue;
-    bool current = (i == model->currentTask);
-    tft.fillCircle(30, y - 5, 3, current ? C_TEAL : C_MUTED);
-    tft.setTextColor(current ? C_TEAL : C_TEXT);
-    tft.setCursor(42, y);
-    tft.print(fitText(model->tasks[i], 176, &FreeSans9pt7b));
-    y += 22;
-    shown++;
-  }
-  tft.setFont();
-  if (y == 134)
-    centerTextFont("Nothing scheduled", 150, C_MUTED, &FreeSans9pt7b);
+  // One task: the one you're focusing on, else the first open one
+  int task = model->hasCurrentTask() && !model->taskDone[model->currentTask]
+                 ? model->currentTask : -1;
+  for (int i = 0; i < 3 && task < 0; i++)
+    if (!model->taskDone[i] && model->tasks[i] != "Empty" && model->tasks[i].length())
+      task = i;
+  if (task >= 0)
+    centerTextFont(fitText(model->tasks[task], 200, &FreeSans9pt7b).c_str(), 178,
+                   task == model->currentTask ? C_TEAL : C_TEXT, &FreeSans9pt7b);
+  else
+    centerTextFont("No open tasks", 178, C_MUTED, &FreeSans9pt7b);
 
   drawAmbientPhrase();
 }
@@ -1606,7 +1593,7 @@ void TaskyUI::drawAgents(const AgentBoard &board, int sel) {
     centerTextFont("No agents yet", 104, C_TEXT, &FreeSans9pt7b);
     centerTextFont("Connect Claude Code:", 136, C_MUTED, &FreeSans9pt7b);
     centerTextFont("tasky-flash.vercel.app", 160, C_TEAL, &FreeSans9pt7b);
-    centerTextFont("Setup > Agents", 184, C_MUTED, &FreeSans9pt7b);
+    centerTextFont("/claude", 184, C_TEAL, &FreeSans9pt7b);
     return;
   }
 

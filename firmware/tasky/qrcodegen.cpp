@@ -30,7 +30,6 @@
 #include <cstddef>
 #include <cstdlib>
 #include <cstring>
-#include <sstream>
 #include <utility>
 
 using std::int8_t;
@@ -248,14 +247,10 @@ QrCode QrCode::encodeSegments(const vector<QrSegment> &segs, Ecc ecl,
       break; // This version number is found to be suitable
     if (version >=
         maxVersion) { // All versions in the range could not fit the given data
-      std::ostringstream sb;
-      if (dataUsedBits == -1)
-        sb << "Segment too long";
-      else {
-        sb << "Data length = " << dataUsedBits << " bits, ";
-        sb << "Max capacity = " << dataCapacityBits << " bits";
-      }
-      throw data_too_long(sb.str());
+      // Tasky: a plain message instead of std::ostringstream, which pulls
+      // in the C++ locale and stream machinery (tens of KB of flash)
+      throw data_too_long(dataUsedBits == -1 ? "Segment too long"
+                                             : "Data too long for the QR code");
     }
   }
   assert(dataUsedBits != -1);

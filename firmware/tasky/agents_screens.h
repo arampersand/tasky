@@ -16,14 +16,14 @@ bool handleAgentCommand(const String &cmd) {
     return false;
   JsonDocument d;
   if (deserializeJson(d, cmd.substring(12))) {
-    Serial.println("@tasky {\"ok\":false,\"error\":\"bad json\"}");
+    taskyOut->println("@tasky {\"ok\":false,\"error\":\"bad json\"}");
     return true;
   }
   const char *id = d["id"] | "";
   bool ok = id[0] && agents.update(id, d["label"] | "", d["state"] | "", d["msg"] | "");
   if (ok)
     markAgentsSeen();
-  Serial.println(ok ? "@tasky {\"ok\":true}"
+  taskyOut->println(ok ? "@tasky {\"ok\":true}"
                     : "@tasky {\"ok\":false,\"error\":\"need id and a valid state\"}");
   return true;
 }
@@ -113,9 +113,9 @@ void answerQuestion(int i, int choice) {
   JsonDocument d;
   d["answer"]["id"] = id;
   d["answer"]["choice"] = choice;
-  Serial.print("@tasky ");
-  serializeJson(d, Serial);
-  Serial.println();
+  String out = "@tasky ";
+  serializeJson(d, out);
+  taskyBroadcast(out);  // the companion may be on USB or Wi-Fi
   if (choice >= 0) {
     snprintf(s.msg, sizeof(s.msg), "You chose: %s", s.question.options[choice]);
     s.state = AGENT_WORKING;
@@ -137,13 +137,13 @@ static bool handleAsk(const String &cmd) {
     return false;
   JsonDocument d;
   if (deserializeJson(d, cmd.substring(cancel ? 17 : 10))) {
-    Serial.println("@tasky {\"ok\":false,\"error\":\"bad json\"}");
+    taskyOut->println("@tasky {\"ok\":false,\"error\":\"bad json\"}");
     return true;
   }
   const char *id = d["id"] | "";
   if (cancel) {
     agents.clearQuestion(id);
-    Serial.println("@tasky {\"ok\":true}");
+    taskyOut->println("@tasky {\"ok\":true}");
     leaveQuestions();
     return true;
   }
@@ -155,10 +155,10 @@ static bool handleAsk(const String &cmd) {
   int i = agents.ask(id, d["session"] | "", d["label"] | "", d["tool"] | "Tool",
                      d["detail"] | "", opts, n, d["timeout"] | 60);
   if (i < 0) {
-    Serial.println("@tasky {\"ok\":false,\"error\":\"need id and options\"}");
+    taskyOut->println("@tasky {\"ok\":false,\"error\":\"need id and options\"}");
     return true;
   }
-  Serial.println("@tasky {\"ok\":true}");
+  taskyOut->println("@tasky {\"ok\":true}");
   markAgentsSeen();
   if (screen == SCR_TOUR)
     return true;
@@ -247,7 +247,8 @@ void handleAgents(int step, EncClickType click) {
 #if FEATURE_BLE_HID
 // Controls: a row of computer keys like the Mac's top row. Turn = pick a key,
 // press = send it. Volume and Brightness are dials: press to grab, turn to
-// adjust, press to let go. Long press = switch Mac / Windows shortcuts.
+// adjust, press to let go. Long press = Mac / Windows / Phone, remembered for
+// each Bluetooth device.
 struct ComputerKey {
   const char *mac, *win;   // names
   uint16_t media;          // consumer usage (both systems), 0 = keyboard shortcut
@@ -267,14 +268,14 @@ static const ComputerKey KEYS[] = {
     {"Brightness", "Brightness", 0, 0, 0, 0, 0, BleHid::BRIGHT_UP, BleHid::BRIGHT_DOWN},
     {"Mission Control", "Task View", 0, CTRL, 0x52, GUI, 0x2B, 0, 0},     // Ctrl+Up / Win+Tab
     {"Spotlight", "Search", 0, GUI, 0x2C, GUI, 0x16, 0, 0},              // Cmd+Space / Win+S
-    {"Dictation", "Dictation", 0, 0, 0, GUI, 0x0B, 0, 0},                // Voice key / Win+H
+    {"Assistant", "Assistant", 0, 0, 0, GUI, 0x06, 0, 0},                // Voice key / Win+C (Copilot)
     {"Desktop left", "Desktop left", 0, CTRL, 0x50, CTRL | GUI, 0x50, 0, 0},
     {"Desktop right", "Desktop right", 0, CTRL, 0x4F, CTRL | GUI, 0x4F, 0, 0},
     {"Screenshot", "Screenshot", 0, GUI | SHIFT, 0x21, GUI | SHIFT, 0x16, 0, 0},  // Cmd+Shift+4 / Win+Shift+S
     {"Lock screen", "Lock screen", 0, CTRL | GUI, 0x14, GUI, 0x0F, 0, 0},  // Ctrl+Cmd+Q / Win+L
 };
 static const int KEYS_N = sizeof(KEYS) / sizeof(KEYS[0]);
-static const int KEY_DICTATION = 8;
+static const int KEY_ASSISTANT = 8;
 
 // Phone mode: what a phone does with a Bluetooth keyboard (iPhone and
 // Android). Dials send consumer keys or arrow keys for each knob direction.
@@ -291,6 +292,8 @@ static const PhoneKey PHONE_KEYS[] = {
     {"Next", BleHid::NEXT, 0, 0, 0, 0, 0},
     {"Previous", BleHid::PREV, 0, 0, 0, 0, 0},
     {"Mute", BleHid::MUTE, 0, 0, 0, 0, 0},
+    {"Home", BleHid::HOME, 0, 0, 0, 0, 0},             // back to the home screen
+    {"Assistant", BleHid::VOICE, 0, 0, 0, 0, 0},       // Siri / Google Assistant
     {"Take photo", BleHid::VOL_UP, 0, 0, 0, 0, 0},     // the camera's shutter key
     {"Scroll", 0, 0, 0, 0, 0x52, 0x51},                 // Up / Down: next reel, list
     {"Next page", 0, 0x4F, 0, 0, 0, 0},                 // Right arrow: books, slides
@@ -317,8 +320,35 @@ static bool isDial(int i) {
   return phoneMode() ? (PHONE_KEYS[i].upMedia || PHONE_KEYS[i].upKey) : KEYS[i].up != 0;
 }
 
+// Which mode this device uses: -1 = not seen yet
+static int knownHostOs(uint64_t addr) {
+  for (int i = 0; i < 4 && addr; i++)
+    if (model.cfg.hostAddr[i] == addr)
+      return model.cfg.hostAddrOs[i] % 3;
+  return -1;
+}
+
+static void rememberHostOs(uint64_t addr) {
+  if (!addr)
+    return;
+  int slot = 3;  // replace the oldest
+  for (int i = 0; i < 4; i++)
+    if (model.cfg.hostAddr[i] == addr) {
+      slot = i;
+      break;
+    }
+  for (int i = slot; i > 0; i--) {  // newest first
+    model.cfg.hostAddr[i] = model.cfg.hostAddr[i - 1];
+    model.cfg.hostAddrOs[i] = model.cfg.hostAddrOs[i - 1];
+  }
+  model.cfg.hostAddr[0] = addr;
+  model.cfg.hostAddrOs[0] = model.cfg.hostOs;
+}
+
 void drawControlsScreen() {
+  bool unknown = BleHid::connected() && knownHostOs(BleHid::peer()) < 0;
   const char *hint = dialGrabbed    ? "Turn: adjust  Press: done"
+                     : unknown      ? "Hold: Mac / Windows / Phone"
                      : isDial(keySel) ? "Press: grab the dial"
                                       : "Press: send";
   ui.drawControls(keyName(keySel - 1), keyName(keySel), keyName(keySel + 1), hint,
@@ -337,7 +367,7 @@ static void sendKey(int i) {
   const ComputerKey &k = KEYS[i];
   if (k.media)
     BleHid::media(k.media);
-  else if (i == KEY_DICTATION && model.cfg.hostOs == 0)
+  else if (i == KEY_ASSISTANT && model.cfg.hostOs == 0)
     BleHid::media(BleHid::VOICE);  // macOS maps the consumer Voice key
   else if (model.cfg.hostOs == 1)
     BleHid::keys(k.winMods, k.winKey);
@@ -360,8 +390,17 @@ static void turnDial(int i, bool up) {
 void handleControls(int step, EncClickType click) {
   ensureBluetooth();
   static bool wasConnected = false;
-  if (BleHid::connected() != wasConnected) {
+  static uint64_t lastPeer = 0;
+  if (BleHid::connected() != wasConnected || BleHid::peer() != lastPeer) {
     wasConnected = BleHid::connected();
+    lastPeer = BleHid::peer();
+    int os = knownHostOs(lastPeer);  // a device you set before: its mode
+    if (os >= 0 && os != model.cfg.hostOs) {
+      model.cfg.hostOs = os;
+      model.save();
+      keySel = 0;
+      dialGrabbed = false;
+    }
     ui.baseDrawn = false;
   }
   if (!ui.baseDrawn)
@@ -369,6 +408,7 @@ void handleControls(int step, EncClickType click) {
   if (click == ENC_LONG) {  // Mac -> Windows -> Phone
     ui.uiTick(true);
     model.cfg.hostOs = (model.cfg.hostOs + 1) % 3;
+    rememberHostOs(BleHid::peer());
     model.save();
     dialGrabbed = false;
     keySel = 0;
