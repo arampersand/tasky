@@ -121,7 +121,7 @@ LlmService::LlmService(TaskyModel *m) : model(m) {
 }
 
 void LlmService::begin() {
-  state = AGENT_IDLE;
+  state = LLM_IDLE;
   // Calculate today's mode on startup
   todayDayIdx = calculateDayIndex();
   todayMode = calculateMode();
@@ -294,13 +294,13 @@ void LlmService::sendDailyPrompt() {
 
   // 1. Check per-mode cache first
   if (loadCachedResponse(currentMode)) {
-    state = AGENT_DONE;
+    state = LLM_DONE;
     return;
   }
 
   // 2. Config check (only real error shown to user)
   if (!isConfigured()) {
-    state = AGENT_ERROR;
+    state = LLM_ERROR;
     strncpy(errorMsg, "Set API key in portal", sizeof(errorMsg) - 1);
     return;
   }
@@ -308,38 +308,38 @@ void LlmService::sendDailyPrompt() {
   // 3. Rate limit → use fallback gracefully
   if (isRateLimited()) {
     loadFallback();
-    state = AGENT_DONE;
+    state = LLM_DONE;
     return;
   }
 
   // 4. No WiFi → use fallback gracefully
   if (WiFi.status() != WL_CONNECTED) {
     loadFallback();
-    state = AGENT_DONE;
+    state = LLM_DONE;
     return;
   }
 
   // 5. Make API call
-  state = AGENT_SENDING;
+  state = LLM_SENDING;
   requestStartMs = millis();
   executeRequest(modePrompts[currentMode]);
 
   // 6. If API failed, use fallback; if success, enforce limit & cache
-  if (state == AGENT_ERROR) {
+  if (state == LLM_ERROR) {
     loadFallback();
-    state = AGENT_DONE;
-  } else if (state == AGENT_DONE) {
+    state = LLM_DONE;
+  } else if (state == LLM_DONE) {
     enforceResponseLimit();
     cacheResponse(currentMode);
   }
 }
 
 void LlmService::cancel() {
-  state = AGENT_IDLE;
+  state = LLM_IDLE;
 }
 
 void LlmService::reset() {
-  state = AGENT_IDLE;
+  state = LLM_IDLE;
   memset(response, 0, sizeof(response));
   responseLen = 0;
 }
@@ -514,7 +514,7 @@ void LlmService::parseAnthropicResponse(const String& json) {
     } else {
       strncpy(errorMsg, "No response", sizeof(errorMsg) - 1);
     }
-    state = AGENT_ERROR;
+    state = LLM_ERROR;
     return;
   }
 
@@ -538,7 +538,7 @@ void LlmService::parseAnthropicResponse(const String& json) {
   strncpy(response, text.c_str(), copyLen);
   response[copyLen] = '\0';
   responseLen = copyLen;
-  state = AGENT_DONE;
+  state = LLM_DONE;
 }
 
 void LlmService::parseOpenAIResponse(const String& json) {
@@ -546,7 +546,7 @@ void LlmService::parseOpenAIResponse(const String& json) {
   if (contentIdx < 0) {
     String errMsg = llmJsonStr(json, "message");
     strncpy(errorMsg, errMsg.length() > 0 ? errMsg.c_str() : "API error", sizeof(errorMsg) - 1);
-    state = AGENT_ERROR;
+    state = LLM_ERROR;
     return;
   }
 
@@ -569,7 +569,7 @@ void LlmService::parseOpenAIResponse(const String& json) {
   strncpy(response, text.c_str(), copyLen);
   response[copyLen] = '\0';
   responseLen = copyLen;
-  state = AGENT_DONE;
+  state = LLM_DONE;
 }
 
 // ============================================================
@@ -577,7 +577,7 @@ void LlmService::parseOpenAIResponse(const String& json) {
 // ============================================================
 
 void LlmService::executeRequest(const char* userMessage) {
-  state = AGENT_THINKING;
+  state = LLM_THINKING;
 
   String url, body, token;
   bool isAnthropic = (model->cfg.llmProvider == LLM_ANTHROPIC);
@@ -603,7 +603,7 @@ void LlmService::executeRequest(const char* userMessage) {
 
     if (!client.connect("api.anthropic.com", 443)) {
       strncpy(errorMsg, "Connection failed", sizeof(errorMsg) - 1);
-      state = AGENT_ERROR;
+      state = LLM_ERROR;
       return;
     }
 
@@ -648,7 +648,7 @@ void LlmService::executeRequest(const char* userMessage) {
 
   if (result.length() == 0) {
     strncpy(errorMsg, "Empty response", sizeof(errorMsg) - 1);
-    state = AGENT_ERROR;
+    state = LLM_ERROR;
     Serial.println("[LLM] Empty response");
     return;
   }
@@ -661,7 +661,7 @@ void LlmService::executeRequest(const char* userMessage) {
     parseOpenAIResponse(result);
   }
 
-  if (state == AGENT_DONE) {
+  if (state == LLM_DONE) {
     incrementRateCount();
     Serial.printf("[LLM] Success. Rate: %d/hour, %d/day\n",
                   model->cfg.llmHourlyCount, model->cfg.llmDailyCount);

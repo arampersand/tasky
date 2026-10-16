@@ -16,6 +16,8 @@ class TaskyNetManager;
 //                                                   llm llmKey city lat lon tasks
 //                                                   light (0 = LED, 1 = RGB bar)
 //                                                   screens ["timer",..] phrases [".."]
+//   TASKY CALTEST     -> @tasky {"ok":true,"events":5,"today":2,"next":"..","nextTime":"10:00"}
+//                        or {"ok":false,"error":".."}  (handled in tasky.ino; needs Wi-Fi)
 //
 // Replies start with "@tasky " so the page can ignore regular debug logs.
 // Secrets are write-only: TASKY? only reports whether they are set.

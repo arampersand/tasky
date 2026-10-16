@@ -5,6 +5,8 @@
 void TaskyModel::begin() {
   load();
   applyTimezone();
+  if (needsSave)  // a one-time migration happened in load()
+    save();
   // Every device gets its own setup-network password, shown on screen and in
   // the QR code, so a password published in the repo can't open any Tasky.
   if (cfg.apPass.length() < 8) {
@@ -68,6 +70,7 @@ void TaskyModel::load() {
   cfg.lastDayNum = pref.getInt("lday", 0);
   cfg.yesterdayPomodoro = pref.getUChar("ypc", 0);
   cfg.dailyFocusMin = pref.getUShort("dfm", 0);
+  cfg.dailyGoalMin = pref.getUShort("goal", 120);
   cfg.githubContribCount = pref.getUChar("ghc", 0);
 
   // Firebase Cloud Sync
@@ -119,15 +122,29 @@ void TaskyModel::load() {
     String k = "s" + String(i);
     streak[i] = pref.getUChar(k.c_str(), 0);
   }
+  memset(ghStreak, 0, sizeof(ghStreak));
+  if (pref.isKey("ghs"))
+    pref.getBytes("ghs", ghStreak, sizeof(ghStreak));
+  // 2.12 and older kept GitHub and Tasky days mixed in one grid. Your grid is
+  // Tasky-only now, so a mixed one starts over (GitHub's refills from the API).
+  streakMigrated = pref.getBool("smig", false);
   currentDayIndex = (int)pref.getUChar("day", 0);
   if (currentDayIndex < 0 || currentDayIndex >= STREAK_N)
     currentDayIndex = 0;
-  streakCursor = currentDayIndex;
 
   clockH = (int)pref.getUChar("ch", 12);
   clockM = (int)pref.getUChar("cm", 0);
   clockS = (int)pref.getUChar("cs", 0);
   pref.end();
+
+  if (!streakMigrated) {
+    if (cfg.streakSource != STREAK_TASKY) {
+      memset(streak, 0, sizeof(streak));
+      cfg.bestStreak = 0;
+    }
+    streakMigrated = true;
+    needsSave = true;
+  }
 
   // limits
   cfg.workMin = clampU8(cfg.workMin, 5, 90);
@@ -222,6 +239,7 @@ void TaskyModel::save() {
   pref.putInt("lday", cfg.lastDayNum);
   pref.putUChar("ypc", cfg.yesterdayPomodoro);
   pref.putUShort("dfm", cfg.dailyFocusMin);
+  pref.putUShort("goal", cfg.dailyGoalMin);
   pref.putUChar("ghc", cfg.githubContribCount);
 
   // Firebase Cloud Sync
@@ -262,6 +280,10 @@ void TaskyModel::save() {
     String k = "s" + String(i);
     pref.putUChar(k.c_str(), streak[i]);
   }
+
+  pref.putBytes("ghs", ghStreak, sizeof(ghStreak));
+
+  pref.putBool("smig", streakMigrated);
   pref.putUChar("day", (uint8_t)currentDayIndex);
 
   pref.putUChar("ch", (uint8_t)clockH);
@@ -350,23 +372,24 @@ void TaskyModel::getClockNow(int &h, int &m, int &s) {
   s = rem % 60;
 }
 
-int TaskyModel::calculateCurrentStreak() {
+int TaskyModel::calculateCurrentStreak(bool github) {
   // Count consecutive days with activity (value > 0), going backwards from current day
   // Supports wrap-around: if we reach index 0, we continue from STREAK_N-1
+  const uint8_t *grid = github ? ghStreak : streak;
   int count = 0;
   int idx = currentDayIndex;
   int checked = 0;
 
   // Check consecutive days with activity (wrap around the array)
-  while (checked < STREAK_N && streak[idx] > 0) {
+  while (checked < STREAK_N && grid[idx] > 0) {
     count++;
     checked++;
     idx--;
     if (idx < 0) idx = STREAK_N - 1;  // Wrap around
   }
 
-  // Update best streak if current is better
-  if (count > (int)cfg.bestStreak) {
+  // Update best streak if current is better (your own streak only)
+  if (!github && count > (int)cfg.bestStreak) {
     cfg.bestStreak = count;
     // Note: save() should be called by caller to persist
   }
@@ -374,11 +397,12 @@ int TaskyModel::calculateCurrentStreak() {
   return count;
 }
 
-int TaskyModel::calculateTotalActiveDays() {
+int TaskyModel::calculateTotalActiveDays(bool github) {
   // Count total days with any activity (green squares)
+  const uint8_t *grid = github ? ghStreak : streak;
   int total = 0;
   for (int i = 0; i < STREAK_N; i++) {
-    if (streak[i] > 0) total++;
+    if (grid[i] > 0) total++;
   }
   return total;
 }
@@ -404,6 +428,7 @@ void TaskyModel::checkDayChange() {
   for (int d = 0; d < days; d++) {
     currentDayIndex = (currentDayIndex + 1) % STREAK_N;
     streak[currentDayIndex] = 0;  // a new (or missed) day starts empty
+    ghStreak[currentDayIndex] = 0;
   }
 
   // Reset daily counters
@@ -512,18 +537,9 @@ void TaskyModel::updateStreakIntensity() {
   else if (cfg.githubContribCount >= 4) githubIntensity = 2;
   else if (cfg.githubContribCount >= 1) githubIntensity = 1;
 
-  // Apply based on source setting
-  switch (cfg.streakSource) {
-    case STREAK_GITHUB:
-      streak[currentDayIndex] = githubIntensity;
-      break;
-    case STREAK_TASKY:
-      streak[currentDayIndex] = taskyIntensity;
-      break;
-    case STREAK_BOTH:
-      streak[currentDayIndex] = max(githubIntensity, taskyIntensity);
-      break;
-  }
+  // Two grids: yours (Tasky activity) and GitHub's
+  streak[currentDayIndex] = taskyIntensity;
+  ghStreak[currentDayIndex] = githubIntensity;
 }
 
 void TaskyModel::clearTodayEvents() {

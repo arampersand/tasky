@@ -64,6 +64,7 @@ enum Screen {
   SCR_AGENTS,     // Agents edition: Claude Code sessions
   SCR_CONTROLS,   // Agents edition: Bluetooth volume / media / shortcuts
   SCR_PHRASES,    // One phrase, big; turn to browse
+  SCR_QUICK,      // Quick settings (long press on Home)
   SCR_TOUR,       // First-boot tour (also More -> Tour)
   // Overlays
   SCR_AMBIENT,    // Idle: clock + next event + weather
@@ -115,6 +116,7 @@ public:
   // Focus settings / More menu selections
   int focusSel = 0;
   int moreSel = 0;
+  int streakPage = 0;  // 0 = yours, 1 = GitHub
   // Partial redraws: what the current list screen last painted
   int lastListSel = -1;
   int lastListStart = -1;
@@ -144,11 +146,16 @@ public:
   void drawCalendar();
   void drawDayTasks(int day); // Show tasks for a specific calendar day
   void drawFocus();           // Focus mode settings
+  void drawQuick(int sel);    // Quick settings sheet
   void drawMore(const char *const labels[], int count);
   void drawAgenda();          // Today's calendar events + Notion tasks
   void drawAmbient(bool weatherOk, float temp, const char *desc, bool celsius);
   void drawAmbientClock();    // Only the clock digits (called each minute)
   void drawAmbientPhrase();   // Only the rotating phrase line
+  void drawDayBar();          // Home: today's streak square + focus-goal bar
+  void drawRest();            // Ambient: clock, date and a quote with author
+  void drawRestQuote();       // Only the quote (changes every 2 minutes)
+  int32_t restSlot = -1;
   // Replaces the phrase on Home when set (e.g. "1 agent waiting")
   String statusLine;
   uint16_t statusColor = 0;
@@ -172,6 +179,7 @@ public:
   void drawStreak();
   void drawStats();
 #if FEATURE_WEATHER
+  void drawWeatherEmpty(const char *line1, const char *line2, bool busy);
   void drawWeather(float temp, float feelsLike, uint8_t humidity,
                    uint8_t icon, const char* desc, const char* city, bool celsius);
 #endif
@@ -194,6 +202,10 @@ public:
   void phraseAt(int idx, String &text, String &author);
   void drawTour(int step);           // 0 turn, 1 press, 2 MODE, 3 done
   void drawHint(const char *text);   // One-line pill at the bottom
+  void drawBanner(const char *text); // Notice across the top (agent needs you)
+  void drawCarouselDots(int index, int count);  // position in the MODE carousel
+  void clearScreen();         // fillScreen(C_BG) + counts it
+  uint32_t fullClears = 0;    // full-screen clears so far
   void drawFinishScreen(const char *msg);
 
   void uiTick(bool strong = false); // Click beep + click animation

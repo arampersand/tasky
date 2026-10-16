@@ -73,6 +73,7 @@ bool ApiClient::getStreaming(const String& url, LineCallback callback, void* use
   http.setTimeout(10000);  // 10 second connection timeout
 
   int code = http.GET();
+  lastStatus = code;
 
   if (code != HTTP_CODE_OK && code != HTTP_CODE_MOVED_PERMANENTLY) {
     Serial.printf("[API] Stream error: %d\n", code);

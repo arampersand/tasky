@@ -27,9 +27,18 @@ Una perilla, una pantalla y una barra de luz: temporizador de foco, tus tareas d
 |---|---|---|
 | Para | Tu compañero de escritorio | Compañero de tu compu y sus agentes de IA |
 | Lo principal | Home de un vistazo, Pomodoro, tareas, calendario, clima, GitHub, Notion, pregúntale a ChatGPT/Claude | **Estado de Claude Code** (la luz respira cuando un agente te necesita), **perilla Bluetooth para volumen/brillo/música**, atajos (Spotlight, Siri, captura), además de timer, tareas, calendario y clima |
-| Flashear | [tasky-flash.vercel.app](https://tasky-flash.vercel.app) → *Tasky* | [tasky-flash.vercel.app](https://tasky-flash.vercel.app) → *Tasky for Agents* + [hooks](companion/README.md) |
+| Flashear | [tasky-flash.vercel.app](https://tasky-flash.vercel.app) → *Tasky* | [tasky-flash.vercel.app](https://tasky-flash.vercel.app) → *Tasky for Agents* + el [plugin de Claude Code](companion/README.md) |
 
 Mismo hardware; cambias cuando quieras flasheando el otro.
+
+**Conecta Claude Code** (Tasky for Agents): dentro de Claude Code, corre
+
+```
+/plugin marketplace add arampersand/tasky
+/plugin install tasky@tasky
+```
+
+y reinicia Claude Code; Tasky muestra una tarjeta *Ready*. ¿Algo no funciona? Corre `/tasky:status`. ¿Sin plugin? [El instalador por terminal](companion/README.md#without-the-plugin-terminal) hace lo mismo.
 
 ## Por qué Tasky
 

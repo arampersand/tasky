@@ -50,7 +50,15 @@ public:
   void begin();
   void loop(); // Call periodically
   void forceUpdate();
-  void requestRefresh() { lastUpdate = 0; }  // fetch on the next loop()
+  // Result of the last forceUpdate(), for the web setup's "Test it" button
+  bool lastOk = false;
+  uint32_t lastAttemptAt = 0;  // millis() when forceUpdate() last finished
+  String lastError;
+  int lastEvents = 0;
+  void requestRefresh() {  // fetch on the next loop() (settings changed)
+    lastUpdate = 0;
+    lastAttemptAt = 0;
+  }
 
 private:
   TaskyModel *model;

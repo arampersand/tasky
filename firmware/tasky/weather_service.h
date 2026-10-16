@@ -25,6 +25,8 @@ public:
   void forceUpdate();
   void requestRefresh() { lastUpdate = 0; }  // fetch on the next loop()
   uint32_t fetchCount() const { return fetches; }  // successful fetches so far
+  bool cityNotFound = false;  // the geocoder doesn't know weatherCity
+  uint8_t failures = 0;       // failed fetches in a row
 
   bool isConfigured() const;
   bool needsGeocode() const;

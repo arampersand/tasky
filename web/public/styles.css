@@ -146,6 +146,20 @@ pre { white-space: pre-wrap; word-break: break-word; color: #b4bccb; max-height:
 .wz-title-icon { display: flex; align-items: center; gap: 10px; }
 .wz-cmd { display: flex; gap: 8px; align-items: center; margin: 0 0 12px; }
 .wz-cmd code { flex: 1; min-width: 0; overflow-x: auto; white-space: nowrap; padding: 12px; background: #0a0f1d; }
+.wz-help .wz-cmd { margin: 6px 0; }
+.wz-step > p.wz-intro { color: var(--teal); font-weight: 600; margin-bottom: 6px; }
+.wz-guide { margin: 0 0 16px; padding-left: 22px; color: #b4bccb; font-size: 15px; }
+.wz-guide li { margin: 4px 0; }
+#wz-caltest { margin-top: 10px; }
+.wz-gh { display: flex; align-items: center; gap: 12px; padding: 10px 12px; margin: 0 0 12px; border-radius: 10px; border: 1px solid var(--line); background: #0a0f1d; }
+.wz-gh img { width: 40px; height: 40px; border-radius: 50%; background: #141b2e; flex: none; }
+.wz-gh div { flex: 1; min-width: 0; display: grid; }
+.wz-gh strong, .wz-gh small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wz-gh small { color: var(--muted); }
+.wz-gh-ask { color: var(--teal); font-weight: 600; font-size: 14px; }
+.wz-gh-activity .small { margin-bottom: 8px; }
+.wz-gh-grid { display: grid; grid-template-rows: repeat(7, 12px); grid-auto-flow: column; grid-auto-columns: 12px; gap: 3px; }
+.wz-gh-grid span { border-radius: 2px; }
 .wz-tips { padding-left: 20px; color: #b4bccb; }
 .wz-tips li { margin: 6px 0; }
 .after-note { margin-top: 18px; }

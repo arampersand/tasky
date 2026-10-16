@@ -36,9 +36,18 @@ A knob, a screen and a light bar: focus timer, today's tasks, your streak, your 
 |---|---|---|
 | For | Your calm desk companion | A companion for your computer and its AI agents |
 | Highlights | Home at a glance, focus timer, tasks, calendar, weather, GitHub, Notion, ask ChatGPT/Claude | **Claude Code status** (light breathes when an agent needs you), **Bluetooth volume/brightness/media dial**, Spotlight/Siri/screenshot shortcuts, plus timer, tasks, calendar, weather |
-| Flash | [tasky-flash.vercel.app](https://tasky-flash.vercel.app) → *Tasky* | [tasky-flash.vercel.app](https://tasky-flash.vercel.app) → *Tasky for Agents* + [agent hooks](companion/README.md) |
+| Flash | [tasky-flash.vercel.app](https://tasky-flash.vercel.app) → *Tasky* | [tasky-flash.vercel.app](https://tasky-flash.vercel.app) → *Tasky for Agents* + the [Claude Code plugin](companion/README.md) |
 
 Same hardware; switch any time by flashing the other one.
+
+**Connect Claude Code** (Tasky for Agents): in Claude Code, run
+
+```
+/plugin marketplace add arampersand/tasky
+/plugin install tasky@tasky
+```
+
+then restart Claude Code; Tasky shows a *Ready* card. Something off? Run `/tasky:status`. No plugin? [The terminal installer](companion/README.md#without-the-plugin-terminal) does the same.
 
 ## Why Tasky
 

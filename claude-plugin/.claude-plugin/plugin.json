@@ -1,0 +1,20 @@
+{
+  "name": "tasky",
+  "displayName": "Tasky",
+  "version": "2.13.0",
+  "description": "Shows each Claude Code session on your Tasky (Tasky for Agents firmware) and lets you allow or deny permission prompts with its knob. Needs Python 3 on macOS or Linux.",
+  "author": {
+    "name": "arampersand",
+    "url": "https://github.com/arampersand"
+  },
+  "homepage": "https://tasky-flash.vercel.app",
+  "repository": "https://github.com/arampersand/tasky",
+  "license": "GPL-3.0-only",
+  "keywords": [
+    "hardware",
+    "esp32",
+    "notifications",
+    "permissions",
+    "desk"
+  ]
+}

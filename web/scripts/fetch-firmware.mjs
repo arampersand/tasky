@@ -74,13 +74,16 @@ console.log(`Latest release: ${rel.tag_name}`);
 
 // The agents companion that public/agents/install.sh downloads: from the same
 // tag as the firmware so both match, or from main while the latest release
-// predates the installer (install.sh runs `tasky_agent.py install`).
-for (const ref of [rel.tag_name, "main"]) {
-  const res = await fetch(`https://raw.githubusercontent.com/${REPO}/${ref}/companion/tasky_agent.py`,
-    { headers: { "User-Agent": headers["User-Agent"] } });
-  const script = res.ok ? await res.text() : "";
-  if (!script.includes("def install_hooks(")) continue;
-  await writeFile(join(OUT, "..", "agents", "tasky_agent.py"), script);
-  console.log(`✓ agents/tasky_agent.py (${ref})`);
-  break;
+// predates the installer (install.sh runs `tasky_agent.py install`). The script
+// lives in claude-plugin/ since the Claude Code plugin; older refs keep it in companion/.
+fetchAgent: for (const ref of [rel.tag_name, "main"]) {
+  for (const path of ["claude-plugin/tasky_agent.py", "companion/tasky_agent.py"]) {
+    const res = await fetch(`https://raw.githubusercontent.com/${REPO}/${ref}/${path}`,
+      { headers: { "User-Agent": headers["User-Agent"] } });
+    const script = res.ok ? await res.text() : "";
+    if (!script.includes("def install_hooks(")) continue;
+    await writeFile(join(OUT, "..", "agents", "tasky_agent.py"), script);
+    console.log(`✓ agents/tasky_agent.py (${ref}:${path})`);
+    break fetchAgent;
+  }
 }

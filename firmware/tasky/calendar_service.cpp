@@ -2,6 +2,7 @@
 #if FEATURE_CALENDAR
 #include "calendar_service.h"
 #include <Arduino.h>
+#include <WiFi.h>
 #include <cstring>
 
 CalendarService::CalendarService(TaskyModel *m) : model(m) {}
@@ -259,8 +260,16 @@ static void expandRRule(ICalParseState* state) {
 }
 
 void CalendarService::forceUpdate() {
-  if (model->cfg.calendarUrl.length() == 0)
+  lastOk = false;
+  lastEvents = 0;
+  if (model->cfg.calendarUrl.length() == 0) {
+    lastError = "No calendar link saved";
     return;
+  }
+  if (WiFi.status() != WL_CONNECTED) {
+    lastError = "Tasky isn't on Wi-Fi yet";
+    return;
+  }
 
   Serial.println("[Cal] Updating (streaming)...");
 
@@ -268,6 +277,7 @@ void CalendarService::forceUpdate() {
   time_t nowTime = time(nullptr);
   if (nowTime < 1577836800) {  // Before year 2020 = NTP not synced
     Serial.println("[Cal] No system time available");
+    lastError = "Tasky doesn't know today's date yet";
     return;
   }
 
@@ -309,12 +319,22 @@ void CalendarService::forceUpdate() {
     model->cfg.nextEventSummary = String(state.nextSummary);
     model->cfg.nextEventTime = String(state.nextTime);
     lastUpdate = millis();  // Only mark success time
+    lastOk = true;
+    lastEvents = state.eventsFound;
+    lastError = "";
 
     Serial.printf("[Cal] Found %d events this month, %d today, %d stored in monthEvents\n",
                   state.eventsFound, model->todayEventCount, model->monthEventCount);
     Serial.printf("[Cal] Next: %s at %s\n", state.nextSummary, state.nextTime);
+    lastAttemptAt = millis();
   } else {
     Serial.println("[Cal] Stream failed - will retry in 30s");
+    int code = api.lastStatus;
+    lastError = code <= 0  ? String("Couldn't reach the calendar server")
+                : code == 404 || code == 403 || code == 401
+                    ? "Couldn't download it (" + String(code) + "). Copy the link again: it may be private or old"
+                    : "Couldn't download it (" + String(code) + ")";
+    lastAttemptAt = millis();
     Serial.printf("[Cal] URL: %s\n", redactUrl(model->cfg.calendarUrl).c_str());
     lastUpdate = millis() - (15UL * 60 * 1000) + 30000;  // Retry in 30s
   }

@@ -26,6 +26,8 @@ bool handleAgentCommand(const String &cmd) {
   return true;
 }
 
+uint32_t agentBannerUntil = 0;  // the banner covers the top of the screen until then
+
 // Home status line + a short beep when a new agent starts waiting
 void refreshAgentStatus() {
   static int lastWaiting = 0;
@@ -43,6 +45,18 @@ void refreshAgentStatus() {
   if (waiting > lastWaiting && model.cfg.soundOn && !model.isFocusModeActive()) {
     buzzerTone(2400);
     uiBeepOffAt = millis() + 90;
+  }
+  // A banner on whatever screen you're on (Agents shows it already)
+  if (waiting > lastWaiting && screen != SCR_AGENTS && screen != SCR_TOUR &&
+      screen != SCR_NOTICE) {
+    for (int i = 0; i < agents.count; i++) {
+      const AgentSession &s = agents.sessions[i];
+      if (s.state == AGENT_WAITING && !s.acknowledged) {
+        ui.drawBanner((String(s.label) + " needs you").c_str());
+        agentBannerUntil = millis() + 4000;
+        break;
+      }
+    }
   }
   lastWaiting = waiting;
 }
@@ -186,7 +200,7 @@ void handleAgents(int step, EncClickType click) {
 
   if (q.id[0]) {
     if (step != 0) {
-      q.sel = (q.sel + step + q.optionCount * 8) % q.optionCount;
+      q.sel = ((q.sel + step) % q.optionCount + q.optionCount) % q.optionCount;
       ui.uiTick(false);
       ui.drawQuestionOptions(q);
     }
@@ -198,7 +212,7 @@ void handleAgents(int step, EncClickType click) {
   } else {
     if (step != 0) {
       // knob up = next card on the right (the knob's steps count the other way)
-      selectAgent((agentsSel - step + agents.count * 4) % agents.count);
+      selectAgent(((agentsSel - step) % agents.count + agents.count) % agents.count);
       ui.uiTick(false);
       ui.drawAgents(agents, agentsSel);
       return;
@@ -319,7 +333,7 @@ void handleControls(int step, EncClickType click) {
       BleHid::media(step < 0 ? k.up : k.down);
     return;
   }
-  keySel = (keySel + step + KEYS_N * 4) % KEYS_N;
+  keySel = ((keySel + step) % KEYS_N + KEYS_N) % KEYS_N;
   ui.uiTick(false);
   drawControlsScreen();
 }

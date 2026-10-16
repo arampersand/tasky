@@ -9,9 +9,7 @@
 #if FEATURE_BLE_HID
 #include "ble_hid.h"
 #endif
-#if FEATURE_AGENTS
 #include <ArduinoJson.h>
-#endif
 #include "ui.h"
 #include "wifi_portal.h"
 #if FEATURE_CALENDAR
@@ -103,6 +101,8 @@ uint32_t lockToastUntil = 0;
 
 enum ModeClickType { MODE_NONE, MODE_SHORT, MODE_LONG, MODE_DOUBLE };
 
+uint32_t lightPreviewUntil = 0;
+uint32_t pressBlinkUntil = 0;  // a short light blip on every press (no buzzer)
 uint32_t lastAnimAt = 0;
 uint32_t lastBeepAt = 0;
 uint32_t lastUiBeepAt = 0;
@@ -131,7 +131,19 @@ void initLight() {
   lightLevel = -1;
 }
 
+// Night: well outside your workday (22:00-7:00 with the default 9-18) the
+// light bar runs at a quarter of its level.
+bool isNight() {
+  struct tm t;
+  if (!model.localNow(t))
+    return false;
+  int h = t.tm_hour;
+  return h >= model.cfg.dayEndHour + 4 || h < model.cfg.dayStartHour - 2;
+}
+
 void setLed(uint8_t v) {
+  if (isNight())
+    v /= 4;
   if (lightMode == 0) {
     ledcWrite(LED_PIN, v);
     return;
@@ -275,11 +287,10 @@ static Screen moreScreens[MAX_MENU];
 static const char *moreLabels[MAX_MENU];
 static int moreN = 0;
 
-// System entries always at the end of More (Setup (QR) is in SCREEN_DEFS:
-// it's listed here only when it isn't in your carousel)
+// System entries always at the end of More (Settings and Setup (QR) are in
+// SCREEN_DEFS: More lists them only when they aren't in your carousel)
 static const ScreenDef MORE_SYSTEM[] = {
     {"update", "Update", SCR_UPDATE},
-    {"settings", "Settings", SCR_SETTINGS},
     {"tour", "Tour", SCR_TOUR},
 };
 
@@ -339,13 +350,22 @@ void goTo(Screen next) {
   ui.applyTheme();
 }
 
-// Screens opened from More return to More with MODO (either direction)
+// Screens opened from More return to More with MODO (either direction);
+// quick settings return to Home
 void navigateNext() {
+  if (screen == SCR_QUICK) {
+    goTo(SCR_HOME);
+    return;
+  }
   int i = carouselIndex(screen);
   goTo(i < 0 ? SCR_MORE : carousel[(i + 1) % carouselN]);
 }
 
 void navigatePrev() {
+  if (screen == SCR_QUICK) {
+    goTo(SCR_HOME);
+    return;
+  }
   int i = carouselIndex(screen);
   goTo(i < 0 ? SCR_MORE : carousel[(i + carouselN - 1) % carouselN]);
 }
@@ -517,35 +537,61 @@ void handleCalendar(int step, EncClickType click) {
   }
 }
 
-// Changes when GitHub sync or midnight rewrites the grid behind our back
+// Changes when GitHub sync or midnight rewrites a grid behind our back
 static uint32_t streakChecksum() {
   uint32_t sum = model.currentDayIndex;
   for (int i = 0; i < STREAK_N; i++)
-    sum = sum * 31 + model.streak[i];
+    sum = sum * 31 + model.streak[i] * 4 + model.ghStreak[i];
   return sum;
 }
 
+// Streak: turn = your streak <-> GitHub's
 void handleStreak(int step, EncClickType click) {
   static uint32_t shownSum = 0;
   if (ui.baseDrawn && streakChecksum() != shownSum)
-    ui.baseDrawn = false;  // the grid changed elsewhere: repaint it all
-  if (!ui.baseDrawn) {
+    ui.drawStreak();  // a grid changed elsewhere: repaint (cells overwrite, no flash)
+  if (!ui.baseDrawn)
     ui.drawStreak();
-    ui.baseDrawn = true;
-    shownSum = streakChecksum();
-  }
   if (step != 0) {
-    model.streakCursor = constrain(model.streakCursor + step, 0, STREAK_N - 1);
+    ui.streakPage = 1 - ui.streakPage;
     ui.uiTick(false);
     ui.drawStreak();
   }
+  shownSum = streakChecksum();
+}
+
+// Quick settings (long press on Home): turn = pick, press = change,
+// long press = back to Home (MODE too, see navigateNext)
+int quickSel = 0;
+void handleQuick(int step, EncClickType click) {
+  if (!ui.baseDrawn)
+    ui.drawQuick(quickSel);
+  if (click == ENC_LONG) {
+    ui.uiTick(true);
+    goTo(SCR_HOME);
+    return;
+  }
+  if (step != 0) {
+    quickSel = ((quickSel - step) % 3 + 3) % 3;  // knob up = next
+    ui.uiTick(false);
+    ui.drawQuick(quickSel);
+  }
   if (click == ENC_SHORT) {
     ui.uiTick(true);
-    model.streak[model.streakCursor] =
-        (model.streak[model.streakCursor] + 1) % 4;
+    Config &c = model.cfg;
+    if (quickSel == 0) {
+      c.darkMode = !c.darkMode;
+      ui.applyTheme();
+      ui.baseDrawn = false;  // new colors: repaint everything
+    } else if (quickSel == 1) {
+      c.ledBright = c.ledBright == 0 ? 90 : c.ledBright < 150 ? 220 : 0;
+      setLed(c.ledBright);  // show the new level for a moment
+      lightPreviewUntil = millis() + 600;
+    } else {
+      c.focusLight = !c.focusLight;
+    }
     model.save();
-    ui.drawStreak();
-    shownSum = streakChecksum();
+    ui.drawQuick(quickSel);
   }
 }
 
@@ -606,6 +652,8 @@ void handleSettings(int step, EncClickType click) {
       case 4:
         model.cfg.ledBright =
             constrain(model.cfg.ledBright + step * 25, 0, 255);
+        setLed(model.cfg.ledBright);  // see the level while you turn
+        lightPreviewUntil = millis() + 800;
         break;
       case 5:
         model.cfg.darkMode = !model.cfg.darkMode;
@@ -689,7 +737,7 @@ void handleFocus(int step, EncClickType click) {
     ui.baseDrawn = true;
   }
   if (step != 0) {
-    ui.focusSel = (ui.focusSel + step + 3) % 3;
+    ui.focusSel = ((ui.focusSel + step) % 3 + 3) % 3;
     ui.drawFocus();
   }
   if (click == ENC_SHORT) {
@@ -712,7 +760,7 @@ void handleMore(int step, EncClickType click) {
     ui.baseDrawn = true;
   }
   if (step != 0) {
-    ui.moreSel = (ui.moreSel + step + moreN) % moreN;
+    ui.moreSel = ((ui.moreSel + step) % moreN + moreN) % moreN;
     ui.drawMore(moreLabels, moreN);
   }
   if (click == ENC_SHORT) {
@@ -783,9 +831,13 @@ void refreshGlance() {
   struct tm t;
   bool hasTime = model.localNow(t);
   int minuteKey = hasTime ? t.tm_min : (int)(millis() / 60000UL % 60);
-  if (!ui.baseDrawn || millis() - lastFullAt > 5UL * 60UL * 1000UL ||
-      haveWeather != hadWeather) {
-    drawAmbientScreen();
+  bool rest = screen == SCR_AMBIENT;  // the calm rest screen: clock + quote
+  if (!ui.baseDrawn || (!rest && millis() - lastFullAt > 5UL * 60UL * 1000UL) ||
+      (!rest && haveWeather != hadWeather)) {
+    if (rest)
+      ui.drawRest();
+    else
+      drawAmbientScreen();
     ui.baseDrawn = true;
     lastFullAt = millis();
     lastMin = minuteKey;
@@ -793,7 +845,12 @@ void refreshGlance() {
   } else if (minuteKey != lastMin) {
     lastMin = minuteKey;
     ui.drawAmbientClock();
-    ui.drawAmbientPhrase();
+    if (rest) {
+      ui.drawRestQuote();
+    } else {
+      ui.drawAmbientPhrase();
+      ui.drawDayBar();
+    }
   }
 }
 
@@ -813,7 +870,7 @@ void handleHome(EncClickType click) {
   }
   if (click == ENC_LONG) {
     ui.uiTick(true);
-    goTo(SCR_TASKS);
+    goTo(SCR_QUICK);
     return;
   }
   refreshGlance();
@@ -842,7 +899,7 @@ int tourStep = 0;
 
 const char *hintFor(Screen s) {
   switch (s) {
-  case SCR_HOME:     return "Press: focus  Hold: tasks";
+  case SCR_HOME:     return "Press: focus  Hold: quick";
   case SCR_TIMER:    return "Turn: time  Press: start";
   case SCR_TASKS:    return "Press: done  Hold: info";
   case SCR_AGENDA:   return "Press: refresh";
@@ -850,7 +907,7 @@ const char *hintFor(Screen s) {
   case SCR_MORE:     return "Turn: pick  Press: open";
   case SCR_FOCUS:    return "Turn: pick  Press: on/off";
   case SCR_CALENDAR: return "Turn: day  Press: open";
-  case SCR_STREAK:   return "Turn: day  Press: mark";
+  case SCR_STREAK:   return "Turn: yours / GitHub";
   case SCR_SETTINGS: return "Press: edit  Turn: change";
   case SCR_PHRASES:  return "Turn: next  Press: random";
   case SCR_WEATHER:  return "Press: refresh";
@@ -1025,6 +1082,8 @@ void checkDayBriefs() {
 void updateFocusLight() {
   if (screen == SCR_NOTICE || model.st.finished)
     return;
+  if (millis() < lightPreviewUntil)
+    return;  // quick settings is showing the new light level
 #if FEATURE_AGENTS
   if (agents.waitingCount(true) > 0) {  // breathe while an agent waits for you
     float phase = (millis() % 1600) / 1600.0f;
@@ -1034,6 +1093,10 @@ void updateFocusLight() {
   }
 #endif
   bool on = model.isFocusModeActive() && model.cfg.focusLight;
+  if (!on && millis() < pressBlinkUntil) {  // you pressed: a short blip
+    setLed(model.cfg.ledBright / 2);
+    return;
+  }
   setLed(on ? model.cfg.ledBright : 0);
 }
 #include "agents_screens.h"
@@ -1051,7 +1114,7 @@ void handleAgenda(int step, EncClickType click) {
   // Auto-refresh when calendar data arrives (was 0, now has events)
   if (model.monthEventCount != lastEventCount) {
     lastEventCount = model.monthEventCount;
-    ui.baseDrawn = false;
+    ui.drawAgenda();  // the list only, no full-screen flash
   }
 
   // Refresh on click - force calendar + notion update
@@ -1065,7 +1128,7 @@ void handleAgenda(int step, EncClickType click) {
     if (model.cfg.notionApiKey.length() > 0)
       notion.forceUpdate();
 #endif
-    ui.baseDrawn = false;
+    ui.drawAgenda();
   }
 }
 
@@ -1075,6 +1138,31 @@ void handleWeather(int step, EncClickType click) {
   if (weather.fetchCount() != shownUpdate) {  // new data arrived: show it
     shownUpdate = weather.fetchCount();
     ui.baseDrawn = false;
+  }
+  // 0 no city, 1 offline, 2 updating, 3 data, 4 city not found, 5 keeps failing
+  static int shownState = -1;
+  int state = !weather.isConfigured() ? 0
+              : weather.hasData()     ? 3
+              : !net.isConnected()    ? 1
+              : weather.cityNotFound  ? 4
+              : weather.failures >= 3 ? 5
+                                      : 2;
+  if (state != shownState) {
+    shownState = state;
+    ui.baseDrawn = false;
+  }
+  if (!ui.baseDrawn && state != 3) {
+    if (state == 4)
+      ui.drawWeatherEmpty("City not found", ("Check \"" + model.cfg.weatherCity + "\"").c_str(), false);
+    else if (state == 5)
+      ui.drawWeatherEmpty("No weather right now", "Trying again soon", false);
+    else if (state == 0)
+      ui.drawWeatherEmpty("Set your city", "tasky-flash.vercel.app", false);
+    else if (state == 1)
+      ui.drawWeatherEmpty("Waiting for Wi-Fi", "Weather comes once Tasky is online", false);
+    else
+      ui.drawWeatherEmpty("Updating...", model.cfg.weatherCity.c_str(), true);
+    ui.baseDrawn = true;
   }
   if (!ui.baseDrawn) {
     ui.drawWeather(
@@ -1191,7 +1279,7 @@ void handleAgent(int step, EncClickType click) {
     return;
   }
 
-  AgentState agentState = llm.getState();
+  LlmState agentState = llm.getState();
   LlmMode mode = llm.getTodayMode();
   const char* modeName = LlmService::getModeName(mode);
   const char* modeDesc = LlmService::getModeDesc(mode);
@@ -1204,7 +1292,7 @@ void handleAgent(int step, EncClickType click) {
   }
 
   // THINKING - refresh for animation, allow cancel
-  if (agentState == AGENT_SENDING || agentState == AGENT_THINKING) {
+  if (agentState == LLM_SENDING || agentState == LLM_THINKING) {
     static uint32_t lastAgentDraw = 0;
     if (millis() - lastAgentDraw >= 400) {
       lastAgentDraw = millis();
@@ -1219,7 +1307,7 @@ void handleAgent(int step, EncClickType click) {
   }
 
   // DONE - scroll response, press to go back
-  if (agentState == AGENT_DONE && ui.agentShowingResponse) {
+  if (agentState == LLM_DONE && ui.agentShowingResponse) {
     if (step != 0) {
       ui.agentScrollOffset += step * 18;
       if (ui.agentScrollOffset < 0) ui.agentScrollOffset = 0;
@@ -1235,7 +1323,7 @@ void handleAgent(int step, EncClickType click) {
   }
 
   // ERROR - press to go back to idle
-  if (agentState == AGENT_ERROR) {
+  if (agentState == LLM_ERROR) {
     if (click == ENC_SHORT) {
       llm.reset();
       ui.baseDrawn = false;
@@ -1253,7 +1341,7 @@ void handleAgent(int step, EncClickType click) {
     LlmMode preMode = llm.getTodayMode();
     const char* preModeName = LlmService::getModeName(preMode);
     const char* preModeDesc = LlmService::getModeDesc(preMode);
-    ui.drawAgent(AGENT_THINKING, nullptr, 0, nullptr, preModeName, preModeDesc, false, 0);
+    ui.drawAgent(LLM_THINKING, nullptr, 0, nullptr, preModeName, preModeDesc, false, 0);
     delay(800);  // Brief animation so it feels like AI is processing
 
     llm.sendDailyPrompt();
@@ -1330,6 +1418,41 @@ void runDisplayBringup() {
 #endif
 
 // ==================== SETUP ====================
+// USB commands beyond the setup protocol: "TASKY CALTEST" (the web setup's
+// "Test it" button) and, on Tasky for Agents, the agent lines.
+bool handleUsbCommand(const String &cmd) {
+#if FEATURE_CALENDAR
+  if (cmd == "TASKY CALTEST") {
+    // A download just finished (Save triggers one): report it instead of
+    // downloading again; otherwise download now (blocks up to ~30 s)
+    if (!calendar.lastAttemptAt || millis() - calendar.lastAttemptAt > 20000)
+      calendar.forceUpdate();
+    JsonDocument d;
+    d["ok"] = calendar.lastOk;
+    if (calendar.lastOk) {
+      d["events"] = calendar.lastEvents;
+      d["today"] = model.todayEventCount;
+      if (model.cfg.nextEventSummary != "No Events") {
+        d["next"] = model.cfg.nextEventSummary;
+        d["nextTime"] = model.cfg.nextEventTime;
+      }
+    } else {
+      d["error"] = calendar.lastError;
+    }
+    Serial.print("@tasky ");
+    serializeJson(d, Serial);
+    Serial.println();
+    ui.baseDrawn = false;  // show the fresh agenda
+    return true;
+  }
+#endif
+#if FEATURE_AGENTS
+  return handleAgentCommand(cmd);
+#else
+  return false;
+#endif
+}
+
 void setup() {
   delay(500);   // Estabilizar alimentacion antes de init
   Serial.begin(115200);
@@ -1415,9 +1538,7 @@ void setup() {
 #if FEATURE_BLE_HID
   BleHid::begin("Tasky");
 #endif
-#if FEATURE_AGENTS
-  usbSetup.onCommand = handleAgentCommand;
-#endif
+  usbSetup.onCommand = handleUsbCommand;
   usbSetup.onChanged = []() {
     rebuildMenus();  // the carousel may have changed
     if (usbSetup.lightSet) {  // switch driver and blink so the user sees it work
@@ -1493,12 +1614,16 @@ void loop() {
     lastExpireAt = now;
     agents.expire();
   }
+  if (agentBannerUntil && (int32_t)(now - agentBannerUntil) > 0) {
+    agentBannerUntil = 0;
+    ui.baseDrawn = false;  // repaint what the banner covered
+  }
   if (agents.changed) {
     agents.changed = false;
     refreshAgentStatus();
     if (screen == SCR_AGENTS)
       agentsRedraw = true;  // repaint the card (not the whole screen)
-    else if (screen == SCR_HOME || screen == SCR_AMBIENT)
+    else if (screen == SCR_HOME)  // the rest screen keeps its quote
       ui.drawAmbientPhrase();
     if (firstQuestion() < 0)
       leaveQuestions();     // a question timed out or was cancelled: go back
@@ -1521,6 +1646,8 @@ void loop() {
   EncClickType click = encoderClickType();
 
   bool anyInput = step != 0 || click != ENC_NONE || modeClick != MODE_NONE;
+  if (click != ENC_NONE || modeClick != MODE_NONE)
+    pressBlinkUntil = now + 80;
   if (anyInput)
     lastInputAt = now;
 
@@ -1656,6 +1783,9 @@ void loop() {
   case SCR_PHRASES:
     handlePhrases(step, click);
     break;
+  case SCR_QUICK:
+    handleQuick(step, click);
+    break;
 #if FEATURE_WEATHER
   case SCR_WEATHER:
     handleWeather(step, click);
@@ -1682,6 +1812,17 @@ void loop() {
     break;
   default:
     break;
+  }
+  // Carousel position dots, once after each full redraw (partial redraws
+  // never touch the top strip)
+  static uint32_t dotsAfterClear = UINT32_MAX;
+  static Screen dotsScreen = SCR_TOUR;
+  if (ui.baseDrawn && (ui.fullClears != dotsAfterClear || screen != dotsScreen)) {
+    dotsAfterClear = ui.fullClears;
+    dotsScreen = screen;
+    int i = carouselIndex(screen);
+    if (i >= 0 && screen != SCR_QR)  // the QR code fills the screen
+      ui.drawCarouselDots(i, carouselN);
   }
   showHint();
 }

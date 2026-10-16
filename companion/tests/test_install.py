@@ -6,7 +6,7 @@ import tempfile
 import unittest
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-spec = importlib.util.spec_from_file_location("tasky_agent", os.path.join(HERE, "..", "tasky_agent.py"))
+spec = importlib.util.spec_from_file_location("tasky_agent", os.path.join(HERE, "..", "..", "claude-plugin", "tasky_agent.py"))
 ta = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(ta)
 
@@ -46,7 +46,7 @@ class InstallTest(unittest.TestCase):
         self.assertIn({"type": "command", "command": "say done"}, s["hooks"]["Stop"][0]["hooks"])
         self.assertEqual(s["hooks"]["PreToolUse"], MINE["hooks"]["PreToolUse"])
         cmds = self.tasky_commands(s)
-        self.assertEqual(len(cmds), 5)  # the old manual hook was replaced
+        self.assertEqual(len(cmds), 6)  # the old manual hook was replaced
         self.assertTrue(all('"/home/me/.tasky/tasky_agent.py"' in c for c in cmds))
         ask = s["hooks"]["PermissionRequest"][0]["hooks"][0]
         self.assertTrue(ask["command"].endswith(" ask"))
@@ -72,7 +72,7 @@ class InstallTest(unittest.TestCase):
         path = os.path.join(self.dir, "new", "settings.json")
         ta.install_hooks(path, "/x/tasky_agent.py")
         with open(path) as f:
-            self.assertEqual(len(self.tasky_commands(json.load(f))), 5)
+            self.assertEqual(len(self.tasky_commands(json.load(f))), 6)
 
     def test_unusual_values_are_kept(self):
         odd = {"hooks": {"Stop": {"weird": True}, "Custom": "keep me"}}

@@ -20,6 +20,7 @@ const ScreenDef SCREEN_DEFS[] = {
     {"stats", "Stats", SCR_STATS},
     {"calendar", "Calendar", SCR_CALENDAR},
     {"focus", "Focus", SCR_FOCUS},
+    {"settings", "Settings", SCR_SETTINGS},
     {"qr", "Setup (QR)", SCR_QR},
 #if FEATURE_LLM
     {"agent", "Agent", SCR_AGENT},
@@ -39,8 +40,9 @@ const ScreenDef *findScreen(const String &id) {
 
 const char *defaultCarousel() {
 #if TASKY_EDITION_AGENTS
-  return "home,agents,controls,timer,tasks,agenda,weather,streak,phrases,qr";
+  // What you use while working, then what you check, then setup
+  return "home,agents,controls,phrases,timer,tasks,agenda,streak,weather,settings,qr";
 #else
-  return "home,timer,tasks,agenda,weather,streak,phrases,stats,qr";
+  return "home,phrases,timer,tasks,agenda,streak,weather,settings,qr";
 #endif
 }

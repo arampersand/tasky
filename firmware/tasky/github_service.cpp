@@ -47,12 +47,13 @@ void GithubService::parseContribs(String data) {
   struct tm now;
   localtime_r(&nowTime, &now);
 
-  // Count events per day for last 30 days
+  // Events per day for the whole grid (the API returns up to ~90 days)
   // dailyCounts[0] = today, [1] = yesterday, etc.
-  int dailyCounts[30] = {0};
+  int dailyCounts[STREAK_N] = {0};
 
   int searchStart = 0;
   int totalEvents = 0;
+  int oldestDaysAgo = 0;
 
   while (true) {
     int idx = data.indexOf("\"created_at\":\"", searchStart);
@@ -80,33 +81,27 @@ void GithubService::parseContribs(String data) {
     time_t todayTime = mktime(&todayTm);
 
     int daysAgo = (todayTime - eventTime) / 86400;
-    if (daysAgo >= 0 && daysAgo < 30) {
+    if (daysAgo >= 0 && daysAgo < STREAK_N) {
       dailyCounts[daysAgo]++;
     }
+    if (daysAgo > oldestDaysAgo)
+      oldestDaysAgo = daysAgo;
 
     totalEvents++;
     searchStart = idx + 24;
   }
 
-  // Map to streak grid (currentDayIndex = today, backwards)
-  for (int d = 0; d < 30 && d < STREAK_N; d++) {
+  // The GitHub grid (currentDayIndex = today, backwards). Your own grid is
+  // Tasky activity only; the Streak screen shows both. A full page (100
+  // events) may stop short of 84 days: older days keep what was saved.
+  int covered = totalEvents >= 100 ? oldestDaysAgo + 1 : STREAK_N;
+  for (int d = 0; d < covered && d < STREAK_N; d++) {
     int streakIdx = (model->currentDayIndex - d + STREAK_N) % STREAK_N;
-
-    // Convert count to intensity (0-3)
     uint8_t ghIntensity = 0;
     if (dailyCounts[d] >= 8) ghIntensity = 3;
     else if (dailyCounts[d] >= 4) ghIntensity = 2;
     else if (dailyCounts[d] >= 1) ghIntensity = 1;
-
-    // Combine with existing intensity (keep max for STREAK_BOTH)
-    if (model->cfg.streakSource == STREAK_GITHUB) {
-      model->streak[streakIdx] = ghIntensity;
-    } else if (model->cfg.streakSource == STREAK_BOTH) {
-      if (ghIntensity > model->streak[streakIdx]) {
-        model->streak[streakIdx] = ghIntensity;
-      }
-    }
-    // STREAK_TASKY: don't touch streak from GitHub
+    model->ghStreak[streakIdx] = ghIntensity;
   }
 
   // Store today's count for updateStreakIntensity()

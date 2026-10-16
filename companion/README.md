@@ -12,19 +12,32 @@ Tasky talks over the same USB cable, so it has to be plugged into the computer r
 ## Set up (macOS / Linux)
 
 1. Flash **Tasky for Agents** from https://tasky-flash.vercel.app.
-2. Run:
-   ```bash
-   curl -fsSL https://tasky-flash.vercel.app/agents/install.sh | sh
+2. Install the Tasky plugin. In Claude Code, run:
    ```
-   It puts `tasky_agent.py` in `~/.tasky/` and adds the hooks to `~/.claude/settings.json`. It backs the file up first (`settings.json.tasky-backup`) and leaves your other settings and hooks alone. Running it again updates it.
-3. Restart Claude Code. If Tasky was plugged in, it shows a "Claude Code" card already.
+   /plugin marketplace add arampersand/tasky
+   /plugin install tasky@tasky
+   ```
+3. Restart Claude Code. With Tasky plugged in, it shows a **Ready** card.
 
-To remove it: `curl -fsSL https://tasky-flash.vercel.app/agents/install.sh | sh -s -- --uninstall`
+Something not working? Run `/tasky:status` in Claude Code: it checks everything and says what to fix.
 
-Only Python 3 is needed (macOS: `xcode-select --install` if `python3` is missing). Windows isn't supported yet.
+The plugin lives in [`claude-plugin/`](../claude-plugin): six hooks, the `/tasky:status` skill and `tasky_agent.py`. Updates come through `/plugin`. To remove it: `/plugin uninstall tasky@tasky`.
+
+Only Python 3 is needed (macOS: `xcode-select --install` if `python3` is missing). Windows isn't supported yet. Tested with Claude Code 2.1.280; if hooks don't fire on an older version, update Claude Code (`claude update`).
+
+### Without the plugin (terminal)
+
+```bash
+curl -fsSL https://tasky-flash.vercel.app/agents/install.sh | sh
+```
+
+It puts `tasky_agent.py` in `~/.tasky/` and adds the same hooks to `~/.claude/settings.json`. It backs the file up first (`settings.json.tasky-backup`) and leaves your other settings and hooks alone. Running it again updates it. To remove it: `curl -fsSL https://tasky-flash.vercel.app/agents/install.sh | sh -s -- --uninstall`
+
+Use the plugin **or** the installer, not both: with both, every event reaches Tasky twice. If you switch to the plugin, run the uninstall command above (`tasky_agent.py doctor` warns about duplicate hooks).
 
 | Claude Code event | What Tasky does |
 |---|---|
+| `SessionStart` | card: Ready |
 | `UserPromptSubmit` | card: working |
 | `PermissionRequest` | the question on the card: allow / deny with the knob |
 | `Notification` (permission or input needed) | card: **waiting**, the light breathes |
@@ -47,7 +60,7 @@ Sessions are named after the project folder. Tasky keeps up to 4 and forgets one
 
 ## Other agents and scripts
 
-Anything that can run a command can report:
+Anything that can run a command can report (with the plugin, the script is in Claude Code's plugin folder; any copy works, e.g. the one from the manual setup below):
 
 ```bash
 python3 ~/.tasky/tasky_agent.py send --id deploy --label "Prod deploy" --state working --msg "Rolling out"
@@ -67,18 +80,20 @@ TASKY ASK-CANCEL {"id":"r1"}
 `state` is `working`, `waiting`, `done` or `end`. Text is ASCII (Tasky's fonts have no accents; the script simplifies them).
 
 <details>
-<summary>Manual setup (without the installer)</summary>
+<summary>Manual setup (without the plugin or the installer)</summary>
 
 ```bash
 mkdir -p ~/.tasky
-curl -fsSL https://raw.githubusercontent.com/arampersand/tasky/main/companion/tasky_agent.py -o ~/.tasky/tasky_agent.py
+curl -fsSL https://raw.githubusercontent.com/arampersand/tasky/main/claude-plugin/tasky_agent.py -o ~/.tasky/tasky_agent.py
 python3 ~/.tasky/tasky_agent.py install       # or merge claude-hooks.json into ~/.claude/settings.json by hand
 ```
 </details>
 
 ## Troubleshooting
 
-- **Nothing shows up:** run `python3 ~/.tasky/tasky_agent.py status`. Close the web setup page or any serial monitor: only one program can hold the port. If several USB devices are connected, set `TASKY_PORT=/dev/cu.usbmodemXXXX`.
+- **First step:** `/tasky:status` in Claude Code, or `python3 ~/.tasky/tasky_agent.py doctor` in a terminal. It checks Python, Tasky on USB (and who holds the port), the firmware edition and version, and the hooks, then says what to fix.
+- **Nothing shows up:** close the web setup page or any serial monitor: only one program can hold the port. If several USB devices are connected, set `TASKY_PORT=/dev/cu.usbmodemXXXX`.
+- **Everything shows up twice:** the plugin and `install.sh` are both installed. Keep the plugin and run `curl -fsSL https://tasky-flash.vercel.app/agents/install.sh | sh -s -- --uninstall`.
 - **Logs:** `~/.tasky/daemon.log`.
 - **macOS asks to "identify your keyboard"** after you pair Tasky over Bluetooth (Controls screen): close that window. Tasky's shortcuts work anyway.
 

@@ -83,6 +83,7 @@ struct Config {
   int32_t lastDayNum = 0;           // Local day number last seen (0 = never)
   uint8_t yesterdayPomodoro = 0;    // Sessions completed yesterday
   uint16_t dailyFocusMin = 0;       // Focus minutes today
+  uint16_t dailyGoalMin = 120;      // Daily focus goal (Home's bar)
   uint8_t githubContribCount = 0;   // GitHub contributions today
 
   // Firebase Cloud Sync
@@ -151,10 +152,12 @@ public:
   NotionTaskItem notionTasks[MAX_NOTION_TASKS];
   int notionTaskCount = 0;
 
-  // Streak
-  uint8_t streak[STREAK_N];
+  // Streak: two grids on the same days (index currentDayIndex = today)
+  uint8_t streak[STREAK_N];    // yours: Tasky activity (focus, tasks, agents)
+  uint8_t ghStreak[STREAK_N];  // GitHub contributions
+  bool streakMigrated = false; // grids split (2.13)
+  bool needsSave = false;
   int currentDayIndex = 0;
-  int streakCursor = 0; // For UI navigation
 
   // Clock
   int clockH = 12, clockM = 0, clockS = 0;
@@ -181,8 +184,9 @@ public:
   uint8_t clampU8(int v, int lo, int hi);
 
   // Streak statistics
-  int calculateCurrentStreak();    // Returns consecutive days with activity from current day
-  int calculateTotalActiveDays();  // Returns total days with any activity (green squares)
+  // Consecutive active days up to today / days with any activity, for one grid
+  int calculateCurrentStreak(bool github = false);
+  int calculateTotalActiveDays(bool github = false);
   void checkDayChange();           // Check if day changed and advance streak index
 
   // Focus mode
