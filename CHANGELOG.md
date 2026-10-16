@@ -11,6 +11,7 @@ All notable changes to the Tasky firmware. Versions match `firmware/tasky/versio
 ### Added
 - **More > Screens** on the device: choose the screen Tasky starts on, and tick, untick and reorder the carousel with the knob.
 - **Daily brief** (with an AI key): the AI screen's default ("auto") mode is now **Today**: your day in three short lines from your calendar and tasks (what matters, what to start with, a tip). It's generated once a day and shown in the morning notice. The other nine modes stay in the mode picker. The screen is called **AI brief**.
+- **Printable quick-start card** (English and Spanish) at tasky-flash.vercel.app/start: controls, setup in two minutes, everyday use, Claude Code.
 - **Phone mode** in Controls (long press cycles Mac → Windows → Phone): volume and scroll dials, play/pause, next/previous, mute, take a photo (camera shutter), next/previous page.
 
 ## v2.13.0 — 2026-10-16 · Easy setup & polish

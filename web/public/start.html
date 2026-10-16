@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tasky quick start</title>
+<meta name="description" content="Printable quick-start card for Tasky (English and Spanish).">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+<style>
+  :root { --ink: #0d1220; --muted: #5b6475; --teal: #1aa598; --line: #d9dde5; --bg: #eef1f5; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.45 Inter, system-ui, sans-serif; }
+  .bar { max-width: 760px; margin: 24px auto 0; padding: 0 16px; display: flex; gap: 12px; align-items: center; justify-content: space-between; flex-wrap: wrap; }
+  .bar a { color: var(--teal); font-weight: 600; text-decoration: none; }
+  .bar button { font: 600 14px Inter, sans-serif; border: 0; border-radius: 999px; padding: 10px 18px; background: var(--ink); color: #fff; cursor: pointer; }
+  .sheet { max-width: 760px; margin: 16px auto 32px; padding: 0 16px; display: grid; gap: 16px; }
+  .card { background: #fff; border: 1px solid var(--line); border-radius: 16px; padding: 22px 24px; break-inside: avoid; }
+  .card h1 { font-size: 22px; margin: 0 0 2px; letter-spacing: -.01em; }
+  .card .sub { color: var(--muted); margin: 0 0 14px; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+  h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: var(--teal); margin: 0 0 8px; }
+  ul, ol { margin: 0; padding-left: 18px; }
+  li { margin: 3px 0; }
+  .controls { display: grid; grid-template-columns: 40px 1fr; gap: 6px 10px; align-items: center; }
+  .controls svg { width: 34px; height: 34px; }
+  code { font: 600 12px/1.4 ui-monospace, Menlo, monospace; background: #f3f5f8; border-radius: 6px; padding: 1px 5px; word-break: break-all; }
+  .foot { margin-top: 12px; color: var(--muted); font-size: 12px; }
+  @media (max-width: 560px) { .grid { grid-template-columns: 1fr; } }
+  @media print {
+    body { background: #fff; }
+    .bar { display: none; }
+    .sheet { margin: 0; padding: 0; max-width: none; gap: 10mm; }
+    .card { border: 1px dashed #aab; border-radius: 6mm; page-break-inside: avoid; }
+  }
+</style>
+</head>
+<body>
+<div class="bar">
+  <a href="/">← tasky-flash.vercel.app</a>
+  <button type="button" onclick="window.print()">Print / Save as PDF</button>
+</div>
+
+<main class="sheet">
+  <!-- English -->
+  <section class="card" lang="en">
+    <h1>Tasky quick start</h1>
+    <p class="sub">A knob, one button, your day at a glance.</p>
+    <div class="grid">
+      <div>
+        <h2>Controls</h2>
+        <div class="controls">
+          <svg viewBox="0 0 34 34" aria-hidden="true"><circle cx="17" cy="17" r="11" fill="none" stroke="currentColor" stroke-width="2.5"/><path d="M23 6l5 3-5 3z" fill="#1aa598"/></svg>
+          <span><b>Turn the knob</b>: move, change a value</span>
+          <svg viewBox="0 0 34 34" aria-hidden="true"><circle cx="17" cy="17" r="11" fill="none" stroke="currentColor" stroke-width="2.5"/><circle cx="17" cy="17" r="4" fill="#1aa598"/></svg>
+          <span><b>Press</b>: choose, start / pause focus · <b>hold</b>: more options</span>
+          <svg viewBox="0 0 34 34" aria-hidden="true"><rect x="5" y="10" width="24" height="14" rx="4" fill="none" stroke="currentColor" stroke-width="2.5"/><text x="17" y="20" font-size="7" font-weight="700" text-anchor="middle" fill="currentColor">MODE</text></svg>
+          <span><b>MODE</b>: next screen · twice: back · hold: rest screen</span>
+        </div>
+      </div>
+      <div>
+        <h2>Set up in 2 minutes</h2>
+        <ol>
+          <li>Plug Tasky into a computer (Chrome or Edge).</li>
+          <li>Open <code>tasky-flash.vercel.app</code> → <b>Set up</b>.</li>
+          <li>Wi-Fi, calendar, tasks, GitHub, city. Every step is optional.</li>
+        </ol>
+        <p class="foot">Phone only? On Tasky: <b>More → Setup (QR)</b>, scan, follow the page.</p>
+      </div>
+      <div>
+        <h2>Every day</h2>
+        <ul>
+          <li><b>Home</b>: time, weather, what's next, your tasks.</li>
+          <li><b>Press</b> on Home to focus; the light means "don't disturb".</li>
+          <li><b>Hold</b> on Home: quick settings.</li>
+          <li><b>More → Screens</b>: pick and order your screens.</li>
+        </ul>
+      </div>
+      <div>
+        <h2>Claude Code</h2>
+        <p>In Claude Code, with Tasky plugged in:</p>
+        <p><code>/plugin marketplace add arampersand/tasky</code><br><code>/plugin install tasky@tasky</code></p>
+        <p class="foot">Allow or deny Claude's requests with the knob. Trouble? <code>/tasky:status</code></p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Español -->
+  <section class="card" lang="es">
+    <h1>Tasky: inicio rápido</h1>
+    <p class="sub">Una perilla, un botón y tu día de un vistazo.</p>
+    <div class="grid">
+      <div>
+        <h2>Controles</h2>
+        <div class="controls">
+          <svg viewBox="0 0 34 34" aria-hidden="true"><circle cx="17" cy="17" r="11" fill="none" stroke="currentColor" stroke-width="2.5"/><path d="M23 6l5 3-5 3z" fill="#1aa598"/></svg>
+          <span><b>Gira la perilla</b>: moverte, cambiar un valor</span>
+          <svg viewBox="0 0 34 34" aria-hidden="true"><circle cx="17" cy="17" r="11" fill="none" stroke="currentColor" stroke-width="2.5"/><circle cx="17" cy="17" r="4" fill="#1aa598"/></svg>
+          <span><b>Presiona</b>: elegir, iniciar / pausar el foco · <b>mantén</b>: más opciones</span>
+          <svg viewBox="0 0 34 34" aria-hidden="true"><rect x="5" y="10" width="24" height="14" rx="4" fill="none" stroke="currentColor" stroke-width="2.5"/><text x="17" y="20" font-size="7" font-weight="700" text-anchor="middle" fill="currentColor">MODE</text></svg>
+          <span><b>MODE</b>: siguiente pantalla · dos veces: regresar · mantén: reposo</span>
+        </div>
+      </div>
+      <div>
+        <h2>Configúralo en 2 minutos</h2>
+        <ol>
+          <li>Conecta el Tasky a una computadora (Chrome o Edge).</li>
+          <li>Abre <code>tasky-flash.vercel.app</code> → <b>Set up</b>.</li>
+          <li>Wi-Fi, calendario, tareas, GitHub, ciudad. Todo es opcional.</li>
+        </ol>
+        <p class="foot">¿Solo celular? En el Tasky: <b>More → Setup (QR)</b>, escanea y sigue la página.</p>
+      </div>
+      <div>
+        <h2>Todos los días</h2>
+        <ul>
+          <li><b>Home</b>: hora, clima, lo siguiente y tus tareas.</li>
+          <li><b>Presiona</b> en Home para enfocarte; la luz dice "no molestar".</li>
+          <li><b>Mantén</b> en Home: ajustes rápidos.</li>
+          <li><b>More → Screens</b>: elige y ordena tus pantallas.</li>
+        </ul>
+      </div>
+      <div>
+        <h2>Claude Code</h2>
+        <p>En Claude Code, con el Tasky conectado:</p>
+        <p><code>/plugin marketplace add arampersand/tasky</code><br><code>/plugin install tasky@tasky</code></p>
+        <p class="foot">Permite o rechaza lo que pide Claude con la perilla. ¿Problemas? <code>/tasky:status</code></p>
+      </div>
+    </div>
+  </section>
+</main>
+</body>
+</html>
