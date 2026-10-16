@@ -1,10 +1,11 @@
-"""Tests for tasky_agent.py against a fake Tasky on a pseudo-terminal.
+"""Tests for tasky_agent.py against a fake Tasky on a pseudo-terminal (USB)
+and a fake Tasky on localhost TCP (Wi-Fi).
 
 Run: python3 -m unittest discover companion/tests
+On Windows only the Wi-Fi and launcher tests run (no pseudo-terminals there).
 """
 import json
 import os
-import pty
 import select
 import shutil
 import signal
@@ -14,8 +15,11 @@ import sys
 import tempfile
 import threading
 import time
-import tty
 import unittest
+
+if os.name != "nt":
+    import pty
+    import tty
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 SCRIPT = os.path.abspath(os.path.join(HERE, "..", "..", "claude-plugin", "tasky_agent.py"))
@@ -164,20 +168,31 @@ class FakeWifiTasky:
 
 
 class AgentTest(unittest.TestCase):
+    EXTRA_ENV = {}
+
     def setUp(self):
         self.home = tempfile.mkdtemp(prefix="tasky-test-")
-        self.env = dict(os.environ, HOME=self.home, TASKY_SOCK=os.path.join(self.home, "s.sock"))
+        self.env = dict(os.environ, HOME=self.home, TASKY_HOME=os.path.join(self.home, ".tasky"),
+                        TASKY_SOCK=os.path.join(self.home, "s.sock"))
+        self.env.update(self.EXTRA_ENV)
         self.tasky = None
 
     def tearDown(self):
-        # stop the daemon this test started
         # Stop this test's daemon and wait until it's really gone: Linux reuses
         # /dev/pts numbers, and a dying daemon must not reopen the next test's pty.
-        subprocess.run(["pkill", "-f", f"{SCRIPT} daemon"], env=self.env, capture_output=True)
-        for _ in range(50):
-            if subprocess.run(["pgrep", "-f", f"{SCRIPT} daemon"], capture_output=True).returncode:
-                break
-            time.sleep(0.1)
+        if os.name == "nt":
+            try:
+                with open(os.path.join(self.home, ".tasky", "daemon.pid")) as f:
+                    os.kill(int(f.read()), signal.SIGTERM)
+                time.sleep(0.5)
+            except (OSError, ValueError):
+                pass
+        else:
+            subprocess.run(["pkill", "-f", f"{SCRIPT} daemon"], env=self.env, capture_output=True)
+            for _ in range(50):
+                if subprocess.run(["pgrep", "-f", f"{SCRIPT} daemon"], capture_output=True).returncode:
+                    break
+                time.sleep(0.1)
         if self.tasky:
             self.tasky.close()
         shutil.rmtree(self.home, ignore_errors=True)
@@ -239,7 +254,21 @@ class AgentTest(unittest.TestCase):
         self.assertEqual((r.returncode, r.stdout), (0, ""))
         self.assertFalse(any(l.startswith("TASKY AGENT") for l in self.wifi.lines))
 
+    def test_launcher_runs_a_hook(self):
+        # hooks/run.sh: how the plugin's hooks start Python on every OS
+        if not shutil.which("sh"):
+            self.skipTest("no sh")
+        self.pair()
+        root = os.path.dirname(SCRIPT)
+        r = subprocess.run(["sh", os.path.join(root, "hooks", "run.sh"), "hook", "working"],
+                           input=json.dumps({"session_id": "sh1"}), text=True, capture_output=True,
+                           env=dict(self.env, CLAUDE_PLUGIN_ROOT=root), timeout=30)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertTrue(any('"sh1"' in l for l in self.wifi.lines), self.wifi.lines)
+
     def plug(self, **kw):
+        if os.name == "nt":
+            self.skipTest("fake USB Tasky needs a pseudo-terminal")
         self.tasky = FakeTasky(**kw)
         self.env["TASKY_PORT"] = self.tasky.path
 
@@ -416,6 +445,13 @@ class AgentTest(unittest.TestCase):
         self.assertEqual(json.loads(asker.stdout.read())["hookSpecificOutput"]["decision"]["behavior"], "allow")
         asker.wait()
         self.assertTrue(any('"id": "other"' in l for l in self.tasky.lines))
+
+
+
+@unittest.skipIf(os.name == "nt", "Windows always uses TCP: AgentTest covers it")
+class AgentTestTcp(AgentTest):
+    """The same tests with hooks reaching the daemon over localhost TCP, as on Windows."""
+    EXTRA_ENV = {"TASKY_IPC": "tcp"}
 
 
 if __name__ == "__main__":

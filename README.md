@@ -129,7 +129,7 @@ Deep dive: **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**.
 
 ## Roadmap
 
-**Tasky 3.0** merges the two 2.x firmwares (Tasky and Tasky for Agents) into one. Next up: **Tasky Go** (battery, phone notifications), more agents (Codex, Cursor) and Windows support for the companion. See **[docs/ROADMAP.md](docs/ROADMAP.md)**. Code-level fixes and good first issues live in **[docs/IMPROVEMENTS.md](docs/IMPROVEMENTS.md)**.
+**Tasky 3.0** merges the two 2.x firmwares (Tasky and Tasky for Agents) into one. Next up: **Tasky Go** (battery, phone notifications), more agents (Codex, Cursor). See **[docs/ROADMAP.md](docs/ROADMAP.md)**. Code-level fixes and good first issues live in **[docs/IMPROVEMENTS.md](docs/IMPROVEMENTS.md)**.
 
 ## Contributing
 

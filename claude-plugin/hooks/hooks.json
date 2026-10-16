@@ -5,12 +5,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3",
-            "args": [
-              "${CLAUDE_PLUGIN_ROOT}/tasky_agent.py",
-              "hook",
-              "start"
-            ]
+            "command": "sh \"${CLAUDE_PLUGIN_ROOT}/hooks/run.sh\" hook start"
           }
         ]
       }
@@ -20,12 +15,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3",
-            "args": [
-              "${CLAUDE_PLUGIN_ROOT}/tasky_agent.py",
-              "hook",
-              "working"
-            ]
+            "command": "sh \"${CLAUDE_PLUGIN_ROOT}/hooks/run.sh\" hook working"
           }
         ]
       }
@@ -35,11 +25,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3",
-            "args": [
-              "${CLAUDE_PLUGIN_ROOT}/tasky_agent.py",
-              "ask"
-            ],
+            "command": "sh \"${CLAUDE_PLUGIN_ROOT}/hooks/run.sh\" ask",
             "timeout": 90
           }
         ]
@@ -50,12 +36,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3",
-            "args": [
-              "${CLAUDE_PLUGIN_ROOT}/tasky_agent.py",
-              "hook",
-              "waiting"
-            ]
+            "command": "sh \"${CLAUDE_PLUGIN_ROOT}/hooks/run.sh\" hook waiting"
           }
         ]
       }
@@ -65,12 +46,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3",
-            "args": [
-              "${CLAUDE_PLUGIN_ROOT}/tasky_agent.py",
-              "hook",
-              "done"
-            ]
+            "command": "sh \"${CLAUDE_PLUGIN_ROOT}/hooks/run.sh\" hook done"
           }
         ]
       }
@@ -80,12 +56,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3",
-            "args": [
-              "${CLAUDE_PLUGIN_ROOT}/tasky_agent.py",
-              "hook",
-              "end"
-            ]
+            "command": "sh \"${CLAUDE_PLUGIN_ROOT}/hooks/run.sh\" hook end"
           }
         ]
       }

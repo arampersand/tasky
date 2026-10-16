@@ -33,9 +33,10 @@ broadcast if its address changed), so Tasky can run on battery.
 Never fails loudly: if Tasky isn't reachable, hooks exit 0 at once and Claude
 Code carries on (permission prompts then show in the terminal as usual).
 
-Needs only Python 3 on macOS / Linux. Port: auto-detected (Espressif USB,
-vendor 0x303A, or the first USB modem that answers "TASKY?"), or set
-TASKY_PORT=/dev/cu.usbmodemXXXX. pyserial is used for detection if installed.
+Needs only Python 3, on macOS, Linux or Windows. Port: auto-detected
+(Espressif USB, vendor 0x303A, or the first USB serial port that answers
+"TASKY?"), or set TASKY_PORT=/dev/cu.usbmodemXXXX (Windows: TASKY_PORT=COM5).
+pyserial is used for detection if installed.
 """
 import argparse
 import glob
@@ -52,10 +53,15 @@ import unicodedata
 import uuid
 
 ESPRESSIF_VID = 0x303A
+IS_WINDOWS = os.name == "nt"
+# Hooks reach the daemon over a Unix socket; Windows (or TASKY_IPC=tcp, for
+# tests) uses a localhost TCP port with a secret, both in ~/.tasky/agent.port
+IPC_TCP = IS_WINDOWS or os.environ.get("TASKY_IPC") == "tcp"
 STATES = ("working", "waiting", "done", "end")
 HOOK_STATES = STATES + ("start",)  # start = a new Claude Code session
-HOME = os.path.join(os.path.expanduser("~"), ".tasky")
+HOME = os.environ.get("TASKY_HOME") or os.path.join(os.path.expanduser("~"), ".tasky")
 SOCK = os.environ.get("TASKY_SOCK", os.path.join(HOME, "agent.sock"))
+PORT_FILE = SOCK + ".port" if os.environ.get("TASKY_SOCK") else os.path.join(HOME, "agent.port")
 LINK = os.path.join(HOME, "link.json")  # Wi-Fi pairing, saved over USB
 FIND_ADDR = os.environ.get("TASKY_FIND_ADDR", "255.255.255.255")  # where to look for Tasky
 WIFI_RETRY_S = float(os.environ.get("TASKY_WIFI_RETRY", "10"))
@@ -134,6 +140,103 @@ class SerialPort:
             pass
 
 
+class WinSerialPort:
+    """The same serial port on Windows, with the Win32 API through ctypes.
+
+    DTR and RTS stay off, like the web setup page: on the ESP32-C3/C6 USB
+    port, RTS with DTR low resets the chip.
+    """
+
+    def __init__(self, path):
+        import ctypes
+        from ctypes import wintypes
+
+        class DCB(ctypes.Structure):
+            _fields_ = [("DCBlength", wintypes.DWORD), ("BaudRate", wintypes.DWORD),
+                        ("flags", wintypes.DWORD), ("wReserved", wintypes.WORD),
+                        ("XonLim", wintypes.WORD), ("XoffLim", wintypes.WORD),
+                        ("ByteSize", wintypes.BYTE), ("Parity", wintypes.BYTE),
+                        ("StopBits", wintypes.BYTE), ("XonChar", ctypes.c_char),
+                        ("XoffChar", ctypes.c_char), ("ErrorChar", ctypes.c_char),
+                        ("EofChar", ctypes.c_char), ("EvtChar", ctypes.c_char),
+                        ("wReserved1", wintypes.WORD)]
+
+        class COMMTIMEOUTS(ctypes.Structure):
+            _fields_ = [(name, wintypes.DWORD) for name in (
+                "ReadIntervalTimeout", "ReadTotalTimeoutMultiplier", "ReadTotalTimeoutConstant",
+                "WriteTotalTimeoutMultiplier", "WriteTotalTimeoutConstant")]
+
+        self.ctypes, self.wintypes = ctypes, wintypes
+        self.k32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        self.k32.CreateFileW.restype = wintypes.HANDLE
+        self.path = path
+        name = path if path.startswith("\\\\.\\") else "\\\\.\\" + path  # COM10 and up need this
+        self.handle = self.k32.CreateFileW(name, 0xC0000000, 0, None, 3, 0, None)  # read+write, OPEN_EXISTING
+        if self.handle in (None, wintypes.HANDLE(-1).value):
+            raise OSError(ctypes.get_last_error(), f"can't open {path}")
+        dcb = DCB()
+        dcb.DCBlength = ctypes.sizeof(DCB)
+        self.k32.GetCommState(self.handle, ctypes.byref(dcb))
+        dcb.BaudRate, dcb.ByteSize, dcb.Parity, dcb.StopBits = 115200, 8, 0, 0
+        dcb.flags = 1  # fBinary; DTR and RTS control disabled, no flow control
+        timeouts = COMMTIMEOUTS(0xFFFFFFFF, 0, 0, 0, 2000)  # reads return at once; writes wait up to 2 s
+        if not (self.k32.SetCommState(self.handle, ctypes.byref(dcb))
+                and self.k32.SetCommTimeouts(self.handle, ctypes.byref(timeouts))):
+            err = ctypes.get_last_error()
+            self.close()
+            raise OSError(err, f"can't set up {path}")
+        self.k32.EscapeCommFunction(self.handle, 6)  # CLRDTR
+        self.k32.EscapeCommFunction(self.handle, 4)  # CLRRTS
+        self.buf = b""
+
+    def write_line(self, line):
+        data = (line + "\n").encode("utf-8")
+        done = self.wintypes.DWORD(0)
+        if not self.k32.WriteFile(self.handle, data, len(data), self.ctypes.byref(done), None) \
+                or done.value != len(data):
+            raise OSError("write failed")
+
+    def read_lines(self, timeout):
+        end = time.time() + timeout
+        chunk = self.ctypes.create_string_buffer(4096)
+        got = self.wintypes.DWORD(0)
+        while True:
+            if not self.k32.ReadFile(self.handle, chunk, 4096, self.ctypes.byref(got), None):
+                raise OSError("Tasky unplugged")
+            if got.value:
+                self.buf += chunk.raw[:got.value]
+                break
+            if time.time() >= end:
+                break
+            time.sleep(0.02)
+        lines = []
+        while b"\n" in self.buf:
+            raw, self.buf = self.buf.split(b"\n", 1)
+            lines.append(raw.decode("utf-8", "replace").strip())
+        return lines
+
+    def close(self):
+        if getattr(self, "handle", None):
+            self.k32.CloseHandle(self.handle)
+            self.handle = None
+
+
+def windows_ports():
+    """USB serial ports (the usbser driver: ESP32 boards, not Bluetooth)."""
+    import winreg
+
+    ports = []
+    try:
+        with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, r"HARDWARE\DEVICEMAP\SERIALCOMM") as key:
+            for i in range(winreg.QueryInfoKey(key)[1]):
+                device, port, _ = winreg.EnumValue(key, i)
+                if "usbser" in device.lower():
+                    ports.append(port)
+    except OSError:
+        pass
+    return sorted(ports)
+
+
 def candidate_ports():
     if os.environ.get("TASKY_PORT"):
         return [os.environ["TASKY_PORT"]]
@@ -142,6 +245,8 @@ def candidate_ports():
 
         return [p.device for p in list_ports.comports() if p.vid == ESPRESSIF_VID]
     except ImportError:
+        if IS_WINDOWS:
+            return windows_ports()
         return sorted(glob.glob("/dev/cu.usbmodem*") + glob.glob("/dev/ttyACM*"))
 
 
@@ -150,7 +255,7 @@ def open_tasky():
     status is the TASKY? reply (edition, version)."""
     for path in candidate_ports():
         try:
-            port = SerialPort(path)
+            port = WinSerialPort(path) if IS_WINDOWS else SerialPort(path)
         except OSError:
             continue
         try:
@@ -341,6 +446,7 @@ class Daemon:
         self.scanned = threading.Event()  # first port search finished
         self.wifi_tried = 0.0
         self.cards = {}  # session id -> (time, last TASKY AGENT line): replayed after a reconnect
+        self.secret = None  # TCP mode: what a hook must send
 
     def connected(self):
         # A hook that started the daemon must not lose its message while the
@@ -442,6 +548,8 @@ class Daemon:
                     return
                 data += chunk
             req = json.loads(data.split(b"\n", 1)[0])
+            if self.secret and req.get("key") != self.secret:
+                return  # TCP on localhost: only hooks that can read ~/.tasky/agent.port
             self.last_activity = time.time()
             if req.get("op") == "send":
                 if req["line"].startswith("TASKY AGENT "):
@@ -491,19 +599,38 @@ class Daemon:
                 del self.asking[key]
 
     def run(self):
-        import fcntl
-
         os.makedirs(HOME, exist_ok=True)
         lock = open(os.path.join(HOME, "daemon.lock"), "w")
         try:
-            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            if IS_WINDOWS:
+                import msvcrt
+
+                msvcrt.locking(lock.fileno(), msvcrt.LK_NBLCK, 1)
+            else:
+                import fcntl
+
+                fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except OSError:
             return  # another daemon already runs
-        if os.path.exists(SOCK):
-            os.unlink(SOCK)
-        server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-        server.bind(SOCK)
-        os.chmod(SOCK, 0o600)  # only you can talk to your Tasky
+        with open(os.path.join(HOME, "daemon.pid"), "w") as f:
+            f.write(str(os.getpid()))
+        if IPC_TCP:
+            # localhost only, on a free port; the port and a secret go in a file
+            # in your home folder, so only you can talk to your Tasky
+            server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            server.bind(("127.0.0.1", 0))
+            self.secret = uuid.uuid4().hex
+            tmp = PORT_FILE + ".tmp"
+            fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+            with os.fdopen(fd, "w") as f:
+                f.write(f"{server.getsockname()[1]} {self.secret}")
+            os.replace(tmp, PORT_FILE)
+        else:
+            if os.path.exists(SOCK):
+                os.unlink(SOCK)
+            server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+            server.bind(SOCK)
+            os.chmod(SOCK, 0o600)  # only you can talk to your Tasky
         server.listen(16)
         server.settimeout(5)
         threading.Thread(target=self.serial_loop, daemon=True).start()
@@ -514,31 +641,62 @@ class Daemon:
                 continue
             threading.Thread(target=self.handle_client, args=(conn,), daemon=True).start()
         server.close()
-        os.unlink(SOCK)
+        try:
+            os.unlink(PORT_FILE if IPC_TCP else SOCK)
+        except OSError:
+            pass
 
 
 # --------------------------------------------------------------------- client
+def connect_daemon(timeout):
+    """A socket to the running daemon; OSError if there is none."""
+    if not IPC_TCP:
+        s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        s.settimeout(timeout)
+        try:
+            s.connect(SOCK)
+        except OSError:
+            s.close()
+            raise
+        return s, None
+    try:
+        with open(PORT_FILE) as f:
+            port, secret = f.read().split()
+    except (OSError, ValueError):
+        raise OSError("no daemon")
+    s = socket.create_connection(("127.0.0.1", int(port)), timeout=timeout)
+    s.settimeout(timeout)
+    return s, secret
+
+
+def start_daemon():
+    os.makedirs(HOME, exist_ok=True)
+    log = open(os.path.join(HOME, "daemon.log"), "a")
+    if IS_WINDOWS:  # in the background, with no console window
+        flags = 0x00000200 | 0x08000000  # CREATE_NEW_PROCESS_GROUP | CREATE_NO_WINDOW
+        subprocess.Popen([sys.executable, os.path.abspath(__file__), "daemon"],
+                         stdin=subprocess.DEVNULL, stdout=log, stderr=log, creationflags=flags)
+    else:
+        subprocess.Popen([sys.executable, os.path.abspath(__file__), "daemon"],
+                         stdin=subprocess.DEVNULL, stdout=log, stderr=log, start_new_session=True)
+
+
 def request(req, timeout=2.0, start=True):
     """Send one request to the daemon (starting it if needed). None on failure."""
     for attempt in range(12):
         try:
-            s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-            s.settimeout(timeout)
-            s.connect(SOCK)
+            s, secret = connect_daemon(timeout)
             break
         except (OSError, AttributeError):
-            s.close()
             if not start:
                 return None
             if attempt == 0:
-                os.makedirs(HOME, exist_ok=True)
-                log = open(os.path.join(HOME, "daemon.log"), "a")
-                subprocess.Popen([sys.executable, os.path.abspath(__file__), "daemon"],
-                                 stdin=subprocess.DEVNULL, stdout=log, stderr=log,
-                                 start_new_session=True)
-            time.sleep(0.15)
+                start_daemon()
+            time.sleep(0.15 if not IS_WINDOWS else 0.3)
     else:
         return None
+    if secret:
+        req = dict(req, key=secret)
     try:
         s.sendall((json.dumps(req) + "\n").encode())
         data = b""
@@ -654,6 +812,16 @@ HOOKS = {
 }
 
 
+def python_command():
+    """How a hook starts Python: python3 on macOS / Linux; on Windows (hooks
+    run in Git Bash) the py launcher, or this very python.exe."""
+    if not IS_WINDOWS:
+        return "python3"
+    import shutil
+
+    return "py -3" if shutil.which("py") else '"' + sys.executable.replace("\\", "/") + '"'
+
+
 def is_ours(hook):
     return isinstance(hook, dict) and "tasky_agent.py" in str(hook.get("command", ""))
 
@@ -698,7 +866,7 @@ def install_hooks(settings_path, script_path, uninstall=False):
             if not isinstance(hooks.get(event, []), list):
                 skipped.append(event)  # an unusual value we won't touch
                 continue
-            hook = {"type": "command", "command": f'python3 "{script_path}" {args}'}
+            hook = {"type": "command", "command": f'{python_command()} "{script_path}" {args}'}
             if event == "PermissionRequest":
                 hook["timeout"] = ASK_TIMEOUT_S + 30
             hooks.setdefault(event, []).append({"hooks": [hook]})
@@ -719,6 +887,8 @@ def install_hooks(settings_path, script_path, uninstall=False):
 # ------------------------------------------------------------------- doctor
 def port_holders(path):
     """Names of the programs that have the port open (macOS / Linux), or []."""
+    if IS_WINDOWS:
+        return []  # no lsof; a busy COM port just fails to open
     try:
         out = subprocess.run(["lsof", "-Fc", path], capture_output=True, text=True, timeout=5).stdout
     except (OSError, subprocess.SubprocessError):

@@ -2,6 +2,12 @@
 
 All notable changes to the Tasky firmware. Versions match `firmware/tasky/version.h` and git tags.
 
+## v3.1.1 — 2026-10-16 · Claude Code on Windows
+
+### Added
+- **Claude Code on Windows.** The plugin now runs on Windows 10/11: Tasky's USB port (COM) through the Windows API, hooks reach the background helper over a private localhost port, and the hooks start Python with the `py` launcher (Claude Code runs them in Git Bash). Needs Python from python.org and Git for Windows. Over Wi-Fi it works the same as on a Mac.
+- CI runs the plugin's tests on Linux, macOS and Windows.
+
 ## v3.1.0 — 2026-10-16 · Claude Code over Wi-Fi
 
 ### Added

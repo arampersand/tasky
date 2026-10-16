@@ -23,7 +23,7 @@ Something not working? Run `/tasky:status` in Claude Code: it checks everything 
 
 The plugin lives in [`claude-plugin/`](../claude-plugin): six hooks, the `/tasky:status` skill and `tasky_agent.py`. Updates come through `/plugin`. To remove it: `/plugin uninstall tasky@tasky`.
 
-Only Python 3 is needed (macOS: `xcode-select --install` if `python3` is missing). Windows isn't supported yet. Tested with Claude Code 2.1.280; if hooks don't fire on an older version, update Claude Code (`claude update`).
+Only Python 3 is needed (macOS: `xcode-select --install` if `python3` is missing). **Windows:** install Python from python.org (it brings the `py` launcher) and Git for Windows: Claude Code runs the plugin's hooks in Git Bash, and `hooks/run.sh` finds Python with `py -3`. Tasky shows up as a COM port (no driver needed on Windows 10/11). Tested with Claude Code 2.1.280; if hooks don't fire on an older version, update Claude Code (`claude update`).
 
 ### Without the plugin (terminal)
 

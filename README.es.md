@@ -78,7 +78,7 @@ pio run -e xiao_c3 -t upload && pio device monitor
 
 ## Lo que viene
 
-**Tasky 3.0** junta los dos firmwares de la 2.x (Tasky y Tasky for Agents) en uno. Lo siguiente: **Tasky Go** (con batería y notificaciones del celular), más agentes (Codex, Cursor) y soporte de Windows para el companion. Detalles en **[docs/ROADMAP.md](docs/ROADMAP.md)**.
+**Tasky 3.0** junta los dos firmwares de la 2.x (Tasky y Tasky for Agents) en uno. Lo siguiente: **Tasky Go** (con batería y notificaciones del celular), más agentes (Codex, Cursor). Detalles en **[docs/ROADMAP.md](docs/ROADMAP.md)**.
 
 ## Contribuir
 

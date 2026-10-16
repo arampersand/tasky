@@ -62,7 +62,7 @@
         <p>Use the USB cable. Plug it into the computer where you use Claude Code. You need Tasky 3.0 or newer. You only need the cable the first time. After that, it also works over Wi-Fi (Tasky 3.1 or newer). First, close any other page that is using Tasky, like the setup page. Only one app can use Tasky's USB connection at a time.</p>
       </li>
       <li>
-        <h2>Paste this in the Terminal app and press Enter</h2>
+        <h2>Paste this in the Terminal app (Windows: PowerShell) and press Enter</h2>
         <div class="cmd"><code>claude plugin marketplace add arampersand/tasky &amp;&amp; claude plugin install tasky@tasky</code><button class="btn ghost" data-copy type="button">Copy</button></div>
         <details><summary>Or type these inside Claude Code</summary>
           <div class="cmd"><code>/plugin marketplace add arampersand/tasky</code><button class="btn ghost" data-copy type="button">Copy</button></div>
@@ -77,7 +77,7 @@
     <div class="faq">
       <article><h3>Answering with the knob</h3><p>When Claude wants to run a command or change a file, Tasky jumps to that card and the light breathes. Turn the knob to pick <strong>Allow</strong>, <strong>Deny</strong> or <strong>Allow edits</strong>. Press to answer. To answer on your computer instead, hold the knob.</p></article>
       <article><h3>Something not working?</h3><p>In Claude Code, type <code>/tasky:status</code>. It checks your setup and tells you what to fix.</p></article>
-      <article><h3>What you need</h3><p>A Mac or Linux computer with Python 3. On a Mac, if Python is missing, run <code>xcode-select --install</code> in Terminal. Windows doesn't work yet.</p></article>
+      <article><h3>What you need</h3><p>A Mac, Windows or Linux computer with Python 3. On a Mac, if Python is missing, run <code>xcode-select --install</code> in Terminal. On Windows, install Python from <a href="https://www.python.org/downloads/">python.org</a> and <a href="https://git-scm.com/downloads/win">Git for Windows</a> (Claude Code uses it to run the plugin), and run the two commands in PowerShell one at a time, without the <code>&amp;&amp;</code>.</p></article>
       <article><h3>Unplugged, on battery?</h3><p>Yes, with Tasky 3.1 or newer. Plug Tasky in once (step 1) so the plugin can pair with it. After that it works over Wi-Fi, as long as Tasky and your computer are on the same network.</p></article>
       <article><h3>Without the plugin</h3><p>For advanced users: <code>curl -fsSL https://tasky-flash.vercel.app/agents/install.sh | sh</code> adds the same setup to your Claude Code settings file, <code>~/.claude/settings.json</code>. Use this or the plugin, not both. <a href="https://github.com/arampersand/tasky/blob/main/companion/README.md">How it works →</a></p></article>
     </div>
@@ -94,7 +94,7 @@
         <p>Usa el cable USB. Conéctalo a la computadora donde usas Claude Code. Necesitas Tasky 3.0 o más nuevo. El cable solo hace falta la primera vez. Después también funciona por Wi-Fi (Tasky 3.1 o más nuevo). Antes, cierra cualquier otra página que esté usando a Tasky, como la de configuración. Solo una app a la vez puede usar la conexión USB de Tasky.</p>
       </li>
       <li>
-        <h2>Pega esto en la app Terminal y presiona Enter</h2>
+        <h2>Pega esto en la app Terminal (Windows: PowerShell) y presiona Enter</h2>
         <div class="cmd"><code>claude plugin marketplace add arampersand/tasky &amp;&amp; claude plugin install tasky@tasky</code><button class="btn ghost" data-copy type="button">Copiar</button></div>
         <details><summary>O escribe esto dentro de Claude Code</summary>
           <div class="cmd"><code>/plugin marketplace add arampersand/tasky</code><button class="btn ghost" data-copy type="button">Copiar</button></div>
@@ -109,7 +109,7 @@
     <div class="faq">
       <article><h3>Responder con la perilla</h3><p>Cuando Claude quiere correr un comando o cambiar un archivo, Tasky salta a esa tarjeta y la luz respira. Gira la perilla para elegir <strong>Allow</strong> (permitir), <strong>Deny</strong> (rechazar) o <strong>Allow edits</strong> (permitir cambios). Presiona para responder. Si prefieres responder en tu computadora, mantén presionada la perilla.</p></article>
       <article><h3>¿Algo no funciona?</h3><p>En Claude Code, escribe <code>/tasky:status</code>. Revisa tu configuración y te dice qué arreglar.</p></article>
-      <article><h3>Qué necesitas</h3><p>Una Mac o una computadora con Linux, con Python 3. En Mac, si no tienes Python, corre <code>xcode-select --install</code> en la Terminal. Windows todavía no funciona.</p></article>
+      <article><h3>Qué necesitas</h3><p>Una Mac, o una computadora con Windows o Linux, con Python 3. En Mac, si no tienes Python, corre <code>xcode-select --install</code> en la Terminal. En Windows, instala Python desde <a href="https://www.python.org/downloads/">python.org</a> y <a href="https://git-scm.com/downloads/win">Git for Windows</a> (Claude Code lo usa para correr el plugin), y corre los dos comandos en PowerShell uno por uno, sin el <code>&amp;&amp;</code>.</p></article>
       <article><h3>¿Desconectado, con batería?</h3><p>Sí, con Tasky 3.1 o más nuevo. Conéctalo una vez (paso 1) para que el plugin se empareje con él. Después funciona por Wi-Fi, siempre que Tasky y tu computadora estén en la misma red.</p></article>
       <article><h3>Sin el plugin</h3><p>Para usuarios avanzados: <code>curl -fsSL https://tasky-flash.vercel.app/agents/install.sh | sh</code> agrega lo mismo a tu archivo de configuración de Claude Code, <code>~/.claude/settings.json</code>. Usa esto o el plugin, no los dos. <a href="https://github.com/arampersand/tasky/blob/main/companion/README.md">Cómo funciona →</a></p></article>
     </div>
