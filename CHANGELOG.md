@@ -2,6 +2,12 @@
 
 All notable changes to the Tasky firmware. Versions match `firmware/tasky/version.h` and git tags.
 
+## v2.9.0 — 2026-10-16 · Tour & hints
+
+### Added
+- **First-boot tour**: four interactive steps (turn the knob, press it, press MODE, done) that each wait for the action they teach. Hold MODE to skip; replay from **More → Tour**. Devices already in use skip it on upgrade.
+- **On-screen hints**: the first three times you open a screen, a one-line hint at the bottom says what the knob does there. It hides after 3 s or on any input.
+
 ## v2.8.0 — 2026-10-16 · Boards & RGB light
 
 ### Added

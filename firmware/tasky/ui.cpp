@@ -2282,3 +2282,53 @@ void TaskyUI::rightTextFont(const String &s, int xRight, int baselineY,
   tft.print(s);
   tft.setFont();
 }
+
+// ==================== TOUR & HINTS ====================
+// Tour: each step shows the control it teaches and waits for that action.
+void TaskyUI::drawTour(int step) {
+  tft.fillScreen(C_BG);
+  for (int i = 0; i < 4; i++) {  // progress dots
+    int x = CX - 24 + i * 16;
+    if (i <= step)
+      tft.fillCircle(x, 26, 4, C_TEAL);
+    else
+      tft.drawCircle(x, 26, 4, C_LINE);
+  }
+  if (step == 3) {
+    centerTextFont("You're set!", 84, C_TEXT, &FreeSansBold18pt7b);
+    centerTextFont("MODE: next screen", 124, C_MUTED, &FreeSans9pt7b);
+    centerTextFont("MODE twice: go back", 148, C_MUTED, &FreeSans9pt7b);
+    centerTextFont("Hold MODE: rest screen", 172, C_MUTED, &FreeSans9pt7b);
+    centerTextFont("Press the knob for Home", 212, C_TEAL, &FreeSans9pt7b);
+    return;
+  }
+  static const char *const TITLE[] = {"Turn the knob", "Press the knob", "Press MODE"};
+  static const char *const SUB[] = {"to move and change", "to pick, start or stop",
+                                    "the button on top"};
+  const int iy = 96;  // icon center
+  if (step < 2) {     // the knob seen from above
+    tft.drawCircle(CX, iy, 30, C_TEAL);
+    tft.drawCircle(CX, iy, 29, C_TEAL);
+    tft.fillCircle(CX, iy - 20, 4, C_TEAL);  // grip mark
+  } else {            // the MODE button
+    tft.drawRoundRect(CX - 36, iy - 16, 72, 32, 8, C_TEAL);
+    tft.drawRoundRect(CX - 35, iy - 15, 70, 30, 7, C_TEAL);
+    centerTextFont("MODE", iy + 6, C_TEXT, &FreeSans9pt7b);
+  }
+  if (step == 0) {  // rotation arrows on both sides
+    tft.fillTriangle(CX - 48, iy + 2, CX - 36, iy + 2, CX - 42, iy - 10, C_TEAL);
+    tft.fillTriangle(CX + 36, iy - 2, CX + 48, iy - 2, CX + 42, iy + 10, C_TEAL);
+  } else {          // press arrow from above
+    int top = step == 1 ? iy - 58 : iy - 46;
+    tft.fillRect(CX - 3, top, 6, 10, C_TEAL);
+    tft.fillTriangle(CX - 9, top + 10, CX + 9, top + 10, CX, top + 20, C_TEAL);
+  }
+  centerTextFont(TITLE[step], 160, C_TEXT, &FreeSansBold12pt7b);
+  centerTextFont(SUB[step], 184, C_MUTED, &FreeSans9pt7b);
+  centerTextFont("Hold MODE to skip", 218, C_MUTED, &FreeSans9pt7b);
+}
+
+void TaskyUI::drawHint(const char *text) {
+  tft.fillRoundRect(10, 200, 220, 26, 13, C_TEXT);
+  centerTextFont(text, 218, C_BG, &FreeSans9pt7b);
+}

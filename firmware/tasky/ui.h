@@ -63,6 +63,7 @@ enum Screen {
   SCR_HOME,       // Glance: clock, weather, next event, tasks, phrase
   SCR_AGENTS,     // Agents edition: Claude Code sessions
   SCR_CONTROLS,   // Agents edition: Bluetooth volume / media / shortcuts
+  SCR_TOUR,       // First-boot tour (also More -> Tour)
   // Overlays
   SCR_AMBIENT,    // Idle: clock + next event + weather
   SCR_NOTICE      // Meeting alert / morning brief / day close
@@ -178,6 +179,8 @@ public:
   void drawWifi(bool wifiOn, String ssid, String pass, String ip);
   void drawQRFull(String ssid, String pass);
   void drawSplashTasky();
+  void drawTour(int step);           // 0 turn, 1 press, 2 MODE, 3 done
+  void drawHint(const char *text);   // One-line pill at the bottom
   void drawFinishScreen(const char *msg);
 
   void uiTick(bool strong = false); // Click beep + click animation

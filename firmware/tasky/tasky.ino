@@ -306,6 +306,7 @@ static const MoreItem MORE_ITEMS[] = {
     {"Update", SCR_UPDATE},
     {"Setup (QR)", SCR_QR},
     {"Settings", SCR_SETTINGS},
+    {"Tour", SCR_TOUR},
 };
 static const int MORE_N = sizeof(MORE_ITEMS) / sizeof(MORE_ITEMS[0]);
 static const char *moreLabels[MORE_N];
@@ -774,12 +775,117 @@ void handleHome(EncClickType click) {
 }
 
 void showNotice(NoticeType type) {
+  if (screen == SCR_TOUR)
+    return;  // don't interrupt the first-boot tour
   // Keep the original screen when a notice lands on top of Ambient
   if (screen != SCR_AMBIENT && screen != SCR_NOTICE)
     screenBeforeOverlay = screen;
   noticeType = type;
   screen = SCR_NOTICE;
   ui.baseDrawn = false;
+}
+
+// ==================== TOUR & HINTS ====================
+// First boot: a 4-step tour that waits for the action each step teaches.
+// Afterwards each screen shows a one-line hint on its first HINT_VISITS visits.
+// Both live in the "tasky" NVS namespace, so a factory reset brings them back.
+const int HINT_VISITS = 3;
+const uint32_t HINT_MS = 3000;
+uint8_t hintVisits[SCR_NOTICE + 1];
+uint32_t hintUntil = 0;
+int tourStep = 0;
+
+const char *hintFor(Screen s) {
+  switch (s) {
+  case SCR_HOME:     return "Press: focus  Hold: tasks";
+  case SCR_TIMER:    return "Turn: time  Press: start";
+  case SCR_TASKS:    return "Press: done  Hold: info";
+  case SCR_AGENDA:   return "Press: refresh";
+  case SCR_STATS:    return "MODE: next screen";
+  case SCR_MORE:     return "Turn: pick  Press: open";
+  case SCR_FOCUS:    return "Turn: pick  Press: on/off";
+  case SCR_CALENDAR: return "Turn: day  Press: open";
+  case SCR_STREAK:   return "Turn: day  Press: mark";
+  case SCR_SETTINGS: return "Press: edit  Turn: change";
+#if FEATURE_AGENTS
+  case SCR_AGENTS:   return "Press: seen  Hold: clear";
+#endif
+  default:           return nullptr;  // screens that already explain themselves
+  }
+}
+
+// Returns true when the tour should run (first boot of a new device)
+bool loadTourAndHints() {
+  Preferences p;
+  p.begin("tasky", true);
+  bool tourDone = p.getBool("tour", false);
+  memset(hintVisits, 0, sizeof(hintVisits));
+  if (p.isKey("hints"))
+    p.getBytes("hints", hintVisits, sizeof(hintVisits));
+  p.end();
+  // Devices upgraded from 2.8 or older are already in use: skip the tour
+  return !tourDone && model.cfg.wifiSSID.length() == 0 && model.cfg.totalFocusMin == 0;
+}
+
+void endTour() {
+  Preferences p;
+  p.begin("tasky", false);
+  p.putBool("tour", true);
+  p.end();
+  tourStep = 0;
+  goTo(SCR_HOME);
+}
+
+void handleTour(int step, EncClickType click, ModeClickType mode) {
+  if (!ui.baseDrawn) {
+    ui.drawTour(tourStep);
+    ui.baseDrawn = true;
+  }
+  if (mode == MODE_LONG) {
+    endTour();
+    return;
+  }
+  bool done = (tourStep == 0 && step != 0) ||
+              ((tourStep == 1 || tourStep == 3) && click != ENC_NONE) ||
+              (tourStep == 2 && (mode == MODE_SHORT || mode == MODE_DOUBLE));
+  if (!done)
+    return;
+  ui.uiTick(true);
+  if (tourStep == 3) {
+    endTour();
+    return;
+  }
+  tourStep++;
+  ui.baseDrawn = false;
+}
+
+// Before the screen handler: hide the hint on input or timeout. Handlers draw
+// their base before reading input, so the redraw never undoes the action.
+void hideHint(bool anyInput) {
+  if (hintUntil && (anyInput || millis() > hintUntil)) {
+    hintUntil = 0;
+    ui.baseDrawn = false;  // redraw what the hint covered
+    ui.lastShownMin = -1;
+  }
+}
+
+// After the screen handler, so the hint lands on top of a drawn screen
+void showHint() {
+  static Screen hintScreen = SCR_TOUR;
+  if (screen == hintScreen || !ui.baseDrawn)
+    return;
+  hintScreen = screen;
+  hintUntil = 0;  // the previous screen's hint went away with it
+  const char *hint = hintFor(screen);
+  if (!hint || hintVisits[screen] >= HINT_VISITS)
+    return;
+  hintVisits[screen]++;
+  Preferences p;
+  p.begin("tasky", false);
+  p.putBytes("hints", hintVisits, sizeof(hintVisits));
+  p.end();
+  ui.drawHint(hint);
+  hintUntil = millis() + HINT_MS;
 }
 
 void handleNotice(EncClickType click, bool modePressed) {
@@ -1250,7 +1356,7 @@ void setup() {
     moreLabels[i] = MORE_ITEMS[i].label;
   lastInputAt = millis();
 
-  screen = SCR_HOME;
+  screen = loadTourAndHints() ? SCR_TOUR : SCR_HOME;
   ui.baseDrawn = false;
   ui.applyTheme();
 
@@ -1391,6 +1497,11 @@ void loop() {
     bothBtnDownAt = 0;
   }
 
+  if (screen == SCR_TOUR) {
+    handleTour(step, click, modeClick);
+    return;
+  }
+
   // Overlays take any input to close
   if (screen == SCR_NOTICE) {
     handleNotice(click, modeClick != MODE_NONE);
@@ -1445,6 +1556,7 @@ void loop() {
     return;
   }
 
+  hideHint(anyInput);
   switch (screen) {
   case SCR_HOME:
     handleHome(click);
@@ -1513,4 +1625,5 @@ void loop() {
   default:
     break;
   }
+  showHint();
 }

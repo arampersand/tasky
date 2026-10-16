@@ -33,7 +33,7 @@ Tasky is a small desk device that keeps your focus sessions, your three tasks fo
 
 ### From your phone (no computer)
 
-1. **Power it up.** Plug in a USB-C cable. You'll see the Tasky splash screen and then **Home**. The focus timer works offline right away.
+1. **Power it up.** Plug in a USB-C cable. You'll see the Tasky splash screen, a short tour of the controls and then **Home**. The focus timer works offline right away.
 2. **Turn on the setup network.** Tasky doesn't broadcast its setup network until you ask it to. Double-press **MODE** to jump to **More**, turn the knob to **Setup (QR)** and press the knob. The screen fills with a QR code.
 3. **Join the network.** Scan the QR code with your phone's camera, or join this WiFi network by hand:
 
@@ -66,6 +66,8 @@ Once Tasky is online it sets its clock over NTP. Your calendar, weather, GitHub 
 
 A single MODE press takes effect about 0.4 s after you let go, because Tasky first waits to see whether a second press follows.
 
+**First boot tour and hints.** A new Tasky starts with a four-step tour: turn the knob, press it, press MODE, done. Each step waits until you do it. Hold MODE to skip. Replay it any time from **More → Tour**. After that, the first three times you open each screen a one-line hint at the bottom says what the knob does there ("Turn: time  Press: start"). It disappears after 3 seconds or as soon as you touch a control. A [factory reset](#factory-reset) brings back both.
+
 ![The knob on the side and the MODE button on top](images/tasky-encoder.jpg)
 
 ### Screen map
@@ -88,6 +90,7 @@ Home → Timer → Tasks → Agenda → Stats → More → (back to Home)
 | Update     | [Allow a firmware upload](#update)       |
 | Setup (QR) | [Setup network QR code](#setup-qr)       |
 | Settings   | [Device settings](#settings)             |
+| Tour       | Replay the first-boot tour               |
 
 ---
 

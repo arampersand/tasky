@@ -42,7 +42,7 @@ The PCBs already have most of it (see [HARDWARE.md → Boards](HARDWARE.md#board
 
 ## Phase 1 — Stable 3.0: setup that flows *(in progress)*
 
-**Shipped in 2.6–2.7:** clock from the browser/phone (no internet needed), web setup wizard over USB (Wi-Fi scan, calendar, tasks, GitHub, AI, weather, time zone), Home glance screen with rotating phrases as the first screen, Ambient sharing the Home layout. **Still to do:** Improv Wi-Fi inside the installer dialog, on-device first-boot tour + hints, portal in English/Spanish, quick-start card, hardware validation.
+**Shipped in 2.6–2.7:** clock from the browser/phone (no internet needed), web setup wizard over USB (Wi-Fi scan, calendar, tasks, GitHub, AI, weather, time zone), Home glance screen with rotating phrases as the first screen, Ambient sharing the Home layout. **Shipped in 2.9:** on-device first-boot tour and one-line hints. **Still to do:** Improv Wi-Fi inside the installer dialog, portal in English/Spanish, quick-start card, hardware validation.
 
 **Guided onboarding on the website**, one screen at a time, each step skippable:
 
