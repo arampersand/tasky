@@ -29,9 +29,9 @@ jobs:
         working-directory: firmware
       - name: Size report
         run: |
-          BIN=firmware/.pio/build/${{ matrix.env }}/tasky-${{ matrix.env }}-merged.bin
+          BIN=firmware/.pio/build/${{ matrix.env }}/release/tasky-${{ matrix.env }}-merged.bin
           echo "### ${{ matrix.env }}: $(stat -c%s firmware/.pio/build/${{ matrix.env }}/firmware.bin) bytes app, $(stat -c%s $BIN) bytes merged" >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v4
         with:
           name: tasky-${{ matrix.env }}
-          path: firmware/.pio/build/${{ matrix.env }}/tasky-${{ matrix.env }}-merged.bin
+          path: firmware/.pio/build/${{ matrix.env }}/release/tasky-${{ matrix.env }}-merged.bin
