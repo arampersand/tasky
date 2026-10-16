@@ -79,7 +79,13 @@ class AgentTest(unittest.TestCase):
 
     def tearDown(self):
         # stop the daemon this test started
+        # Stop this test's daemon and wait until it's really gone: Linux reuses
+        # /dev/pts numbers, and a dying daemon must not reopen the next test's pty.
         subprocess.run(["pkill", "-f", f"{SCRIPT} daemon"], env=self.env, capture_output=True)
+        for _ in range(50):
+            if subprocess.run(["pgrep", "-f", f"{SCRIPT} daemon"], capture_output=True).returncode:
+                break
+            time.sleep(0.1)
         if self.tasky:
             self.tasky.close()
         shutil.rmtree(self.home, ignore_errors=True)
@@ -155,7 +161,8 @@ class AgentTest(unittest.TestCase):
         r = self.run_agent("ask", stdin=self.ask_event())
         self.assertEqual(r.stdout, "")
         self.run_agent("hook", "working", stdin={"session_id": "a"})
-        self.assertFalse(any(l.startswith(("TASKY AGENT ", "TASKY ASK ")) for l in self.tasky.lines))
+        self.assertFalse(any(l.startswith(("TASKY AGENT ", "TASKY ASK ")) for l in self.tasky.lines),
+                         self.tasky.lines)
         self.assertIn("standard firmware", self.run_agent("status").stdout)
 
     def test_timeout_falls_back_to_terminal(self):
