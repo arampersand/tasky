@@ -1328,16 +1328,18 @@ void TaskyUI::drawBanner(const char *text) {
                  &FreeSansBold12pt7b);
 }
 
-// Where you are in the MODE carousel: a small "3/11" at the top edge
+// Where you are in the MODE carousel: the screen's number, small, in the
+// bottom-right corner (clear of the centered bottom lines and the hint pill)
 void TaskyUI::drawCarouselDots(int index, int count) {
-  char buf[8];
-  snprintf(buf, sizeof(buf), "%d/%d", index + 1, count);
+  (void)count;
+  char buf[4];
+  snprintf(buf, sizeof(buf), "%d", index + 1);
   tft.setFont();  // the small built-in 6x8 font
   tft.setTextSize(1);
   int w = strlen(buf) * 6;
-  tft.fillRect(CX - w / 2 - 2, 3, w + 4, 10, C_BG);
+  tft.fillRect(228 - w, 227, w + 2, 9, C_BG);
   tft.setTextColor(C_MUTED);
-  tft.setCursor(CX - w / 2, 4);
+  tft.setCursor(229 - w, 228);
   tft.print(buf);
 }
 
@@ -2647,24 +2649,23 @@ void TaskyUI::drawQRFull(String ssid, String pass) {
 #if FEATURE_QR_CODE
   String payload = "WIFI:S:" + ssid + ";T:WPA;P:" + pass + ";;";
   qrcodegen::QrCode qr =
-      qrcodegen::QrCode::encodeText(payload.c_str(), ECC_MEDIUM);
+      qrcodegen::QrCode::encodeText(payload.c_str(), ECC_LOW);
 
-  // Phones need a white "quiet zone" around the code (4 modules by the
-  // spec) and like some error correction on a small, glossy screen
+  // As big as it fits: big modules are what phone cameras need. The white
+  // screen around it is the quiet zone (keep at least 2 modules each side).
+  // One text line below shows the network and its password (unique per
+  // Tasky) for joining by hand.
   int size = qr.getSize();
-  int border = 4;
-  int totalModules = size + (border * 2);
-
-  // QR fills most of the screen; one text line below shows the credentials
-  // (the password is unique per device, so people need to be able to read it)
+  int border = 0;
+  int totalModules = size;
   const int TEXT_H = 22;
-  int scale = (220 - TEXT_H) / totalModules;
+  int scale = min(W / (size + 4), (H - TEXT_H - 4) / size);
   if (scale < 1)
     scale = 1;
 
   int dimension = totalModules * scale;
   int startX = (W - dimension) / 2;
-  int startY = (H - dimension - TEXT_H) / 2;
+  int startY = (H - TEXT_H - dimension) / 2;
 
   for (int y = -border; y < size + border; y++) {
     for (int x = -border; x < size + border; x++) {
@@ -2680,8 +2681,8 @@ void TaskyUI::drawQRFull(String ssid, String pass) {
                    scale, scale, color);
     }
   }
-  String creds = ssid + " / " + pass;
-  centerTextFont(creds.c_str(), startY + dimension + 17, 0x0000, &FreeSans9pt7b);
+  String creds = "Wi-Fi " + ssid + " / " + pass;
+  centerTextFont(creds.c_str(), startY + dimension + 18, 0x0000, &FreeSans9pt7b);
 #else
   // Text-only fallback when QR disabled to save ~35-50 KB
   centerTextFont("WiFi Setup", 50, 0x0000, &FreeSansBold12pt7b);

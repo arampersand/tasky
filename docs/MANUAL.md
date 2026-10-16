@@ -75,12 +75,12 @@ A single MODE press takes effect about 0.4 s after you let go, because Tasky fir
 MODE moves through the **main carousel** in a loop: first what you use while working, then what you check, then setup. By default:
 
 ```
-Home → Agents → Controls → Phrases → Timer → Tasks → Agenda → Streak → Weather → Settings → Setup (QR) → More
+Home → Agents → Controls → Phrases → Timer → Tasks → Agenda → Calendar → Streak → Weather → Settings → Setup (QR) → More
 ```
 
 **Agents** and **Controls** are in the carousel from the start. Bluetooth turns on the first time you open **Controls**, and stays on from then.
 
-A small number at the top edge (for example **3/11**) shows where you are in the carousel.
+The screen's number in the carousel shows small in the bottom-right corner.
 
 **You choose the carousel.** In the web setup's **Screens** step, tick the screens you want and put them in order with ↑/↓, or do the same on Tasky in **More → [Screens](#screens-editor)**. **Home** is always first and **More** always last.
 
