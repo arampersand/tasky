@@ -59,7 +59,7 @@ Tu celular es la peor herramienta de foco que tienes. Tasky es un objeto de un s
 1. Abre **[tasky-flash.vercel.app](https://tasky-flash.vercel.app)** en Chrome o Edge desde una computadora.
 2. Elige **XIAO ESP32-C3** o **C6** y conecta la placa con un cable USB-C *de datos*. Si no aparece el puerto, mantén `BOOT` presionado al conectarla.
 3. Click en **Connect & flash**.
-4. Déjalo conectado y sigue **Set up** en la misma página: WiFi → calendario → tareas → GitHub → IA → clima, todo por el cable USB. (¿Sin compu? En Tasky abre **More → Setup (QR)** y escanea el código con el celular.)
+4. Déjalo conectado y sigue **Set up** en la misma página: WiFi → calendario → tareas → GitHub → IA → clima, todo por el cable USB. (¿Sin compu? En Tasky abre **Settings → More → Setup (QR)** y escanea el código con el celular.)
 
 La página siempre sirve la [release](https://github.com/arampersand/tasky/releases/latest) más nueva y conserva tus ajustes al reinstalar.
 

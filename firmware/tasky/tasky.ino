@@ -316,7 +316,12 @@ void rebuildMenus() {
     inCarousel[def - SCREEN_DEFS] = true;
     carousel[carouselN++] = def->screen;
   }
-  carousel[carouselN++] = SCR_MORE;
+  // More lives inside Settings; it's in the carousel only if Settings isn't
+  bool settingsIn = false;
+  for (int c = 0; c < carouselN; c++)
+    settingsIn |= carousel[c] == SCR_SETTINGS;
+  if (!settingsIn)
+    carousel[carouselN++] = SCR_MORE;
 
   moreN = 0;
   for (int i = 0; i < SCREEN_DEFS_N; i++)
@@ -361,11 +366,21 @@ void goTo(Screen next) {
 
 // Screens opened from More return to More with MODO (either direction);
 // quick settings return to Home
+// More (opened from Settings) goes back to Settings
+static bool backFromMore() {
+  if (screen != SCR_MORE || carouselIndex(SCR_MORE) >= 0)
+    return false;
+  goTo(SCR_SETTINGS);
+  return true;
+}
+
 void navigateNext() {
   if (screen == SCR_QUICK) {
     goTo(SCR_HOME);
     return;
   }
+  if (backFromMore())
+    return;
   int i = carouselIndex(screen);
   goTo(i < 0 ? SCR_MORE : carousel[(i + 1) % carouselN]);
 }
@@ -375,6 +390,8 @@ void navigatePrev() {
     goTo(SCR_HOME);
     return;
   }
+  if (backFromMore())
+    return;
   int i = carouselIndex(screen);
   goTo(i < 0 ? SCR_MORE : carousel[(i + carouselN - 1) % carouselN]);
 }
@@ -755,8 +772,10 @@ void handleStats(int step, EncClickType click) {
   }
 }
 
+// Settings: row 0 opens More (screens not in your carousel); then Work,
+// Break, WiFi, Bright, LED, Theme
 void handleSettings(int step, EncClickType click) {
-  const int maxSettingsIdx = 5;  // 0-5 (6 items)
+  const int maxSettingsIdx = 6;  // rows 0-6
 
   // Update WiFi status for display
   ui.wifiConnected = net.isConnected();
@@ -765,17 +784,15 @@ void handleSettings(int step, EncClickType click) {
     ui.drawSettings();
     ui.baseDrawn = true;
   }
+  int item = ui.settingsSel - 1;  // -1 = More
   if (ui.settingsEditing) {
     if (step != 0) {
-      switch (ui.settingsSel) {
+      switch (item) {
       case 0:
         model.cfg.workMin = constrain(model.cfg.workMin + step * 5, 5, 90);
         break;
       case 1:
         model.cfg.breakMin = constrain(model.cfg.breakMin + step * 5, 1, 30);
-        break;
-      case 2:
-        // WiFi - no editing, handled by click
         break;
       case 3:
         model.cfg.screenBright =
@@ -812,8 +829,12 @@ void handleSettings(int step, EncClickType click) {
     }
     if (click == ENC_SHORT) {
       ui.uiTick(true);
+      if (item < 0) {  // More: every other screen
+        goTo(SCR_MORE);
+        return;
+      }
       // WiFi item: navigate to WiFi screen instead of editing
-      if (ui.settingsSel == 2) {
+      if (item == 2) {
         if (!portal.wifiOn) portal.begin();
         screen = SCR_WIFI_INFO;
         ui.baseDrawn = false;
@@ -1984,13 +2005,15 @@ void loop() {
   default:
     break;
   }
-  // Carousel position dots, once after each full redraw (partial redraws
-  // never touch the top strip)
-  static uint32_t dotsAfterClear = UINT32_MAX;
+  // Carousel page number: after each full redraw, and once a second in case
+  // a partial redraw clipped the corner
+  static uint32_t dotsAfterClear = UINT32_MAX, dotsAt = 0;
   static Screen dotsScreen = SCR_TOUR;
-  if (ui.baseDrawn && (ui.fullClears != dotsAfterClear || screen != dotsScreen)) {
+  if (ui.baseDrawn && (ui.fullClears != dotsAfterClear || screen != dotsScreen ||
+                       millis() - dotsAt > 1000)) {
     dotsAfterClear = ui.fullClears;
     dotsScreen = screen;
+    dotsAt = millis();
     int i = carouselIndex(screen);
     if (i >= 0 && screen != SCR_QR)  // the QR code fills the screen
       ui.drawCarouselDots(i, carouselN);

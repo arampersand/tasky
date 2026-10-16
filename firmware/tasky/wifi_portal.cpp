@@ -450,8 +450,8 @@ String WiFiPortal::htmlPage() {
   number(T("Minutes per focus session", "Minutos por sesión de enfoque"), "work", model->cfg.workMin, 5, 90);
   number(T("Workday starts (hour, 0-23)", "Inicio de jornada (hora, 0-23)"), "dsh", model->cfg.dayStartHour, 0, 23);
   number(T("Workday ends (hour, 0-23)", "Fin de jornada (hora, 0-23)"), "deh", model->cfg.dayEndHour, 0, 23);
-  hint(T("Tasky gives you a summary when the day starts and ends. Focus mode (light + lock while a session runs) is set on Tasky: MODE to More → Focus.",
-         "Tasky te da un resumen al empezar y al cerrar el día. El modo Focus (luz y bloqueo durante la sesión) se ajusta en Tasky: MODE hasta More → Focus."));
+  hint(T("Tasky gives you a summary when the day starts and ends. Focus mode (light + lock while a session runs) is set on Tasky: Settings → More → Focus.",
+         "Tasky te da un resumen al empezar y al cerrar el día. El modo Focus (luz y bloqueo durante la sesión) se ajusta en Tasky: Settings → More → Focus."));
 
 #if FEATURE_WEATHER
   s += "<label>";
@@ -512,8 +512,8 @@ String WiFiPortal::htmlPage() {
   s += "<details class='mo'><summary>";
   s += T("Firmware update", "Actualizar firmware");
   s += "</summary><p class='h'>";
-  s += T("First, on Tasky: MODE to More → Update and press the knob. Updates stay enabled for 5 minutes.",
-         "Primero en Tasky: MODE hasta More → Update y presiona la perilla. La actualización queda habilitada 5 minutos.");
+  s += T("First, on Tasky: Settings → More → Update and press the knob. Updates stay enabled for 5 minutes.",
+         "Primero en Tasky: Settings → More → Update y presiona la perilla. La actualización queda habilitada 5 minutos.");
   s += "</p><p>";
   s += T("Current version", "Versión actual");
   s += ": <b class='ok'>v" + (ota ? ota->getVersion() : String("?")) + "</b></p>";

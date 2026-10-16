@@ -302,56 +302,44 @@ void TaskyUI::drawSettings() {
     tft.drawFastHLine(30, 46, 180, C_LINE);
   }
 
-  // Settings: Work, Break, WiFi, Bright, LED, Theme (0-5)
-  const int itemCount = 6;
-  const char *labels[6] = {"Work", "Break", "WiFi", "Bright", "LED", "Theme"};
-  String values[6];
-  values[0] = String(model->cfg.workMin) + "m";
-  values[1] = String(model->cfg.breakMin) + "m";
-  values[2] = model->cfg.wifiSSID.length() > 0 ? "ON" : "OFF";
-  values[3] = String((model->cfg.screenBright * 100) / 255) + "%";
-  values[4] = String((model->cfg.ledBright * 100) / 255) + "%";
-  values[5] = model->cfg.darkMode ? "DARK" : "LIGHT";
+  // Row 0 opens More (every screen that isn't in your carousel), then
+  // Work, Break, WiFi, Bright, LED, Theme
+  const int itemCount = 7;
+  const char *labels[7] = {"More", "Work", "Break", "WiFi", "Bright", "LED", "Theme"};
+  String values[7];
+  values[0] = ">";
+  values[1] = String(model->cfg.workMin) + "m";
+  values[2] = String(model->cfg.breakMin) + "m";
+  values[3] = model->cfg.wifiSSID.length() > 0 ? "ON" : "OFF";
+  values[4] = String((model->cfg.screenBright * 100) / 255) + "%";
+  values[5] = String((model->cfg.ledBright * 100) / 255) + "%";
+  values[6] = model->cfg.darkMode ? "DARK" : "LIGHT";
 
-  int yStart = 72;
-  int rowH = 28;
+  int yStart = 70;  // last row ends at y 226, above the page number
+  int rowH = 25;
 
-  // Draw all items
   for (int i = 0; i < itemCount; i++) {
     int baseline = yStart + i * rowH;
     bool sel = (i == settingsSel);
     if (!full && !sel && i != lastListSel)
       continue;
-    if (!full)  // rows are 28 px apart; 12pt caps reach baseline - 17
-      tft.fillRect(20, baseline - 18, 200, 27, C_BG);
+    if (!full)  // rows are 25 px apart; 12pt caps reach baseline - 17
+      tft.fillRect(20, baseline - 18, 200, 24, C_BG);
 
-    // Draw highlight for selected item
-    if (sel) {
-      int w = 200;
-      int x = (W - w) / 2;
-      if (settingsEditing) {
-        tft.drawRoundRect(x, baseline - 16, w, 24, 6, C_TEAL);
-      } else {
-        tft.drawRoundRect(x, baseline - 16, w, 24, 6, C_LINE);
-      }
-    }
+    if (sel)
+      tft.drawRoundRect(20, baseline - 18, 200, 24, 6, settingsEditing ? C_TEAL : C_LINE);
 
-    // Text color - always visible
-    uint16_t labelColor = sel ? C_TEAL : C_TEXT;
+    uint16_t labelColor = sel ? C_TEAL : (i == 0 ? C_TEAL : C_TEXT);
     uint16_t valueColor = sel ? C_TEAL : C_MUTED;
-
-    // WiFi row: color value green/red based on connection
-    if (i == 2) {
+    if (i == 3)  // WiFi: green/red by connection
       valueColor = wifiConnected ? C_GREEN : C_RED;
-      if (sel) labelColor = C_TEAL;
-    }
 
     tft.setTextColor(labelColor);
-    tft.setFont(&FreeSans12pt7b); // Bigger font
+    tft.setFont(&FreeSans12pt7b);
     tft.setCursor(28, baseline);
     tft.print(labels[i]);
-    if (i == 3 || i == 4) {  // Bright / LED: a level bar you can read at a glance
-      int level = i == 3 ? model->cfg.screenBright : model->cfg.ledBright;
+    if (i == 4 || i == 5) {  // Bright / LED: a level bar you can read at a glance
+      int level = i == 4 ? model->cfg.screenBright : model->cfg.ledBright;
       const int bx = 128, bw = 80, by = baseline - 9;
       tft.fillRoundRect(bx, by, bw, 8, 4, C_LINE);
       int w = bw * level / 255;
@@ -1328,19 +1316,19 @@ void TaskyUI::drawBanner(const char *text) {
                  &FreeSansBold12pt7b);
 }
 
-// Where you are in the MODE carousel: the screen's number, small, in the
-// bottom-right corner (clear of the centered bottom lines and the hint pill)
+// Where you are in the MODE carousel: the screen's number in the
+// bottom-right corner, below the hint pill. The built-in font draws its own
+// background, so repainting it never flickers.
 void TaskyUI::drawCarouselDots(int index, int count) {
   (void)count;
   char buf[4];
   snprintf(buf, sizeof(buf), "%d", index + 1);
-  tft.setFont();  // the small built-in 6x8 font
-  tft.setTextSize(1);
-  int w = strlen(buf) * 6;
-  tft.fillRect(228 - w, 227, w + 2, 9, C_BG);
-  tft.setTextColor(C_MUTED);
-  tft.setCursor(229 - w, 228);
+  tft.setFont();  // built-in 6x8 font at 2x: 12x16 cells
+  tft.setTextSize(2);
+  tft.setTextColor(C_MUTED, C_BG);
+  tft.setCursor(240 - (int)strlen(buf) * 12, 226);
   tft.print(buf);
+  tft.setTextSize(1);
 }
 
 // Phrases screen: one phrase, centered, with its author underneath

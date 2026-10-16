@@ -69,7 +69,7 @@ Your phone is the worst focus tool you own. Tasky is a single-purpose object tha
 1. Open **[tasky-flash.vercel.app](https://tasky-flash.vercel.app)** in Chrome or Edge on a computer.
 2. Pick **XIAO ESP32-C3** or **C6** and plug the board in with a USB-C *data* cable. If no port shows up, hold `BOOT` while plugging in.
 3. Click **Connect & flash**.
-4. Keep it plugged in and follow **Set up** on the same page: Wi-Fi → calendar → tasks → GitHub → AI → weather, all over the USB cable. (No computer? On Tasky open **More → Setup (QR)** and scan the code with your phone.)
+4. Keep it plugged in and follow **Set up** on the same page: Wi-Fi → calendar → tasks → GitHub → AI → weather, all over the USB cable. (No computer? On Tasky open **Settings → More → Setup (QR)** and scan the code with your phone.)
 
 The page always serves the newest [release](https://github.com/arampersand/tasky/releases/latest) and keeps your settings when you reinstall. Prefer the command line? (full image, erases settings)
 

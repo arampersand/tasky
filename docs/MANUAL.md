@@ -34,7 +34,7 @@ Tasky is a small desk device that keeps your focus sessions, your three tasks fo
 ### From your phone (no computer)
 
 1. **Power it up.** Plug in a USB-C cable. You'll see the Tasky splash screen, a short tour of the controls and then **Home**. The focus timer works offline right away.
-2. **Turn on the setup network.** Tasky doesn't broadcast its setup network until you ask it to. Double-press **MODE** to jump to **More**, turn the knob to **Setup (QR)** and press the knob. The screen fills with a QR code.
+2. **Turn on the setup network.** Tasky doesn't broadcast its setup network until you ask it to. From **Home**, double-press **MODE** to jump to the **QR** screen (or open **Settings → More → Setup (QR)**). The screen fills with a QR code.
 3. **Join the network.** Scan the QR code with your phone's camera, or join this WiFi network by hand:
 
    | Network (SSID) | Password                                   |
@@ -43,7 +43,7 @@ Tasky is a small desk device that keeps your focus sessions, your three tasks fo
 
 4. **Open the portal.** Most phones open the setup page on their own (captive portal). If yours doesn't, browse to **http://192.168.4.1**.
 5. **Enter your WiFi details.** Fill in your home network name, its password and your **UTC offset** (for example `-6`). Then tap **Guardar y Conectar** (Save and connect).
-6. **Check that it worked.** On the device, go to **More → Settings**, select **WiFi** and press the knob. The screen should say **Connected** and show the device's IP address on your network.
+6. **Check that it worked.** On the device, go to **Settings**, select **WiFi** and press the knob. The screen should say **Connected** and show the device's IP address on your network.
 
 > [!NOTE]
 > The portal pages are currently in Spanish. The [field reference](#portal-fields) below gives the English meaning of every field.
@@ -59,14 +59,14 @@ Once Tasky is online it sets its clock over NTP. Your calendar, weather, GitHub 
 | **Knob**                   | Turn                 | Moves a selection, changes a value or scrolls (depends on the screen)                               |
 | **Knob**                   | Short press          | The screen's main action                                                                           |
 | **Knob**                   | Long press (≥ 0.9 s) | The screen's secondary action (reset, details, mode menu)                                          |
-| **MODE**                   | Single press         | Next screen in the main carousel. From a screen you opened through **More**, it takes you back to **More** |
-| **MODE**                   | Double press         | Previous screen in the main carousel (or back to **More**)                                         |
+| **MODE**                   | Single press         | Next screen in the main carousel. From a screen you opened through **More**, it takes you back to **More**; from **More**, back to **Settings** |
+| **MODE**                   | Double press         | Previous screen in the main carousel (or back to **More** / **Settings**)                                         |
 | **MODE**                   | Hold (≥ 1.5 s)       | Switch to the [Ambient](#ambient-idle-screen) idle screen                                          |
 | **Knob + MODE**            | Hold both for 3 s    | [Factory reset](#factory-reset)                                                                     |
 
 A single MODE press takes effect about 0.4 s after you let go, because Tasky first waits to see whether a second press follows.
 
-**First boot tour and hints.** A new Tasky starts with a four-step tour: turn the knob, press it, press MODE, done. Each step waits until you do it. Hold MODE to skip. Replay it any time from **More → Tour**. After that, the first three times you open each screen a one-line hint at the bottom says what the knob does there ("Turn: time  Press: start"). It disappears after 3 seconds or as soon as you touch a control. A [factory reset](#factory-reset) brings back both.
+**First boot tour and hints.** A new Tasky starts with a four-step tour: turn the knob, press it, press MODE, done. Each step waits until you do it. Hold MODE to skip. Replay it any time from **Settings → More → Tour**. After that, the first three times you open each screen a one-line hint at the bottom says what the knob does there ("Turn: time  Press: start"). It disappears after 3 seconds or as soon as you touch a control. A [factory reset](#factory-reset) brings back both.
 
 ![The knob on the side and the MODE button on top](images/tasky-encoder.jpg)
 
@@ -75,16 +75,16 @@ A single MODE press takes effect about 0.4 s after you let go, because Tasky fir
 MODE moves through the **main carousel** in a loop: first what you use while working, then what you check, then setup. By default:
 
 ```
-Home → Agents → Controls → Phrases → Timer → Tasks → Agenda → Calendar → Streak → Weather → Settings → Setup (QR) → More
+Home → Timer → Tasks → Agenda → Calendar → Streak → Weather → Agents → Controls → Phrases → Settings (with **More** inside) → Setup (QR)
 ```
 
 **Agents** and **Controls** are in the carousel from the start. Bluetooth turns on the first time you open **Controls**, and stays on from then.
 
 The screen's number in the carousel shows small in the bottom-right corner.
 
-**You choose the carousel.** In the web setup's **Screens** step, tick the screens you want and put them in order with ↑/↓, or do the same on Tasky in **More → [Screens](#screens-editor)**. **Home** is always first and **More** always last.
+**You choose the carousel.** In the web setup's **Screens** step, tick the screens you want and put them in order with ↑/↓, or do the same on Tasky in **Settings → More → [Screens](#screens-editor)**. **Home** is always first.
 
-**More** lists every screen that isn't in your carousel (for example Stats, Focus, Calendar, Agent), then **Update** and **Tour**.
+**More** is the first row of **Settings** (if you take Settings out of the carousel, More takes its place at the end). It lists every screen that isn't in your carousel (for example Stats, Focus, Calendar, Agent), then **Update** and **Tour**.
 
 ---
 
@@ -191,7 +191,7 @@ More is a menu of the remaining screens. Turn the knob to select an item and pre
 
 ### Screens (editor)
 
-<a id="screens-editor"></a>Open it from **More → Screens** to choose your carousel right on Tasky. It's the same list as the web setup's **Screens** step, and every change is saved at once.
+<a id="screens-editor"></a>Open it from **Settings → More → Screens** to choose your carousel right on Tasky. It's the same list as the web setup's **Screens** step, and every change is saved at once.
 
 - **Start** (first row): the screen Tasky opens on, Home or any screen in your carousel. **Press** to cycle through them.
 - Below it, **every screen** with a check box:
@@ -330,7 +330,7 @@ While focus mode is on:
 - **Lock:** with *Lock screens* enabled, MODE does nothing on the Timer and the task line briefly shows **Pause to unlock**. Pause the timer (short press) to move around again.
 - **Indicator:** a dot appears next to the FOCUS label.
 
-Configure focus mode under **More → Focus**.
+Configure focus mode under **Settings → More → Focus**.
 
 ---
 
@@ -406,7 +406,7 @@ Tap **Guardar y Conectar** to save every field at once. Tasky then reconnects to
 > [!NOTE]
 > When you change a task's name, that slot starts again: not done, zero focus minutes. Tasks whose names you don't change keep their checkmark.
 
-The break length isn't in the portal. Set it on the device under **More → Settings → Break**.
+The break length isn't in the portal. Set it on the device under **Settings → Break**.
 
 ### Integrations
 
@@ -492,7 +492,7 @@ If the board isn't detected, see [Can't enter the bootloader](#cant-enter-the-bo
 
 ### Option B: over WiFi from the portal
 
-1. On the device, open **More → Update** and press the knob. The screen shows **READY**, the URL and a 5-minute countdown.
+1. On the device, open **Settings → More → Update** and press the knob. The screen shows **READY**, the URL and a 5-minute countdown.
 2. Open that URL in a browser on the same network, or on the setup network.
 3. Scroll to **Firmware Update**, choose the `.bin` file and click **Actualizar Firmware**.
 4. Watch the progress bar. When the upload finishes, the device reboots into the new version.
@@ -507,7 +507,7 @@ The current version is shown on the Update screen and in the portal.
 
 ## Claude Code agents and Controls
 
-Tasky is also a companion for your computer: it shows your Claude Code sessions and works as a Bluetooth key row. Both are part of the firmware since 3.0 (in 2.7–2.13 they were a separate **Tasky for Agents** firmware). **Agents** and **Controls** wait in **More** until you use them, then join the [carousel](#screen-map).
+Tasky is also a companion for your computer: it shows your Claude Code sessions and works as a Bluetooth key row. Both are part of the firmware since 3.0 (in 2.7–2.13 they were a separate **Tasky for Agents** firmware). **Agents** and **Controls** are in the [carousel](#screen-map) from the start.
 
 ### Agents
 

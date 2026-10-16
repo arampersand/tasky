@@ -2,6 +2,13 @@
 
 All notable changes to the Tasky firmware. Versions match `firmware/tasky/version.h` and git tags.
 
+## v3.0.1 — 2026-10-16 · More in Settings
+
+### Changed
+- **More moved into Settings.** It's the first row of Settings instead of a separate last screen (they looked like the same thing). MODE from More goes back to Settings. If you take Settings out of the carousel, More comes back at the end so you can always reach it.
+- New default order: Home → Timer → Tasks → Agenda → Calendar → Streak → Weather → Agents → Controls → Phrases → Settings → Setup (QR). A carousel you already arranged in Screens stays as it is.
+- The page number in the corner is bigger.
+
 ## v3.0.0 — 2026-10-16 · One Tasky
 
 ### Changed
