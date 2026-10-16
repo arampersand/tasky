@@ -290,6 +290,7 @@ static int moreN = 0;
 // System entries always at the end of More (Settings and Setup (QR) are in
 // SCREEN_DEFS: More lists them only when they aren't in your carousel)
 static const ScreenDef MORE_SYSTEM[] = {
+    {"screens", "Screens", SCR_SCREENS},
     {"update", "Update", SCR_UPDATE},
     {"tour", "Tour", SCR_TOUR},
 };
@@ -310,6 +311,10 @@ void rebuildMenus() {
     pos = comma + 1;
     if (!def || inCarousel[def - SCREEN_DEFS])
       continue;  // unknown in this edition, or listed twice
+    // Agents and Controls wait in More until you've used them
+    if ((def->screen == SCR_AGENTS && !model.cfg.agentsSeen) ||
+        (def->screen == SCR_CONTROLS && !model.cfg.btOn))
+      continue;
     inCarousel[def - SCREEN_DEFS] = true;
     carousel[carouselN++] = def->screen;
   }
@@ -558,6 +563,111 @@ void handleStreak(int step, EncClickType click) {
     ui.drawStreak();
   }
   shownSum = streakChecksum();
+}
+
+// Screens editor (More > Screens): row 0 picks the start screen; below,
+// press = in/out of the carousel, hold = grab and turn to move it.
+// Changes are saved at once (the web's Screens step sees the same list).
+static uint8_t edOrder[MAX_MENU];  // SCREEN_DEFS indexes (Home excluded)
+static bool edIncluded[MAX_MENU];
+static const char *edLabels[MAX_MENU];
+static int edN = 0, edSel = 0;
+static bool edGrabbed = false;
+
+static void loadScreensEditor() {
+  edN = 0;
+  for (int c = 1; c < carouselN - 1; c++)  // carousel order first (skip Home, More)
+    for (int i = 1; i < SCREEN_DEFS_N; i++)
+      if (SCREEN_DEFS[i].screen == carousel[c]) {
+        edOrder[edN] = i;
+        edIncluded[edN++] = true;
+      }
+  for (int i = 1; i < SCREEN_DEFS_N; i++) {  // then the rest, unticked
+    bool seen = false;
+    for (int k = 0; k < edN; k++)
+      seen |= edOrder[k] == i;
+    if (!seen) {
+      edOrder[edN] = i;
+      edIncluded[edN++] = false;
+    }
+  }
+}
+
+static void saveScreensEditor() {
+  String list = "home";
+  for (int k = 0; k < edN; k++)
+    if (edIncluded[k])
+      list += String(",") + SCREEN_DEFS[edOrder[k]].id;
+  model.cfg.screens = list;
+  model.save();
+  rebuildMenus();
+}
+
+static const ScreenDef *startDef() {
+  const ScreenDef *d = findScreen(model.cfg.startScreen);
+  return d ? d : &SCREEN_DEFS[0];
+}
+
+static void drawScreensEditor() {
+  for (int k = 0; k < edN; k++)
+    edLabels[k] = SCREEN_DEFS[edOrder[k]].label;
+  ui.drawScreens(startDef()->label, edLabels, edIncluded, edN, edSel, edGrabbed);
+}
+
+void handleScreensEditor(int step, EncClickType click) {
+  if (!ui.baseDrawn) {
+    loadScreensEditor();
+    edSel = 0;
+    edGrabbed = false;
+    drawScreensEditor();
+  }
+  int rows = edN + 1;
+  if (step != 0) {
+    ui.uiTick(false);
+    int to = ((edSel - step) % rows + rows) % rows;  // knob up = next
+    if (edGrabbed && edSel > 0 && to > 0) {  // carry the grabbed screen along
+      int a = edSel - 1, b = to - 1;
+      uint8_t o = edOrder[a];
+      bool in = edIncluded[a];
+      int dir = b > a ? 1 : -1;
+      for (int k = a; k != b; k += dir) {
+        edOrder[k] = edOrder[k + dir];
+        edIncluded[k] = edIncluded[k + dir];
+      }
+      edOrder[b] = o;
+      edIncluded[b] = in;
+    }
+    edSel = edGrabbed && to == 0 ? edSel : to;
+    drawScreensEditor();
+  }
+  if (click == ENC_SHORT) {
+    ui.uiTick(true);
+    if (edSel == 0) {  // next start screen: Home or any screen in your carousel
+      int cur = 0;
+      for (int c = 0; c < carouselN - 1; c++)
+        if (carousel[c] == startDef()->screen)
+          cur = c;
+      Screen next = carousel[(cur + 1) % (carouselN - 1)];
+      for (int i = 0; i < SCREEN_DEFS_N; i++)
+        if (SCREEN_DEFS[i].screen == next)
+          model.cfg.startScreen = SCREEN_DEFS[i].id;
+      model.save();
+    } else if (edGrabbed) {
+      edGrabbed = false;
+      saveScreensEditor();
+    } else {
+      edIncluded[edSel - 1] = !edIncluded[edSel - 1];
+      saveScreensEditor();
+    }
+    drawScreensEditor();
+  }
+  if (click == ENC_LONG && edSel > 0) {
+    ui.uiTick(true);
+    edGrabbed = !edGrabbed;
+    if (!edGrabbed)
+      saveScreensEditor();
+    drawScreensEditor();
+  }
 }
 
 // Quick settings (long press on Home): turn = pick, press = change,
@@ -1099,6 +1209,32 @@ void updateFocusLight() {
   }
   setLed(on ? model.cfg.ledBright : 0);
 }
+// Bluetooth (the Controls key row) starts the first time you open Controls,
+// then on every boot: it costs RAM and power, so people who never pair skip it.
+void ensureBluetooth() {
+#if FEATURE_BLE_HID
+  static bool started = false;
+  if (started)
+    return;
+  started = true;
+  BleHid::begin("Tasky");
+  if (!model.cfg.btOn) {
+    model.cfg.btOn = true;  // Controls joins the carousel from now on
+    model.save();
+    rebuildMenus();
+  }
+#endif
+}
+
+// The first agent card puts Agents in the carousel
+void markAgentsSeen() {
+  if (model.cfg.agentsSeen)
+    return;
+  model.cfg.agentsSeen = true;
+  model.save();
+  rebuildMenus();
+}
+
 #include "agents_screens.h"
 
 
@@ -1531,13 +1667,12 @@ void setup() {
   rebuildMenus();
   lastInputAt = millis();
 
-  screen = loadTourAndHints() ? SCR_TOUR : SCR_HOME;
+  screen = loadTourAndHints() ? SCR_TOUR : startDef()->screen;  // your start screen
   ui.baseDrawn = false;
   ui.applyTheme();
 
-#if FEATURE_BLE_HID
-  BleHid::begin("Tasky");
-#endif
+  if (model.cfg.btOn)
+    ensureBluetooth();
   usbSetup.onCommand = handleUsbCommand;
   usbSetup.onChanged = []() {
     rebuildMenus();  // the carousel may have changed
@@ -1785,6 +1920,9 @@ void loop() {
     break;
   case SCR_QUICK:
     handleQuick(step, click);
+    break;
+  case SCR_SCREENS:
+    handleScreensEditor(step, click);
     break;
 #if FEATURE_WEATHER
   case SCR_WEATHER:

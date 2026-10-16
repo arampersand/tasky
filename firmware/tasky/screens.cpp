@@ -38,11 +38,8 @@ const ScreenDef *findScreen(const String &id) {
   return nullptr;
 }
 
+// What you use while working, then what you check, then setup. Agents and
+// Controls are skipped until you use them (rebuildMenus in tasky.ino).
 const char *defaultCarousel() {
-#if TASKY_EDITION_AGENTS
-  // What you use while working, then what you check, then setup
   return "home,agents,controls,phrases,timer,tasks,agenda,streak,weather,settings,qr";
-#else
-  return "home,phrases,timer,tasks,agenda,streak,weather,settings,qr";
-#endif
 }

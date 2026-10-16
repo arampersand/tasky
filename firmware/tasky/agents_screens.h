@@ -21,6 +21,8 @@ bool handleAgentCommand(const String &cmd) {
   }
   const char *id = d["id"] | "";
   bool ok = id[0] && agents.update(id, d["label"] | "", d["state"] | "", d["msg"] | "");
+  if (ok)
+    markAgentsSeen();
   Serial.println(ok ? "@tasky {\"ok\":true}"
                     : "@tasky {\"ok\":false,\"error\":\"need id and a valid state\"}");
   return true;
@@ -157,6 +159,7 @@ static bool handleAsk(const String &cmd) {
     return true;
   }
   Serial.println("@tasky {\"ok\":true}");
+  markAgentsSeen();
   if (screen == SCR_TOUR)
     return true;
   resolveSelection();
@@ -302,6 +305,7 @@ static void sendKey(const ComputerKey &k) {
 }
 
 void handleControls(int step, EncClickType click) {
+  ensureBluetooth();
   static bool wasConnected = false;
   if (BleHid::connected() != wasConnected) {
     wasConnected = BleHid::connected();

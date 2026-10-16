@@ -55,7 +55,8 @@ void UsbSetup::sendStatus() {
   JsonDocument doc;
   doc["v"] = TASKY_VERSION;
   doc["board"] = CONFIG_IDF_TARGET;  // "esp32c3" / "esp32c6"
-  doc["edition"] = TASKY_EDITION_AGENTS ? "agents" : "tasky";
+  doc["edition"] = "tasky";  // one firmware since 3.0
+  doc["agents"] = true;      // answers TASKY AGENT / ASK (companion, web)
   JsonObject wifi = doc["wifi"].to<JsonObject>();
   wifi["ssid"] = model->cfg.wifiSSID;
   wifi["connected"] = net->isConnected();

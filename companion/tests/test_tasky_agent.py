@@ -23,14 +23,14 @@ SCRIPT = os.path.abspath(os.path.join(HERE, "..", "..", "claude-plugin", "tasky_
 class FakeTasky:
     """Answers like the firmware: TASKY? status, TASKY AGENT ok, TASKY ASK -> answer."""
 
-    def __init__(self, choice=0, answer_after=0.3, version="2.12.0", edition="agents"):
+    def __init__(self, choice=0, answer_after=0.3, version="2.12.0", edition="agents", agents=None):
         self.master, slave = pty.openpty()
         tty.setraw(slave)
         self.path = os.ttyname(slave)
         self.slave = slave  # keep it open so the pty stays alive
         self.choice = choice  # None = never answer
         self.answer_after = answer_after
-        self.version, self.edition = version, edition
+        self.version, self.edition, self.agents = version, edition, agents
         self.lines = []
         self.stop = False
         threading.Thread(target=self.loop, daemon=True).start()
@@ -54,8 +54,11 @@ class FakeTasky:
                 self.lines.append(line)
                 os.write(self.master, b"[debug] some log line\n")  # noise the client must ignore
                 if line == "TASKY?":
-                    self.reply({"v": self.version, "edition": self.edition})
-                elif line.startswith("TASKY AGENT ") and self.edition == "agents":
+                    status = {"v": self.version, "edition": self.edition}
+                    if self.agents is not None:
+                        status["agents"] = self.agents
+                    self.reply(status)
+                elif line.startswith("TASKY AGENT ") and (self.edition == "agents" or self.agents):
                     self.reply({"ok": True})
                 elif not line.startswith("TASKY ASK ") or self.version < "2.12":
                     self.reply({"ok": False, "error": "unknown command"})  # like old firmware
@@ -162,7 +165,7 @@ class AgentTest(unittest.TestCase):
         self.plug(edition="tasky")
         r = self.run_agent("doctor", "--settings", os.path.join(self.home, "none.json"))
         self.assertEqual(r.returncode, 1)
-        self.assertIn("Flash Tasky for Agents", r.stdout)
+        self.assertIn("Update Tasky at https://tasky-flash.vercel.app", r.stdout)
         self.assertIn("/plugin install tasky@tasky", r.stdout)
 
     def test_ask_allow(self):
@@ -209,6 +212,14 @@ class AgentTest(unittest.TestCase):
         self.run_agent("hook", "working", stdin={"session_id": "a"})
         self.assertTrue(any(l.startswith("TASKY AGENT ") for l in self.tasky.lines))
 
+    def test_one_firmware_3_0(self):
+        # 3.0: edition "tasky" with "agents": true does cards and questions
+        self.plug(version="3.0.0", edition="tasky", agents=True, choice=0)
+        out = json.loads(self.run_agent("ask", stdin=self.ask_event()).stdout)
+        self.assertEqual(out["hookSpecificOutput"]["decision"]["behavior"], "allow")
+        self.run_agent("hook", "working", stdin={"session_id": "a"})
+        self.assertTrue(any(l.startswith("TASKY AGENT ") for l in self.tasky.lines))
+
     def test_standard_edition_gets_nothing(self):
         self.plug(edition="tasky")
         r = self.run_agent("ask", stdin=self.ask_event())
@@ -216,7 +227,7 @@ class AgentTest(unittest.TestCase):
         self.run_agent("hook", "working", stdin={"session_id": "a"})
         self.assertFalse(any(l.startswith(("TASKY AGENT ", "TASKY ASK ")) for l in self.tasky.lines),
                          self.tasky.lines)
-        self.assertIn("standard firmware", self.run_agent("status").stdout)
+        self.assertIn("no agent cards", self.run_agent("status").stdout)
 
     def test_timeout_falls_back_to_terminal(self):
         self.plug(choice=None)

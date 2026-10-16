@@ -1082,6 +1082,53 @@ void TaskyUI::drawQuick(int sel) {
   }
 }
 
+// ==================== SCREENS EDITOR ====================
+void TaskyUI::drawScreens(const char *start, const char *const labels[], const bool included[],
+                          int count, int sel, bool grabbed) {
+  const int visible = 6, rowH = 24, first = 80;
+  bool full = !baseDrawn;
+  baseDrawn = true;
+  if (full) {
+    clearScreen();
+    centerTextFont("SCREENS", 34, C_TEXT, &FreeSansBold12pt7b);
+    tft.drawFastHLine(40, 44, 160, C_LINE);
+  }
+  tft.fillRect(10, 50, 220, 182, C_BG);
+  int rows = count + 1;  // + the start row
+  int startRow = constrain(sel - visible / 2, 0, max(0, rows - visible));
+  for (int v = 0; v < visible && startRow + v < rows; v++) {
+    int r = startRow + v;
+    int y = first + v * rowH;
+    bool isSel = r == sel;
+    uint16_t bg = isSel ? (grabbed ? C_ORANGE : C_TEAL) : C_BG;
+    if (isSel)
+      tft.fillRoundRect(16, y - 16, 208, 22, 5, bg);
+    uint16_t fg = isSel ? C_BG : C_TEXT;
+    tft.setFont(&FreeSans9pt7b);
+    if (r == 0) {
+      tft.setTextColor(isSel ? C_BG : C_TEAL);
+      tft.setCursor(26, y);
+      tft.print("Start");
+      tft.setFont();
+      rightTextFont(start, 214, y, isSel ? C_BG : C_TEAL, &FreeSans9pt7b);
+      continue;
+    }
+    int i = r - 1;
+    if (included[i])  // a tick, or an empty box
+      tft.fillRoundRect(26, y - 11, 10, 10, 2, isSel ? C_BG : C_TEAL);
+    else
+      tft.drawRoundRect(26, y - 11, 10, 10, 2, isSel ? C_BG : C_MUTED);
+    tft.setTextColor(included[i] ? fg : (isSel ? C_BG : C_MUTED));
+    tft.setCursor(44, y);
+    tft.print(labels[i]);
+    tft.setFont();
+    if (isSel && grabbed)
+      rightTextFont("move", 214, y, C_BG, &FreeSans9pt7b);
+  }
+  centerTextFont(grabbed ? "Turn: move  Press: drop" : "Press: on/off  Hold: move", 226,
+                 C_MUTED, &FreeSans9pt7b);
+}
+
 // ==================== MORE MENU ====================
 void TaskyUI::drawMore(const char *const labels[], int count) {
   const int visible = 6, rowH = 22, first = 74;

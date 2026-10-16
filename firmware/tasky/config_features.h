@@ -9,34 +9,21 @@
 // Set to 1 to enable, 0 to disable. Disabled features are excluded from compilation.
 // Config: Huge APP (3MB) - features esenciales para asistente de productividad.
 
-// ==================== EDITION ====================
-// Two firmwares from one codebase (both fit the 1.875 MB OTA slot):
-//   0 = Tasky            focus timer, tasks, calendar, weather, GitHub, Notion, AI chat
-//   1 = Tasky for Agents computer companion: Bluetooth volume/media/shortcuts and
-//                        Claude Code agent status, plus timer/tasks/calendar/weather.
-//                        Drops the on-device AI chat and Notion to make room for BLE.
-// Set per PlatformIO env with -DTASKY_EDITION_AGENTS=1 (envs *_agents).
-#ifndef TASKY_EDITION_AGENTS
-#define TASKY_EDITION_AGENTS 0
-#endif
-
+// ==================== ONE FIRMWARE (3.0) ====================
+// Since 3.0 there's a single Tasky: focus timer, tasks, calendar, weather,
+// GitHub, Notion, AI brief, Claude Code agents and the Bluetooth key row are
+// all built in. Bluetooth starts only once you open Controls (then stays on),
+// and Agents / Controls join the carousel once you use them.
 #define FEATURE_WEATHER  1   // Clima - contexto del dia
 #define FEATURE_SPOTIFY  0   // Spotify - disabled until BLE music from phone app is ready
 #define FEATURE_FIREBASE 0   // Cloud sync - opcional (sync entre dispositivos)
 #define FEATURE_GITHUB   1   // GitHub - streak para desarrolladores
 #define FEATURE_CALENDAR 1   // iCal + Agenda - tu calendario
 #define FEATURE_QR_CODE  1   // QR para WiFi setup
-#if TASKY_EDITION_AGENTS
-#define FEATURE_NOTION   0
-#define FEATURE_LLM      0
+#define FEATURE_NOTION   1   // Notion - tareas en Agenda
+#define FEATURE_LLM      1   // AI - cloud LLM integration (Claude/OpenAI)
 #define FEATURE_BLE_HID  1   // Bluetooth keyboard/media controller (NimBLE)
 #define FEATURE_AGENTS   1   // Claude Code / agent status over USB
-#else
-#define FEATURE_NOTION   1   // Notion - tareas en Agenda
-#define FEATURE_LLM      1   // AI Agent - cloud LLM integration (Claude/OpenAI)
-#define FEATURE_BLE_HID  0
-#define FEATURE_AGENTS   0
-#endif
 
 // ==================== SECRETS (from config_secrets.h, gitignored) ====================
 // Copy config_secrets.h.example to config_secrets.h and fill in your keys.

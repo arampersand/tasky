@@ -12,7 +12,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        env: [xiao_c3, xiao_c6, xiao_c3_agents, xiao_c6_agents]
+        env: [xiao_c3, xiao_c6]
     steps:
       - uses: actions/checkout@v4
       - name: Check tag matches version.h

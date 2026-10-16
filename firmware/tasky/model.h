@@ -47,8 +47,11 @@ struct Config {
   uint8_t ledBright = 180;
   uint8_t ledType = 0;  // 0 = PWM LED(s), 1 = SK6812 RGB chain (see config_hardware.h)
   String screens = "";  // MODE carousel ids, "home,timer,..." ("" = default)
+  String startScreen = "home";  // the screen Tasky opens on
   String phrases = "";  // Your phrases, one per line ("" = built-in)
   uint8_t hostOs = 0;   // Controls shortcuts: 0 = Mac, 1 = Windows
+  bool btOn = false;    // Bluetooth started (you opened Controls once)
+  bool agentsSeen = false;  // an agent reported once: Agents joins the carousel
   bool soundOn = true;
   bool darkMode = true;
   uint32_t totalFocusMin = 0;
