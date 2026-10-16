@@ -133,6 +133,7 @@
         <li data-step="github">GitHub</li>
         <li data-step="ai">AI</li>
         <li data-step="place">Weather</li>
+        <li data-step="light">Light</li>
         <li data-step="done">Done</li>
       </ol>
 
@@ -213,6 +214,19 @@
           <label class="wz-field">City<input id="wz-city" autocomplete="off" placeholder="Mexico City"></label>
           <p class="wz-status" id="wz-place-status" role="status"></p>
           <div class="wz-actions"><button class="btn ghost" data-skip>Skip</button><button class="btn primary" data-save="place">Save</button></div>
+        </div>
+
+        <!-- Light -->
+        <div class="wz-step" data-step="light" hidden>
+          <h3>Light</h3>
+          <p>Which light does your Tasky have? It blinks once when you save.</p>
+          <div class="seg" role="radiogroup" aria-label="Light type">
+            <label><input type="radio" name="wz-light" value="0" checked><span>One or two LEDs</span></label>
+            <label><input type="radio" name="wz-light" value="1"><span>RGB bar (6 LEDs)</span></label>
+          </div>
+          <p class="small">Hand-built and v1.1 boards have plain LEDs. The v3.1 board has the RGB bar along the top.</p>
+          <p class="wz-status" role="status"></p>
+          <div class="wz-actions"><button class="btn ghost" data-skip>Skip</button><button class="btn primary" data-save="light">Save</button></div>
         </div>
 
         <!-- Done -->

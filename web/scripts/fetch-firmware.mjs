@@ -19,8 +19,8 @@ const OUT = join(dirname(fileURLToPath(import.meta.url)), "..", "public", "firmw
 const BOARDS = [
   { id: "c3", env: "xiao_c3", chipFamily: "ESP32-C3" },
   { id: "c6", env: "xiao_c6", chipFamily: "ESP32-C6" },
-  { id: "c3-agents", env: "xiao_c3_agents", chipFamily: "ESP32-C3", optional: true },
-  { id: "c6-agents", env: "xiao_c6_agents", chipFamily: "ESP32-C6", optional: true },
+  { id: "c3-agents", env: "xiao_c3_agents", chipFamily: "ESP32-C3", optional: true, name: "Tasky for Agents" },
+  { id: "c6-agents", env: "xiao_c6_agents", chipFamily: "ESP32-C6", optional: true, name: "Tasky for Agents" },
 ];
 const headers = { "User-Agent": "tasky-flash-build", Accept: "application/vnd.github+json" };
 if (process.env.GITHUB_TOKEN) headers.Authorization = `Bearer ${process.env.GITHUB_TOKEN}`;
@@ -53,7 +53,7 @@ for (const b of BOARDS) {
   const parts = JSON.parse((await download(`tasky-${b.env}-parts.json`)).toString("utf8"));
   for (const p of parts) await writeFile(join(OUT, p.path), await download(p.path));
   await writeFile(join(OUT, `manifest-${b.id}.json`), JSON.stringify({
-    name: "Tasky",
+    name: b.name || "Tasky",
     version,
     new_install_prompt_erase: true,
     builds: [{ chipFamily: b.chipFamily, parts }],

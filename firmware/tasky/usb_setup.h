@@ -14,6 +14,7 @@ class TaskyNetManager;
 //   TASKY SCAN        -> @tasky {"scan":[{"s":ssid,"r":rssi,"o":open},..]}
 //   TASKY SET {json}  -> @tasky {"ok":true}   keys: ssid pass tz time cal ghu
 //                                                   llm llmKey city lat lon tasks
+//                                                   light (0 = LED, 1 = RGB bar)
 //
 // Replies start with "@tasky " so the page can ignore regular debug logs.
 // Secrets are write-only: TASKY? only reports whether they are set.
@@ -26,6 +27,8 @@ public:
   std::function<void()> onChanged;
   // Edition-specific commands ("TASKY AGENT {...}"): return true if handled.
   std::function<bool(const String &cmd)> onCommand;
+  // Set when a SET carried "light"; onChanged clears it after re-init.
+  bool lightSet = false;
 
 private:
   TaskyModel *model;

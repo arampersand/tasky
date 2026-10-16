@@ -108,7 +108,49 @@ bool alarmFlip = false;
 uint32_t uiBeepOffAt = 0;
 
 // ==================== HARDWARE HELPERS ====================
-void setLed(uint8_t v) { ledcWrite(LED_PIN, v); }
+// Light bar: PWM for plain LEDs, or an SK6812 chain driven by the RMT
+// peripheral (10 MHz tick = 100 ns). setLed() runs every loop, so the RGB path
+// only transmits when the level changes.
+uint8_t lightMode = 0xFF;  // what LED_PIN is set up as (0xFF = not yet)
+int16_t lightLevel = -1;
+
+void initLight() {
+  if (lightMode == model.cfg.ledType)
+    return;
+  if (lightMode == 0)
+    ledcDetach(LED_PIN);
+  else if (lightMode == 1)
+    rmtDeinit(LED_PIN);
+  if (model.cfg.ledType == 1)
+    rmtInit(LED_PIN, RMT_TX_MODE, RMT_MEM_NUM_BLOCKS_1, 10000000);
+  else
+    ledcAttach(LED_PIN, 5000, 8);
+  lightMode = model.cfg.ledType;
+  lightLevel = -1;
+}
+
+void setLed(uint8_t v) {
+  if (lightMode == 0) {
+    ledcWrite(LED_PIN, v);
+    return;
+  }
+  if (lightMode != 1 || v == lightLevel)
+    return;
+  lightLevel = v;
+  static rmt_data_t bits[RGB_LED_COUNT * 24];
+  const uint32_t rgb = RGB_LED_COLOR;
+  const uint8_t grb[3] = {(uint8_t)(((rgb >> 8) & 0xFF) * v / 255),
+                          (uint8_t)((rgb >> 16) * v / 255),
+                          (uint8_t)((rgb & 0xFF) * v / 255)};
+  int i = 0;
+  for (int led = 0; led < RGB_LED_COUNT; led++)
+    for (uint8_t c : grb)
+      for (int b = 7; b >= 0; b--) {
+        bool one = (c >> b) & 1;
+        bits[i++] = {one ? 6u : 3u, 1u, one ? 6u : 9u, 0u};  // T1H/T0H, then low
+      }
+  rmtWrite(LED_PIN, bits, i, RMT_WAIT_FOR_EVER);
+}
 
 #if TFT_BL >= 0
 void setBacklight(uint8_t v) {
@@ -1153,7 +1195,6 @@ void setup() {
   digitalWrite(TFT_BL, HIGH);  // Backlight on desde el inicio
 #endif
 
-  ledcAttach(LED_PIN, 5000, 8);
   // ledcAttach(BUZZER_PIN, 2000, 8); // Removed for Active Buzzer
 
   buzzerTone(1000);
@@ -1166,6 +1207,7 @@ void setup() {
 
   Serial.println("Loading model...");
   model.begin();
+  initLight();  // needs the saved light type
   Serial.println("Init display...");
   ui.init();
 
@@ -1219,6 +1261,13 @@ void setup() {
   usbSetup.onCommand = handleAgentCommand;
 #endif
   usbSetup.onChanged = []() {
+    if (usbSetup.lightSet) {  // switch driver and blink so the user sees it work
+      usbSetup.lightSet = false;
+      initLight();
+      setLed(model.cfg.ledBright);
+      delay(400);
+      setLed(0);
+    }
 #if FEATURE_WEATHER
     weather.requestRefresh();
 #endif

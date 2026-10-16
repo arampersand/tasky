@@ -65,6 +65,7 @@ void UsbSetup::sendStatus() {
   cfg["llmKey"] = model->cfg.llmApiKey.length() > 0;
   cfg["city"] = model->cfg.weatherCity;
   cfg["tz"] = model->cfg.timezone;
+  cfg["light"] = model->cfg.ledType;
   JsonArray tasks = cfg["tasks"].to<JsonArray>();
   for (int i = 0; i < 3; i++)
     tasks.add(model->tasks[i]);
@@ -137,6 +138,10 @@ void UsbSetup::applySet(const String &json) {
   if (doc["lat"].is<float>() && doc["lon"].is<float>()) {
     model->cfg.weatherLat = doc["lat"].as<float>();
     model->cfg.weatherLon = doc["lon"].as<float>();
+  }
+  if (doc["light"].is<int>()) {
+    model->cfg.ledType = doc["light"].as<int>() == 1 ? 1 : 0;
+    lightSet = true;
   }
   if (doc["tasks"].is<JsonArrayConst>()) {
     JsonArrayConst tasks = doc["tasks"].as<JsonArrayConst>();

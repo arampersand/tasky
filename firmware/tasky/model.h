@@ -45,6 +45,7 @@ struct Config {
   uint8_t breakMin = 5;
   uint8_t screenBright = 200;
   uint8_t ledBright = 180;
+  uint8_t ledType = 0;  // 0 = PWM LED(s), 1 = SK6812 RGB chain (see config_hardware.h)
   bool soundOn = true;
   bool darkMode = true;
   uint32_t totalFocusMin = 0;

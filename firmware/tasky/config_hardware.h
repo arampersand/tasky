@@ -32,6 +32,12 @@
      // Standard XIAO MISO is D9.
      // If LEDs are here, SPI MISO cannot be used (OK for display).
 
+// Light bar type is a runtime setting (Config::ledType, web setup "Light"):
+//   0 = one or two plain LEDs, PWM (Tasky v1.1 board, hand-wired builds)
+//   1 = chain of SK6812MINI RGB LEDs on LED_PIN (Tasky v3.1 board)
+#define RGB_LED_COUNT 6
+#define RGB_LED_COLOR 0xFF6000 // amber; scaled by Settings -> LED
+
 #define ACTIVE_BUZZER 1 // 1 = Active Buzzer (High/Low), 0 = Passive (PWM)
 #define BUZZER_PIN D0   // Was GPIO 2 on C3
 #define TFT_BL D0       // Backlight (D0 segun doc) - si compartido con Buzzer, mantener HIGH al terminar

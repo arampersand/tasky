@@ -32,9 +32,13 @@ The variant is a build flag (`TASKY_VARIANT_DESK` / `TASKY_VARIANT_GO` in `confi
 | Battery target | — | A work week per charge (e-paper) / 1–2 days (IPS) |
 
 **Hardware notes for Tasky Go**
-- Battery sensing needs one ADC pin. On the XIAO C3 every ADC-capable pin (D0–D3) is already used by the display/buzzer, so Go frees one (e.g. moves the buzzer) and reads `BAT+` through a 1:2 divider.
-- A slide switch on `BAT+`; the light bar becomes optional to save power.
-- Rough budget (IPS): Wi-Fi active ≈ 80–100 mA, backlight ≈ 20–40 mA. A 1000 mAh cell lasts ~8 h fully on, so Go relies on light sleep, short Wi-Fi bursts and a sleeping screen.
+
+The PCBs already have most of it (see [HARDWARE.md → Boards](HARDWARE.md#boards-pcb)): a 2000 mAh LiPo on the XIAO `BAT` pads (charged over USB-C) and, on v3.1, a slide switch. What Go still needs:
+
+1. **Battery gauge.** One ADC1 pin reading `BAT+` through a 1:2 divider (2 × 220 kΩ + 100 nF). ADC2 (D3 on the C3) can't be used while Wi-Fi is on, and D0–D2 are taken. Proposed v3.2 change: tie the display's RES to 3V3 through an RC (the ST7789 has a software reset, `TFT_RST -1`), move the buzzer driver from D0 to D3 (digital is fine there) and use **D0 (A0) for battery sense** on both C3 and C6.
+2. **Display backlight on a pin** (a MOSFET on BLK, which is tied to VCC today), so the screen can dim and sleep.
+3. **Firmware:** battery icon and level on Home, light sleep between knob events, Wi-Fi only in short sync bursts, screen off after a timeout.
+- Rough budget (IPS): Wi-Fi active ≈ 80–100 mA, backlight ≈ 20–40 mA. The 2000 mAh cell lasts ~15 h fully on (estimate), so a full day needs light sleep, short Wi-Fi bursts and a sleeping screen.
 
 ## Phase 1 — Stable 3.0: setup that flows *(in progress)*
 
@@ -77,9 +81,10 @@ The XIAO C3/C6 have no native USB (USB-Serial/JTAG only), so they can't be a USB
 - Shipped as an alternative firmware ("Tasky Desk: Companion") selectable in the web flasher.
 
 ## Phase 4 — Tasky Go
-- Battery wiring, switch, battery gauge, light/deep sleep.
+- ~~Battery wiring, switch~~ (on the v1.1/v3.1 PCBs). Still to do: battery gauge, backlight control, light/deep sleep (v3.2 board, see above).
+- ~~SK6812 RGB light bar of the v3.1 board~~ (2.8: web setup **Light** step).
 - **Phone notifications over Bluetooth:** iPhone via ANCS (no app needed); Android via a small companion app (or Gadgetbridge-style bridge). Filtered to what matters: calls, calendar, chosen apps.
-- Enclosure files (STL/STEP) for Desk and Go in `hardware/`, plus a KiCad carrier board so builds don't need hand wiring.
+- Enclosure files (STL/STEP) for Desk and Go in `hardware/`, plus the EasyEDA carrier boards (Gerbers + BOM) so anyone can order one.
 - E-paper experiment for the Go display.
 
 ## Ideas parking lot

@@ -2,7 +2,7 @@
 // firmware/tasky/usb_setup.h ("TASKY?", "TASKY SCAN", "TASKY SET {json}").
 // Replies start with "@tasky "; everything else on the port is debug log.
 
-let STEPS = ["connect", "wifi", "calendar", "tasks", "github", "ai", "place", "done"];
+let STEPS = ["connect", "wifi", "calendar", "tasks", "github", "ai", "place", "light", "done"];
 const MIN_VERSION = [2, 6, 0];
 
 const $ = (id) => document.getElementById(id);
@@ -143,6 +143,11 @@ $("wz-connect").addEventListener("click", (e) => busy(e.currentTarget, async () 
     time: Math.floor(Date.now() / 1000),
   }).catch(() => {});
   prefill(state);
+  if (state.cfg?.light === undefined) {
+    // Firmware older than 2.8 has a single light type
+    STEPS = STEPS.filter((s) => s !== "light");
+    wizard.querySelector('.wz-progress li[data-step="light"]').hidden = true;
+  }
   if (state.edition === "agents") {
     // The Agents edition has no on-device AI chat: skip that step, explain hooks instead
     STEPS = STEPS.filter((s) => s !== "ai");
@@ -163,6 +168,8 @@ function prefill(s) {
   if (s.cfg?.llmKey) $("wz-llmkey").placeholder = "Saved. Paste a new key to replace it";
   const prov = wizard.querySelector(`input[name="wz-llm"][value="${s.cfg?.llm ?? 1}"]`);
   if (prov) prov.checked = true;
+  const light = wizard.querySelector(`input[name="wz-light"][value="${s.cfg?.light ?? 0}"]`);
+  if (light) light.checked = true;
 }
 
 // ---------- Wi-Fi ----------
@@ -224,6 +231,7 @@ const SAVERS = {
     const llm = Number(wizard.querySelector('input[name="wz-llm"]:checked').value);
     return key ? { llm, llmKey: key } : { llm };
   },
+  light: () => ({ light: Number(wizard.querySelector('input[name="wz-light"]:checked').value) }),
   place: () => {
     const city = $("wz-city").value.trim();
     const out = city ? { city } : {};

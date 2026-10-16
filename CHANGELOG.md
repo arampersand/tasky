@@ -2,6 +2,16 @@
 
 All notable changes to the Tasky firmware. Versions match `firmware/tasky/version.h` and git tags.
 
+## v2.8.0 — 2026-10-16 · Boards & RGB light
+
+### Added
+- **RGB light bar** for the v3.1 PCB (6 × SK6812MINI on D9), driven by the RMT peripheral with no new library. Choose it in the new **Light** step of the web setup (`TASKY SET {"light":1}`). The light blinks once to confirm. The default stays plain LEDs with PWM.
+- `docs/HARDWARE.md`: the v1.1 and v3.1 carrier boards, the schematic and board notes. `docs/ROADMAP.md`: Tasky Go hardware plan based on the real boards.
+
+### Fixed
+- CI uploads the merged image again (it was looking outside `release/`).
+- Web flasher: the Agents manifests are named "Tasky for Agents".
+
 ## v2.7.0 — 2026-10-15 · Tasky for Agents
 
 ### Added
