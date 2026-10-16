@@ -1,4 +1,5 @@
 #include "usb_setup.h"
+#include "config_features.h"
 #include "network_manager.h"
 #include "version.h"
 #include <ArduinoJson.h>
@@ -42,7 +43,7 @@ void UsbSetup::handle(const String &cmd) {
     sendScan();
   else if (cmd.startsWith("TASKY SET "))
     applySet(cmd.substring(10));
-  else
+  else if (!(onCommand && onCommand(cmd)))
     replyError("unknown command");
 }
 
@@ -50,6 +51,7 @@ void UsbSetup::sendStatus() {
   JsonDocument doc;
   doc["v"] = TASKY_VERSION;
   doc["board"] = CONFIG_IDF_TARGET;  // "esp32c3" / "esp32c6"
+  doc["edition"] = TASKY_EDITION_AGENTS ? "agents" : "tasky";
   JsonObject wifi = doc["wifi"].to<JsonObject>();
   wifi["ssid"] = model->cfg.wifiSSID;
   wifi["connected"] = net->isConnected();
@@ -110,8 +112,12 @@ void UsbSetup::applySet(const String &json) {
     model->cfg.wifiPass = doc["pass"].as<String>();
     wifiChanged = true;
   }
-  if (doc["tz"].is<int>())
+  if (doc["tz"].is<int>()) {
     model->cfg.timezone = (int8_t)constrain(doc["tz"].as<int>(), -12, 14);
+    model->applyTimezone();
+  }
+  if (doc["time"].is<long long>())
+    model->setClock((time_t)doc["time"].as<long long>());  // seconds, UTC
   if (doc["cal"].is<const char *>())
     model->cfg.calendarUrl = doc["cal"].as<String>();
   if (doc["ghu"].is<const char *>())

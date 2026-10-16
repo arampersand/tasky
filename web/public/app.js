@@ -1,8 +1,10 @@
-// Board selector + latest-release info for the flasher page.
+// Edition + board selector and latest-release info for the flasher page.
 const installer = document.getElementById("installer");
-
-for (const radio of document.querySelectorAll('input[name="board"]')) {
-  radio.addEventListener("change", () => installer.setAttribute("manifest", `/firmware/manifest-${radio.value}.json`));
+const picked = (name) => document.querySelector(`input[name="${name}"]:checked`).value;
+const updateManifest = () =>
+  installer.setAttribute("manifest", `/firmware/manifest-${picked("board")}${picked("edition")}.json`);
+for (const radio of document.querySelectorAll('input[name="board"], input[name="edition"]')) {
+  radio.addEventListener("change", updateManifest);
 }
 
 let latest = { version: null };
@@ -24,4 +26,10 @@ if (!latest.version) {
   $("rel-notes").textContent = latest.notes || "No notes for this release.";  // plain text, never HTML
   $("rel-link").href = latest.url;
   $("hero-version").textContent = `v${latest.version} · ESP32-C3 / C6 · open source`;
+  // Releases before 2.7 have no Agents edition
+  if (latest.available && !latest.available.includes("c3-agents")) {
+    const agents = $("edition-agents");
+    agents.querySelector("input").disabled = true;
+    agents.querySelector("small").textContent = "Coming in the next release";
+  }
 }

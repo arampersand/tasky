@@ -295,6 +295,19 @@ Fonts are Adafruit GFX FreeSans fonts (`ui.h`). They only contain ASCII, so acce
 
 ---
 
+## Shortcuts (Tasky for Agents)
+
+The Controls screen's shortcut list is `SHORTCUTS[]` in `firmware/tasky/agents_screens.h`. Each entry is a keyboard combo (`mods` + HID usage id) or a media usage:
+
+```cpp
+{"Spotlight", BleHid::GUI, 0x2C, 0},                   // Cmd+Space
+{"Voice / Siri", 0, 0, BleHid::VOICE},
+```
+
+Modifiers: `BleHid::CTRL`, `SHIFT`, `ALT`, `GUI` (Cmd/Windows key). Key ids come from the USB HID usage tables (letters `a`=0x04 … `z`=0x1D, `1`=0x1E … `0`=0x27, Space 0x2C, arrows 0x4F–0x52). On Windows, swap `GUI` for `CTRL` where needed (e.g. Win+S for search: `{"Search", BleHid::GUI, 0x16, 0}`).
+
+---
+
 ## Changing the Home phrases
 
 The rotating phrases on Home/Ambient live in `PHRASES[]` near the top of the Home section of `firmware/tasky/ui.cpp`. Add, remove or translate them; keep each under ~24 characters so it fits on one line. A new phrase shows every 2 minutes.

@@ -54,6 +54,16 @@ void WiFiPortal::addRoutes() {
 
   server.on("/", HTTP_GET, [this]() { handleRoot(); });
   server.on("/save", HTTP_POST, [this]() { handleSave(); });
+  // The phone's clock: lets Tasky show the time before (or without) internet
+  server.on("/time", HTTP_POST, [this]() {
+    if (!authorized())
+      return;
+    if (server.hasArg("tz"))
+      model->cfg.timezone = (int8_t)constrain(server.arg("tz").toInt(), -12, 14);
+    if (server.hasArg("t"))
+      model->setClock((time_t)atoll(server.arg("t").c_str()));
+    server.send(204);
+  });
 
   // OTA update routes
   server.on("/ota/status", HTTP_GET, [this]() {
@@ -515,6 +525,10 @@ String WiFiPortal::htmlPage() {
 
   // Status message
   s += "<div id='otaStatus' style='display:none;margin-top:12px;padding:12px;border-radius:4px'></div>";
+
+  // Send the phone's clock + time zone (no internet needed for the time)
+  s += "<script>fetch('/time',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},"
+       "body:'t='+Math.floor(Date.now()/1000)+'&tz='+Math.round(-new Date().getTimezoneOffset()/60)}).catch(function(){});</script>";
 
   // JavaScript for OTA upload
   s += "<script>";

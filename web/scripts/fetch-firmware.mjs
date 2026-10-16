@@ -15,9 +15,12 @@ import { fileURLToPath } from "node:url";
 
 const REPO = process.env.TASKY_REPO ?? "arampersand/tasky";
 const OUT = join(dirname(fileURLToPath(import.meta.url)), "..", "public", "firmware");
+// Two editions x two boards. Agents builds are optional (older releases lack them).
 const BOARDS = [
   { id: "c3", env: "xiao_c3", chipFamily: "ESP32-C3" },
   { id: "c6", env: "xiao_c6", chipFamily: "ESP32-C6" },
+  { id: "c3-agents", env: "xiao_c3_agents", chipFamily: "ESP32-C3", optional: true },
+  { id: "c6-agents", env: "xiao_c6_agents", chipFamily: "ESP32-C6", optional: true },
 ];
 const headers = { "User-Agent": "tasky-flash-build", Accept: "application/vnd.github+json" };
 if (process.env.GITHUB_TOKEN) headers.Authorization = `Bearer ${process.env.GITHUB_TOKEN}`;
@@ -41,7 +44,12 @@ async function download(name) {
   return Buffer.from(await r.arrayBuffer());
 }
 
+const available = [];
 for (const b of BOARDS) {
+  if (b.optional && !rel.assets.some((a) => a.name === `tasky-${b.env}-parts.json`)) {
+    console.warn(`(no ${b.env} build in ${rel.tag_name}, skipping)`);
+    continue;
+  }
   const parts = JSON.parse((await download(`tasky-${b.env}-parts.json`)).toString("utf8"));
   for (const p of parts) await writeFile(join(OUT, p.path), await download(p.path));
   await writeFile(join(OUT, `manifest-${b.id}.json`), JSON.stringify({
@@ -51,6 +59,7 @@ for (const b of BOARDS) {
     builds: [{ chipFamily: b.chipFamily, parts }],
   }, null, 2));
   console.log(`✓ ${b.env}: ${parts.map((p) => `${p.path}@0x${p.offset.toString(16)}`).join(", ")}`);
+  available.push(b.id);
 }
 
 await writeFile(join(OUT, "latest.json"), JSON.stringify({
@@ -59,5 +68,6 @@ await writeFile(join(OUT, "latest.json"), JSON.stringify({
   notes: rel.body ?? "",
   publishedAt: rel.published_at,
   url: rel.html_url,
+  available,
 }, null, 2));
 console.log(`Latest release: ${rel.tag_name}`);

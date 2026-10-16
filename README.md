@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="docs/images/tasky-focus.jpg" alt="Tasky running a 25-minute focus session" width="420">
+<img src="docs/images/tasky-hero.jpg" alt="Tasky running a 25-minute focus session" width="640">
 
 # Tasky
 
@@ -22,12 +22,23 @@ A knob, a screen and a light bar: focus timer, today's tasks, your streak, your 
 
 <table>
 <tr>
+<td><img src="docs/images/tasky-render-ring.jpg" alt="Tasky render" width="200"></td>
 <td><img src="docs/images/tasky-front.jpg" alt="Tasky front" width="200"></td>
 <td><img src="docs/images/tasky-tasks.jpg" alt="Tasks screen" width="200"></td>
 <td><img src="docs/images/tasky-stats.jpg" alt="Stats screen" width="200"></td>
 <td><img src="docs/images/tasky-menu.jpg" alt="More menu" width="200"></td>
 </tr>
 </table>
+
+## Two firmwares
+
+| | **Tasky** | **Tasky for Agents** |
+|---|---|---|
+| For | Your calm desk companion | A companion for your computer and its AI agents |
+| Highlights | Home at a glance, focus timer, tasks, calendar, weather, GitHub, Notion, ask ChatGPT/Claude | **Claude Code status** (light breathes when an agent needs you), **Bluetooth volume/brightness/media dial**, Spotlight/Siri/screenshot shortcuts, plus timer, tasks, calendar, weather |
+| Flash | [tasky-flash.vercel.app](https://tasky-flash.vercel.app) → *Tasky* | [tasky-flash.vercel.app](https://tasky-flash.vercel.app) → *Tasky for Agents* + [agent hooks](companion/README.md) |
+
+Same hardware; switch any time by flashing the other one.
 
 ## Why Tasky
 

@@ -345,6 +345,22 @@ stateDiagram-v2
 
 The same web server answers on the station IP when Tasky is on your network, which is how the Update screen can show `http://<device-ip>/`.
 
+### Editions
+
+`TASKY_EDITION_AGENTS` (set by the `*_agents` PlatformIO envs) switches feature flags in `config_features.h`:
+
+| | Tasky | Tasky for Agents |
+|---|---|---|
+| `FEATURE_LLM`, `FEATURE_NOTION` | on | off |
+| `FEATURE_BLE_HID` (`ble_hid.*`, NimBLE-Arduino) | off | on |
+| `FEATURE_AGENTS` (`agents.h`, `agents_screens.h`) | off | on |
+| Carousel | Home, Timer, Tasks, Agenda, Stats, More | Home, Agents, Controls, Timer, Tasks, Agenda, More |
+| App image | ~1.54 MB | ~1.74 MB (C3) / ~1.88 MB (C6) |
+
+The Bluetooth stack is why the editions are separate: on the C6 the Agents build leaves under 90 KB of the 1.875 MiB slot.
+
+`TASKY AGENT {json}` lines reach `handleAgentCommand()` through `UsbSetup::onCommand`; `AgentBoard` keeps up to 4 sessions, `refreshAgentStatus()` drives the Home status line and beep, and `updateFocusLight()` breathes the LED (50 ms tick) while an unacknowledged session waits.
+
 ### USB setup protocol (`UsbSetup`)
 
 `usb_setup.h/.cpp` reads lines from the USB serial port in `loop()` (non-blocking) so the web setup wizard can configure Tasky over the same cable it was flashed with. Physical USB access is the trust boundary.
@@ -353,7 +369,8 @@ The same web server answers on the station IP when Tasky is on your network, whi
 |---|---|
 | `TASKY?` | version, chip, Wi-Fi status/IP, which settings are set (secrets only as booleans), tasks |
 | `TASKY SCAN` | up to 20 nearby networks `{s, r, o}` (blocking scan, ~2–3 s) |
-| `TASKY SET {json}` | `{ok:true}`; keys `ssid pass tz cal ghu llm llmKey city lat lon tasks` |
+| `TASKY SET {json}` | `{ok:true}`; keys `ssid pass tz time cal ghu llm llmKey city lat lon tasks` (`time` = browser clock, epoch seconds) |
+| `TASKY AGENT {json}` | Agents edition only, see [companion/README.md](../companion/README.md) |
 
 Replies are prefixed so the page can ignore ordinary debug logs. After a `SET`, `onChanged` (wired in `setup()`) asks weather and calendar to refresh and redraws Home.
 

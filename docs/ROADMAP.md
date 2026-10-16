@@ -38,7 +38,7 @@ The variant is a build flag (`TASKY_VARIANT_DESK` / `TASKY_VARIANT_GO` in `confi
 
 ## Phase 1 — Stable 3.0: setup that flows *(in progress)*
 
-**Shipped in 2.6.0 (beta):** web setup wizard over USB (Wi-Fi scan, calendar, tasks, GitHub, AI, weather, time zone), Home glance screen with rotating phrases as the first screen, Ambient sharing the Home layout. **Still to do:** Improv Wi-Fi inside the installer dialog, on-device first-boot tour + hints, portal in English/Spanish, quick-start card, hardware validation.
+**Shipped in 2.6–2.7:** clock from the browser/phone (no internet needed), web setup wizard over USB (Wi-Fi scan, calendar, tasks, GitHub, AI, weather, time zone), Home glance screen with rotating phrases as the first screen, Ambient sharing the Home layout. **Still to do:** Improv Wi-Fi inside the installer dialog, on-device first-boot tour + hints, portal in English/Spanish, quick-start card, hardware validation.
 
 **Guided onboarding on the website**, one screen at a time, each step skippable:
 
@@ -65,7 +65,10 @@ All of it goes over Web Serial, so it works from the same page that flashed the 
 - **Calendar to-dos:** today's events listed as checkable items; calendars that export tasks (`VTODO`) add them too. Google Tasks / Todoist / Notion sync into the task slots.
 - Agent screen with quick prompts ("plan my day", "summarize my next meeting") and answers that fit the screen.
 
-## Phase 3 — Desk companion (computer)
+## Phase 3 — Desk companion (computer) *(started)*
+
+**Shipped in 2.7.0:** the **Tasky for Agents** firmware: Claude Code status over USB via hooks (`companion/`), breathing light when an agent waits, and a Bluetooth Controls screen (volume, brightness, media, shortcuts). Next: a long-running companion that lets the knob switch/focus terminal sessions, Windows/Linux shortcut sets, more agents (Codex, Cursor, CI).
+
 The XIAO C3/C6 have no native USB (USB-Serial/JTAG only), so they can't be a USB keyboard. Two routes that work on both:
 - **Bluetooth keyboard / media controller (BLE HID)**, no app needed: knob = volume (or brightness, switchable), press = play/pause, long press = mute. Extra actions mapped to shortcuts: Siri / Spotlight search, dictation, screenshot.
 - **Companion app** (tray app or `tasky` CLI) over USB serial or Wi-Fi, for things a keyboard can't do:

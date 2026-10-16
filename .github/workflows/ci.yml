@@ -14,7 +14,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        env: [xiao_c3, xiao_c6]
+        env: [xiao_c3, xiao_c6, xiao_c3_agents, xiao_c6_agents]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5

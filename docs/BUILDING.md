@@ -46,7 +46,7 @@ pio run -e xiao_c3 -t upload       # compile and flash over USB
 pio device monitor                 # serial console at 115200 baud
 ```
 
-For the XIAO ESP32-C6, use `-e xiao_c6`.
+For the XIAO ESP32-C6, use `-e xiao_c6`. For the **Tasky for Agents** firmware use `-e xiao_c3_agents` / `-e xiao_c6_agents` (adds the NimBLE-Arduino library).
 
 - **First build:** the first build downloads the pioarduino platform, the toolchain and four libraries (Adafruit GFX, Adafruit ST7735 and ST7789, Adafruit BusIO, ArduinoJson 7). This takes a few minutes.
 - **Upload port:** if more than one serial device is connected, add `--upload-port /dev/cu.usbmodemXXXX` (macOS/Linux) or `--upload-port COMx` (Windows).

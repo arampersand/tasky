@@ -184,6 +184,10 @@ public:
 
   // Local time (false until NTP has synced)
   bool localNow(struct tm &out);
+  // Time without internet: the setup page / phone portal sends the browser's
+  // clock. NTP corrects it later when Wi-Fi is up.
+  void applyTimezone();            // TZ env from cfg.timezone (whole hours)
+  void setClock(time_t epochUtc);
 
   // Calendar helpers
   static int hhmmToMinutes(const char *hhmm);      // "HH:MM" -> minutes, -1 if invalid

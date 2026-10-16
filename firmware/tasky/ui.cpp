@@ -1072,8 +1072,12 @@ void TaskyUI::drawAmbientPhrase() {
                            ? "Press the knob to focus"  // first-minute hint
                            : PHRASES[slot % PHRASES_N];
   tft.fillRect(0, 204, W, 26, C_BG);
-  centerTextFont(fitText(phrase, 200, &FreeSans9pt7b).c_str(), 222, C_MUTED,
-                 &FreeSans9pt7b);
+  if (statusLine.length())
+    centerTextFont(fitText(statusLine, 200, &FreeSans9pt7b).c_str(), 222,
+                   statusColor ? statusColor : C_TEAL, &FreeSans9pt7b);
+  else
+    centerTextFont(fitText(phrase, 200, &FreeSans9pt7b).c_str(), 222, C_MUTED,
+                   &FreeSans9pt7b);
 }
 
 void TaskyUI::drawAmbient(bool weatherOk, float temp, const char *desc,
@@ -1147,6 +1151,76 @@ void TaskyUI::drawAmbient(bool weatherOk, float temp, const char *desc,
 
   drawAmbientPhrase();
 }
+
+#if FEATURE_AGENTS
+// ==================== AGENTS (agents edition) ====================
+void TaskyUI::drawAgents(const AgentBoard &board, int sel) {
+  tft.fillScreen(C_BG);
+  centerTextFont("AGENTS", 34, C_TEXT, &FreeSansBold12pt7b);
+  tft.drawFastHLine(40, 44, 160, C_LINE);
+
+  if (board.count == 0) {
+    centerTextFont("No agents yet", 104, C_TEXT, &FreeSans9pt7b);
+    centerTextFont("Add the Tasky hooks", 136, C_MUTED, &FreeSans9pt7b);
+    centerTextFont("to Claude Code", 158, C_MUTED, &FreeSans9pt7b);
+    centerTextFont("tasky-flash.vercel.app", 196, C_TEAL, &FreeSans9pt7b);
+    return;
+  }
+
+  static const char *STATE_TXT[] = {"working", "waiting", "done"};
+  const uint16_t stateColor[] = {C_TEAL, C_ORANGE, C_GREEN};
+  for (int i = 0; i < board.count; i++) {
+    const AgentSession &s = board.sessions[i];
+    int base = 74 + i * 26;
+    bool isSel = (i == sel);
+    if (isSel)
+      tft.fillRoundRect(14, base - 17, 212, 24, 4, C_LINE);
+    uint16_t col = stateColor[s.state];
+    if (s.state == AGENT_WAITING && !s.acknowledged)
+      tft.fillCircle(26, base - 5, 5, col);
+    else
+      tft.drawCircle(26, base - 5, 4, col);
+    tft.setFont(&FreeSans9pt7b);
+    tft.setTextColor(C_TEXT);
+    tft.setCursor(40, base);
+    tft.print(fitText(s.label, 110, &FreeSans9pt7b));
+    tft.setTextColor(col);
+    String st = STATE_TXT[s.state];
+    int16_t x1, y1;
+    uint16_t w, h;
+    tft.getTextBounds(st, 0, 0, &x1, &y1, &w, &h);
+    tft.setCursor(218 - (int)w, base);
+    tft.print(st);
+    tft.setFont();
+  }
+
+  // Detail of the selected session
+  if (sel >= 0 && sel < board.count && board.sessions[sel].msg[0]) {
+    tft.drawFastHLine(40, 184, 160, C_LINE);
+    centerTextFont(fitText(board.sessions[sel].msg, 210, &FreeSans9pt7b).c_str(), 210,
+                   C_MUTED, &FreeSans9pt7b);
+  }
+}
+#endif
+
+#if FEATURE_BLE_HID
+// ==================== CONTROLS (agents edition) ====================
+void TaskyUI::drawControls(const char *mode, const char *value, const char *hint,
+                           bool connected) {
+  tft.fillScreen(C_BG);
+  centerTextFont("CONTROLS", 34, C_TEXT, &FreeSansBold12pt7b);
+  tft.drawFastHLine(40, 44, 160, C_LINE);
+  centerTextFont(mode, 92, C_TEAL, &FreeSansBold18pt7b);
+  centerTextFont(fitText(value, 210, &FreeSans12pt7b).c_str(), 132, C_TEXT, &FreeSans12pt7b);
+  centerTextFont(fitText(hint, 210, &FreeSans9pt7b).c_str(), 170, C_MUTED, &FreeSans9pt7b);
+  if (connected) {
+    tft.fillCircle(72, 205, 4, C_GREEN);
+    centerTextFont("  Bluetooth connected", 210, C_MUTED, &FreeSans9pt7b);
+  } else {
+    centerTextFont("Pair \"Tasky\" in Bluetooth", 210, C_ORANGE, &FreeSans9pt7b);
+  }
+}
+#endif
 
 // ==================== NOTICES ====================
 void TaskyUI::drawMeetingAlert(const CalendarEventItem &ev, int minutes,

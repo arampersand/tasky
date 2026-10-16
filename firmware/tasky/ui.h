@@ -20,6 +20,7 @@
 #if FEATURE_QR_CODE
 #include "qrcode.h"
 #endif
+#include "agents.h"
 #include <Fonts/FreeSans12pt7b.h>
 #include <Fonts/FreeSans9pt7b.h>
 #include <Fonts/FreeSansBold12pt7b.h>
@@ -60,6 +61,8 @@ enum Screen {
   SCR_QR,
   SCR_WIFI_INFO,
   SCR_HOME,       // Glance: clock, weather, next event, tasks, phrase
+  SCR_AGENTS,     // Agents edition: Claude Code sessions
+  SCR_CONTROLS,   // Agents edition: Bluetooth volume / media / shortcuts
   // Overlays
   SCR_AMBIENT,    // Idle: clock + next event + weather
   SCR_NOTICE      // Meeting alert / morning brief / day close
@@ -141,6 +144,15 @@ public:
   void drawAmbient(bool weatherOk, float temp, const char *desc, bool celsius);
   void drawAmbientClock();    // Only the clock digits (called each minute)
   void drawAmbientPhrase();   // Only the rotating phrase line
+  // Replaces the phrase on Home when set (e.g. "1 agent waiting")
+  String statusLine;
+  uint16_t statusColor = 0;
+#if FEATURE_AGENTS
+  void drawAgents(const AgentBoard &board, int sel);
+#endif
+#if FEATURE_BLE_HID
+  void drawControls(const char *mode, const char *value, const char *hint, bool connected);
+#endif
   void drawMeetingAlert(const CalendarEventItem &ev, int minutes, bool timerPaused);
   void drawMorningBrief();
   void drawDayClose();

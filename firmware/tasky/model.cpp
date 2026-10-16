@@ -4,6 +4,7 @@
 
 void TaskyModel::begin() {
   load();
+  applyTimezone();
   // Every device gets its own setup-network password, shown on screen and in
   // the QR code, so a password published in the repo can't open any Tasky.
   if (cfg.apPass.length() < 8) {
@@ -459,6 +460,28 @@ const CalendarEventItem *TaskyModel::firstEventOnDay(int dayOfMonth) {
     bestMin = start;
   }
   return best;
+}
+
+void TaskyModel::applyTimezone() {
+  char tz[12];
+  snprintf(tz, sizeof(tz), "UTC%+d", -cfg.timezone);  // POSIX sign is inverted
+  setenv("TZ", tz, 1);
+  tzset();
+}
+
+void TaskyModel::setClock(time_t epochUtc) {
+  if (epochUtc < 1577836800)  // reject anything before 2020
+    return;
+  applyTimezone();
+  struct timeval tv = {epochUtc, 0};
+  settimeofday(&tv, nullptr);
+  struct tm t;
+  localtime_r(&epochUtc, &t);
+  clockH = t.tm_hour;
+  clockM = t.tm_min;
+  clockS = t.tm_sec;
+  clockSetAtMs = millis();
+  Serial.printf("[Clock] Set from browser: %02d:%02d\n", t.tm_hour, t.tm_min);
 }
 
 bool TaskyModel::localNow(struct tm &out) {

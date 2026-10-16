@@ -2,7 +2,7 @@
 // firmware/tasky/usb_setup.h ("TASKY?", "TASKY SCAN", "TASKY SET {json}").
 // Replies start with "@tasky "; everything else on the port is debug log.
 
-const STEPS = ["connect", "wifi", "calendar", "tasks", "github", "ai", "place", "done"];
+let STEPS = ["connect", "wifi", "calendar", "tasks", "github", "ai", "place", "done"];
 const MIN_VERSION = [2, 6, 0];
 
 const $ = (id) => document.getElementById(id);
@@ -137,10 +137,19 @@ $("wz-connect").addEventListener("click", (e) => busy(e.currentTarget, async () 
     setStatus("wz-connect-status", `Tasky is on v${state.v}. Flash the latest firmware above first.`, "error");
     return;
   }
-  // The browser knows the time zone; Tasky stores a whole-hour offset.
-  await link.set({ tz: Math.round(-new Date().getTimezoneOffset() / 60) }).catch(() => {});
+  // The browser knows the time and zone: Tasky shows the clock even before Wi-Fi.
+  await link.set({
+    tz: Math.round(-new Date().getTimezoneOffset() / 60),
+    time: Math.floor(Date.now() / 1000),
+  }).catch(() => {});
   prefill(state);
-  setStatus("wz-connect-status", `Connected to Tasky v${state.v}.`, "ok");
+  if (state.edition === "agents") {
+    // The Agents edition has no on-device AI chat: skip that step, explain hooks instead
+    STEPS = STEPS.filter((s) => s !== "ai");
+    wizard.querySelector('.wz-progress li[data-step="ai"]').hidden = true;
+    $("wz-agents-tip").hidden = false;
+  }
+  setStatus("wz-connect-status", `Connected to ${state.edition === "agents" ? "Tasky for Agents" : "Tasky"} v${state.v}.`, "ok");
   setTimeout(() => show("wifi"), 500);
 }));
 

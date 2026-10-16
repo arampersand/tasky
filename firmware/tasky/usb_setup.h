@@ -12,8 +12,8 @@ class TaskyNetManager;
 //
 //   TASKY?            -> @tasky {"v":..,"board":..,"wifi":{..},"cfg":{..}}
 //   TASKY SCAN        -> @tasky {"scan":[{"s":ssid,"r":rssi,"o":open},..]}
-//   TASKY SET {json}  -> @tasky {"ok":true}   keys: ssid pass tz cal ghu llm
-//                                                   llmKey city lat lon tasks
+//   TASKY SET {json}  -> @tasky {"ok":true}   keys: ssid pass tz time cal ghu
+//                                                   llm llmKey city lat lon tasks
 //
 // Replies start with "@tasky " so the page can ignore regular debug logs.
 // Secrets are write-only: TASKY? only reports whether they are set.
@@ -24,6 +24,8 @@ public:
   void loop();
   // Called after a successful SET (e.g. to refresh weather/calendar).
   std::function<void()> onChanged;
+  // Edition-specific commands ("TASKY AGENT {...}"): return true if handled.
+  std::function<bool(const String &cmd)> onCommand;
 
 private:
   TaskyModel *model;

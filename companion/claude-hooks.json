@@ -1,0 +1,16 @@
+{
+  "hooks": {
+    "UserPromptSubmit": [
+      { "hooks": [{ "type": "command", "command": "python3 ~/tasky/companion/tasky_agent.py hook working" }] }
+    ],
+    "Notification": [
+      { "hooks": [{ "type": "command", "command": "python3 ~/tasky/companion/tasky_agent.py hook waiting" }] }
+    ],
+    "Stop": [
+      { "hooks": [{ "type": "command", "command": "python3 ~/tasky/companion/tasky_agent.py hook done" }] }
+    ],
+    "SessionEnd": [
+      { "hooks": [{ "type": "command", "command": "python3 ~/tasky/companion/tasky_agent.py hook end" }] }
+    ]
+  }
+}

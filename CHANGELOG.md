@@ -2,6 +2,16 @@
 
 All notable changes to the Tasky firmware. Versions match `firmware/tasky/version.h` and git tags.
 
+## v2.7.0 — 2026-10-15 · Tasky for Agents
+
+### Added
+- **Tasky for Agents**, a second firmware (envs `xiao_c3_agents`, `xiao_c6_agents`; pick it in the web flasher):
+  - **Agents** screen: Claude Code sessions reported over USB by hooks (`companion/tasky_agent.py`); the light bar breathes and Tasky beeps when an agent waits for you; Home shows "1 agent needs you".
+  - **Controls** screen: Bluetooth keyboard/media dial — volume, brightness, media, and shortcuts (Spotlight, Voice/Siri, screenshot, Mission Control, lock).
+  - Drops the on-device AI chat and Notion to fit the Bluetooth stack.
+- **Clock without internet:** the web setup sends your computer's time and time zone; the phone portal sends the phone's.
+- Website: firmware picker (Tasky / Tasky for Agents), "Two firmwares" section, new studio renders.
+
 ## v2.6.0 — 2026-10-15 · Home & web setup (3.0 beta)
 
 ### Added

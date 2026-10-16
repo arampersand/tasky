@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="docs/images/tasky-focus.jpg" alt="Tasky en una sesión de foco de 25 minutos" width="420">
+<img src="docs/images/tasky-hero.jpg" alt="Tasky en una sesión de foco de 25 minutos" width="640">
 
 # Tasky
 
@@ -20,6 +20,16 @@ Una perilla, una pantalla y una barra de luz: temporizador de foco, tus tareas d
 </div>
 
 ---
+
+## Dos firmwares
+
+| | **Tasky** | **Tasky for Agents** |
+|---|---|---|
+| Para | Tu compañero de escritorio | Compañero de tu compu y sus agentes de IA |
+| Lo principal | Home de un vistazo, Pomodoro, tareas, calendario, clima, GitHub, Notion, pregúntale a ChatGPT/Claude | **Estado de Claude Code** (la luz respira cuando un agente te necesita), **perilla Bluetooth para volumen/brillo/música**, atajos (Spotlight, Siri, captura), además de timer, tareas, calendario y clima |
+| Flashear | [tasky-flash.vercel.app](https://tasky-flash.vercel.app) → *Tasky* | [tasky-flash.vercel.app](https://tasky-flash.vercel.app) → *Tasky for Agents* + [hooks](companion/README.md) |
+
+Mismo hardware; cambias cuando quieras flasheando el otro.
 
 ## Por qué Tasky
 

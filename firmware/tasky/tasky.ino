@@ -4,6 +4,12 @@
 #include "network_manager.h"
 #include "ota_service.h"
 #include "usb_setup.h"
+#if FEATURE_BLE_HID
+#include "ble_hid.h"
+#endif
+#if FEATURE_AGENTS
+#include <ArduinoJson.h>
+#endif
 #include "ui.h"
 #include "wifi_portal.h"
 #if FEATURE_CALENDAR
@@ -62,6 +68,9 @@ LlmService llm(&model);
 OtaService ota(&model);
 WiFiPortal portal(&model, &net, &ota);
 UsbSetup usbSetup(&model, &net);
+#if FEATURE_AGENTS
+AgentBoard agents;
+#endif
 
 // ==================== STATE ====================
 Screen screen = SCR_HOME;
@@ -226,8 +235,13 @@ ModeClickType modeClickType() {
 
 // ==================== NAVIGATION & HANDLERS ====================
 // MODO cycles through the everyday screens; everything else lives in More.
+#if TASKY_EDITION_AGENTS
+static const Screen CAROUSEL[] = {SCR_HOME,  SCR_AGENTS, SCR_CONTROLS, SCR_TIMER,
+                                  SCR_TASKS, SCR_AGENDA, SCR_MORE};
+#else
 static const Screen CAROUSEL[] = {SCR_HOME,   SCR_TIMER, SCR_TASKS,
                                   SCR_AGENDA, SCR_STATS, SCR_MORE};
+#endif
 static const int CAROUSEL_N = sizeof(CAROUSEL) / sizeof(CAROUSEL[0]);
 
 struct MoreItem {
@@ -816,9 +830,19 @@ void checkDayBriefs() {
 void updateFocusLight() {
   if (screen == SCR_NOTICE || model.st.finished)
     return;
+#if FEATURE_AGENTS
+  if (agents.waitingCount(true) > 0) {  // breathe while an agent waits for you
+    float phase = (millis() % 1600) / 1600.0f;
+    float level = 0.15f + 0.85f * (0.5f - 0.5f * cosf(phase * 2 * PI));
+    setLed((uint8_t)(model.cfg.ledBright * level));
+    return;
+  }
+#endif
   bool on = model.isFocusModeActive() && model.cfg.focusLight;
   setLed(on ? model.cfg.ledBright : 0);
 }
+#include "agents_screens.h"
+
 
 void handleAgenda(int step, EncClickType click) {
   static int lastEventCount = -1;
@@ -1188,6 +1212,12 @@ void setup() {
   ui.baseDrawn = false;
   ui.applyTheme();
 
+#if FEATURE_BLE_HID
+  BleHid::begin("Tasky");
+#endif
+#if FEATURE_AGENTS
+  usbSetup.onCommand = handleAgentCommand;
+#endif
   usbSetup.onChanged = []() {
 #if FEATURE_WEATHER
     weather.requestRefresh();
@@ -1250,8 +1280,24 @@ void loop() {
     checkDayBriefs();
   }
 
+#if FEATURE_AGENTS
+  static uint32_t lastExpireAt = 0;
+  if (now - lastExpireAt > 60000UL) {
+    lastExpireAt = now;
+    agents.expire();
+  }
+  if (agents.changed) {
+    agents.changed = false;
+    refreshAgentStatus();
+    if (screen == SCR_AGENTS)
+      ui.baseDrawn = false;
+    else if (screen == SCR_HOME || screen == SCR_AMBIENT)
+      ui.drawAmbientPhrase();
+  }
+#endif
+
   static uint32_t lastLightAt = 0;
-  if (now - lastLightAt >= 250) {
+  if (now - lastLightAt >= 50) {  // 50 ms: smooth "agent waiting" breathing
     lastLightAt = now;
     updateFocusLight();
   }
@@ -1354,6 +1400,16 @@ void loop() {
   case SCR_HOME:
     handleHome(click);
     break;
+#if FEATURE_AGENTS
+  case SCR_AGENTS:
+    handleAgents(step, click);
+    break;
+#endif
+#if FEATURE_BLE_HID
+  case SCR_CONTROLS:
+    handleControls(step, click);
+    break;
+#endif
   case SCR_TIMER:
     handleTimer(step, click);
     break;

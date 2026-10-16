@@ -1,6 +1,6 @@
 # Tasky User Manual
 
-Firmware version: **2.6.0**
+Firmware version: **2.7.0**
 
 Tasky is a small desk device that keeps your focus sessions, your three tasks for the day, your calendar and your streak in front of you. You operate it with one knob and one button.
 
@@ -13,6 +13,7 @@ Tasky is a small desk device that keeps your focus sessions, your three tasks fo
 - [Automatic screens](#automatic-screens)
 - [WiFi portal and integrations](#wifi-portal-and-integrations)
 - [Firmware updates](#firmware-updates)
+- [Tasky for Agents](#tasky-for-agents)
 - [Factory reset](#factory-reset)
 - [Troubleshooting](#troubleshooting)
 
@@ -26,6 +27,9 @@ Tasky is a small desk device that keeps your focus sessions, your three tasks fo
 2. Scroll to **Set up** and click **Connect Tasky**. Pick Tasky's USB port.
 3. Follow the steps: **Wi-Fi → calendar → today's tasks → GitHub → AI → weather**. Every step is optional, and the time zone is set from your computer.
 4. That's it. Tasky shows the **Home** screen with the time, weather, what's next and your tasks.
+
+> [!TIP]
+> **No internet yet?** Tasky takes the time from your computer during setup (or from your phone when you open the setup page), so the clock is right even before Wi-Fi. Once online, it keeps it exact over NTP.
 
 ### From your phone (no computer)
 
@@ -489,6 +493,45 @@ If the upload is refused with **"Enable Update on the Tasky first (More > Update
 The current version is shown on the Update screen and in the portal.
 
 ---
+
+## Tasky for Agents
+
+The **Tasky for Agents** firmware (pick it in the web flasher) turns Tasky into a companion for your computer. It keeps Home, the focus timer, tasks, agenda and weather, and replaces the AI chat and Notion with two screens:
+
+```
+Home → Agents → Controls → Timer → Tasks → Agenda → More
+```
+
+### Agents
+
+Shows the AI coding agents running on your computer (for example Claude Code sessions), reported over USB by the [companion hooks](../companion/README.md).
+
+| What you see | Meaning |
+|---|---|
+| Teal ring, "working" | The agent is busy |
+| **Orange dot, "waiting"** | The agent needs your approval or input. The **light bar breathes** and Tasky beeps once (not during a focus session); Home says "1 agent needs you" |
+| Green ring, "done" | The agent finished its turn |
+
+| Input | Result |
+|---|---|
+| Turn | Select a session (its last message shows at the bottom) |
+| Short press | Acknowledge: the light stops breathing for that session |
+| Long press | Dismiss the session |
+
+Tasky keeps up to 4 sessions and forgets ones with no news for 2 hours.
+
+### Controls (Bluetooth)
+
+The knob becomes a dial for your computer. **Pair once:** on your computer open Bluetooth settings and connect to **Tasky** (it shows up as a keyboard).
+
+| Mode | Turn | Short press |
+|---|---|---|
+| **Volume** | Volume up / down | Mute |
+| **Brightness** | Screen brightness up / down | — |
+| **Media** | Next / previous track | Play / pause |
+| **Shortcuts** | Pick: Spotlight, Voice / Siri, Screenshot, Mission Control, Lock screen | Run it |
+
+**Long press** switches mode. Shortcuts are macOS key combos; see [CUSTOMIZING.md](CUSTOMIZING.md#shortcuts-tasky-for-agents) to change them.
 
 ## Factory reset
 
