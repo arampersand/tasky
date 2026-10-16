@@ -4,7 +4,28 @@
   "buildCommand": "node scripts/fetch-firmware.mjs",
   "outputDirectory": "public",
   "headers": [
-    { "source": "/firmware/(.*)", "headers": [{ "key": "Cache-Control", "value": "public, max-age=0, must-revalidate" }] },
-    { "source": "/agents/(.*)", "headers": [{ "key": "Cache-Control", "value": "public, max-age=0, must-revalidate" }, { "key": "Content-Type", "value": "text/plain; charset=utf-8" }] }
-  ]
+    {
+      "source": "/firmware/(.*)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=0, must-revalidate"
+        }
+      ]
+    },
+    {
+      "source": "/agents/(.*)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=0, must-revalidate"
+        },
+        {
+          "key": "Content-Type",
+          "value": "text/plain; charset=utf-8"
+        }
+      ]
+    }
+  ],
+  "cleanUrls": true
 }

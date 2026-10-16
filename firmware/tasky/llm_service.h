@@ -31,7 +31,8 @@ enum LlmMode {
   MODE_MOVE,       // Movimiento - brief exercise routine
   MODE_GYM,        // Gym - day-specific gym routine
   MODE_RECIPES,    // Recetas - cheap recipe under $10
-  LLM_MODE_COUNT   // = 9
+  MODE_TODAY,      // Hoy - your day in three short lines (default since 3.0)
+  LLM_MODE_COUNT   // = 10 (new modes go last: NVS cache keys use the index)
 };
 
 // Rate limits (unchanged)
@@ -74,6 +75,7 @@ public:
   char response[LLM_RESPONSE_MAX];
   int responseLen = 0;
   char errorMsg[64];
+  bool usedFallback = false;  // response is the canned offline text
 
 private:
   TaskyModel* model;

@@ -1,6 +1,6 @@
 # Tasky User Manual
 
-Firmware version: **2.7.0**
+Firmware version: **3.0.0**
 
 Tasky is a small desk device that keeps your focus sessions, your three tasks for the day, your calendar and your streak in front of you. You operate it with one knob and one button.
 
@@ -13,7 +13,7 @@ Tasky is a small desk device that keeps your focus sessions, your three tasks fo
 - [Automatic screens](#automatic-screens)
 - [WiFi portal and integrations](#wifi-portal-and-integrations)
 - [Firmware updates](#firmware-updates)
-- [Tasky for Agents](#tasky-for-agents)
+- [Claude Code agents and Controls](#claude-code-agents-and-controls)
 - [Factory reset](#factory-reset)
 - [Troubleshooting](#troubleshooting)
 
@@ -75,14 +75,14 @@ A single MODE press takes effect about 0.4 s after you let go, because Tasky fir
 MODE moves through the **main carousel** in a loop: first what you use while working, then what you check, then setup. By default:
 
 ```
-Home → Phrases → Timer → Tasks → Agenda → Streak → Weather → Settings → Setup (QR) → More
+Home → Agents → Controls → Phrases → Timer → Tasks → Agenda → Calendar → Streak → Weather → Settings → Setup (QR) → More
 ```
 
-(Tasky for Agents: `Home → Agents → Controls → Phrases → Timer → Tasks → Agenda → Streak → Weather → Settings → Setup (QR) → More`.)
+**Agents** and **Controls** are in the carousel from the start. Bluetooth turns on the first time you open **Controls**, and stays on from then.
 
-**Small dots along the top edge** show where you are in the carousel.
+The screen's number in the carousel shows small in the bottom-right corner.
 
-**You choose the carousel.** In the web setup's **Screens** step, tick the screens you want and put them in order with ↑/↓. **Home** is always first and **More** always last.
+**You choose the carousel.** In the web setup's **Screens** step, tick the screens you want and put them in order with ↑/↓, or do the same on Tasky in **More → [Screens](#screens-editor)**. **Home** is always first and **More** always last.
 
 **More** lists every screen that isn't in your carousel (for example Stats, Focus, Calendar, Agent), then **Update** and **Tour**.
 
@@ -188,6 +188,19 @@ This screen shows your **total focus time** (all time, in hours and minutes), **
 ![More menu](images/tasky-menu.jpg)
 
 More is a menu of the remaining screens. Turn the knob to select an item and press it to open the screen. MODE leaves the menu: single press to the Timer, double press to Stats.
+
+### Screens (editor)
+
+<a id="screens-editor"></a>Open it from **More → Screens** to choose your carousel right on Tasky. It's the same list as the web setup's **Screens** step, and every change is saved at once.
+
+- **Start** (first row): the screen Tasky opens on, Home or any screen in your carousel. **Press** to cycle through them.
+- Below it, **every screen** with a check box:
+
+| Input | Result |
+| ----- | ------ |
+| Turn | Select a screen |
+| Short press | Put it in the carousel or take it out (check box) |
+| Long press | Grab it; then **turn** to move it up or down and **press** to drop it |
 
 ### Focus
 
@@ -492,13 +505,9 @@ The current version is shown on the Update screen and in the portal.
 
 ---
 
-## Tasky for Agents
+## Claude Code agents and Controls
 
-The **Tasky for Agents** firmware (pick it in the web flasher) turns Tasky into a companion for your computer. It keeps Home, the focus timer, tasks, agenda and weather, and replaces the AI chat and Notion with two screens:
-
-```
-Home → Agents → Controls → Timer → Tasks → Agenda → Weather → Phrases → More
-```
+Tasky is also a companion for your computer: it shows your Claude Code sessions and works as a Bluetooth key row. Both are part of the firmware since 3.0 (in 2.7–2.13 they were a separate **Tasky for Agents** firmware). **Agents** and **Controls** wait in **More** until you use them, then join the [carousel](#screen-map).
 
 ### Agents
 
@@ -528,7 +537,7 @@ Tasky keeps up to 4 cards and forgets ones with no news for 2 hours.
 
 ### Controls (Bluetooth)
 
-The knob becomes a row of computer keys, like the top row of a Mac keyboard. **Pair once:** on your computer, open Bluetooth settings and connect to **Tasky** (it shows up as a keyboard). macOS may open a window asking to identify the keyboard. Close it: Tasky's keys work anyway.
+The knob becomes a row of computer keys, like the top row of a Mac keyboard. Bluetooth stays off until the first time you open Controls; from then on it starts with Tasky. **Pair once:** on your computer, open Bluetooth settings and connect to **Tasky** (it shows up as a keyboard). macOS may open a window asking to identify the keyboard. Close it: Tasky's keys work anyway.
 
 **Turn** to pick a key (the previous and next ones show above and below), **press** to send it:
 
@@ -536,7 +545,11 @@ Volume · Mute · Play / Pause · Next · Previous · Brightness · Mission Cont
 
 **Volume** and **Brightness** are dials: press to grab (the name turns orange), turn to adjust, press again to let go.
 
-**Long press** switches between **Mac** and **Windows** shortcuts (shown at the top). Media keys work the same on both. See [CUSTOMIZING.md](CUSTOMIZING.md#shortcuts-tasky-for-agents) to change the keys.
+**Long press** switches between **Mac**, **Windows** and **Phone** (shown at the top). Media keys work the same everywhere.
+
+**Phone** mode is for an iPhone or Android phone paired with Tasky (it sees a Bluetooth keyboard, no app needed): **Volume** and **Scroll** dials (scroll = next / previous reel, list or page), **Play / Pause**, **Next**, **Previous**, **Mute**, **Take photo** (the volume-up key that fires the camera's shutter, for a group photo from across the room) and **Next / Previous page** (arrow keys: e-books, PDFs, sheet music, slides). Some phones hide the on-screen keyboard while a Bluetooth keyboard is connected; turn Bluetooth off on Tasky's side by unpairing if you need to type.
+
+See [CUSTOMIZING.md](CUSTOMIZING.md#shortcuts-tasky-for-agents) to change the keys.
 
 ## Factory reset
 

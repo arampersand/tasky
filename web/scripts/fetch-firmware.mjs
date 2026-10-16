@@ -15,7 +15,8 @@ import { fileURLToPath } from "node:url";
 
 const REPO = process.env.TASKY_REPO ?? "arampersand/tasky";
 const OUT = join(dirname(fileURLToPath(import.meta.url)), "..", "public", "firmware");
-// Two editions x two boards. Agents builds are optional (older releases lack them).
+// One firmware x two boards since 3.0. The 2.7–2.13 releases also shipped
+// "Tasky for Agents" builds: optional, fetched only when the release has them.
 const BOARDS = [
   { id: "c3", env: "xiao_c3", chipFamily: "ESP32-C3" },
   { id: "c6", env: "xiao_c6", chipFamily: "ESP32-C6" },

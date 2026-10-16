@@ -35,7 +35,8 @@ static const char* modeNames[LLM_MODE_COUNT] = {
   "CLOSING",
   "MOVEMENT",
   "GYM",
-  "RECIPES"
+  "RECIPES",
+  "TODAY"
 };
 
 // Short descriptions (for IDLE screen)
@@ -48,7 +49,8 @@ static const char* modeDescs[LLM_MODE_COUNT] = {
   "Prepare a good closing",
   "Short exercise routine",
   "Gym routine for today",
-  "Easy affordable recipe"
+  "Easy affordable recipe",
+  "Your day in three lines"
 };
 
 // Full prompts sent to LLM (reference user context injected via system prompt)
@@ -94,7 +96,12 @@ static const char* modePrompts[LLM_MODE_COUNT] = {
   // MODE_RECIPES
   "Dame una receta sencilla que cueste menos de 10 dolares, con ingredientes "
   "y pasos muy breves. Que sea rapida de preparar (menos de 30 min). "
-  "Formato compacto, maximo 180 caracteres."
+  "Formato compacto, maximo 180 caracteres.",
+
+  // MODE_TODAY (the daily brief)
+  "Con mi calendario y mis tareas de hoy, dame mi dia en exactamente 3 frases "
+  "muy cortas (maximo 6 palabras cada una) separadas por ' / ': lo mas "
+  "importante de hoy, con que empezar, y un consejo para el dia."
 };
 
 // Offline fallback phrases (shown when no internet/API fails)
@@ -107,7 +114,8 @@ static const char* modeFallbacks[LLM_MODE_COUNT] = {
   "Escribe tres cosas que lograste hoy y una meta para manana.",
   "10 sentadillas, 10 lagartijas, 30s plancha. Repite 3 veces.",
   "Pecho y triceps: 4x10 press banca, 3x12 aperturas, 3x15 fondos, 3x12 extension triceps.",
-  "Huevos revueltos con frijoles y tortilla. Costo: $3. Tiempo: 10 min."
+  "Huevos revueltos con frijoles y tortilla. Costo: $3. Tiempo: 10 min.",
+  "Elige tu tarea clave / Empieza con 25 min de foco / Revisa tu calendario"
 };
 
 // ============================================================
@@ -199,19 +207,10 @@ uint32_t LlmService::calculateDayIndex() {
   return (uint32_t)((t.tm_year + 1900) * 372 + (t.tm_mon + 1) * 31 + t.tm_mday);
 }
 
+// Auto = the daily brief ("Today"). The other modes stay one press away in
+// the mode picker (manual override).
 LlmMode LlmService::calculateMode() {
-  int modeIdx = (int)(todayDayIdx % LLM_MODE_COUNT);
-
-  // Anti-repetition: check last mode from NVS
-  cachePref.begin("llm", true);
-  uint8_t lastMode = cachePref.getUChar("lm", 0xFF);
-  cachePref.end();
-
-  if (lastMode != 0xFF && modeIdx == (int)lastMode) {
-    modeIdx = (modeIdx + 1) % LLM_MODE_COUNT;
-  }
-
-  return (LlmMode)modeIdx;
+  return MODE_TODAY;
 }
 
 // ============================================================
@@ -272,6 +271,7 @@ void LlmService::loadFallback() {
   strncpy(response, fb, LLM_RESPONSE_MAX - 1);
   response[LLM_RESPONSE_MAX - 1] = '\0';
   responseLen = strlen(response);
+  usedFallback = true;
   Serial.println("[LLM] Using offline fallback");
   // Don't cache fallbacks - next time with internet, get real response
 }
@@ -291,6 +291,7 @@ void LlmService::sendDailyPrompt() {
   memset(response, 0, sizeof(response));
   responseLen = 0;
   memset(errorMsg, 0, sizeof(errorMsg));
+  usedFallback = false;
 
   // 1. Check per-mode cache first
   if (loadCachedResponse(currentMode)) {
@@ -456,8 +457,12 @@ String LlmService::buildToolContext() {
 String LlmService::buildSystemPrompt() {
   String sys = "Eres Tasky AI, un coach de productividad en un dispositivo pequeno. ";
   sys += "Responde SOLO en espanol. ";
-  sys += "Reglas estrictas: maximo 180 caracteres, una sola frase, ";
-  sys += "sin emojis, sin comillas, sin listas, sin viñetas. ";
+  if (todayMode == MODE_TODAY)  // the daily brief: three short phrases
+    sys += "Reglas estrictas: exactamente 3 frases muy cortas separadas por ' / ', "
+           "maximo 180 caracteres en total, sin emojis, sin comillas, sin viñetas. ";
+  else
+    sys += "Reglas estrictas: maximo 180 caracteres, una sola frase, "
+           "sin emojis, sin comillas, sin listas, sin viñetas. ";
   sys += "Se directo, especifico y accionable basandote en los datos reales del usuario. ";
   sys += "Contexto del usuario:\n";
   sys += buildToolContext();

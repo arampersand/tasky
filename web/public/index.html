@@ -26,7 +26,7 @@
   <nav>
     <a href="#flash">Flash</a>
     <a href="#setup">Set up</a>
-    <a href="#editions">Editions</a>
+    <a href="#tasky">What it does</a>
     <a href="#build">Build your own</a>
     <a class="gh" href="https://github.com/arampersand/tasky" rel="noopener">GitHub</a>
   </nav>
@@ -66,13 +66,7 @@
         <li>
           <span class="num">1</span>
           <div>
-            <h3>Pick your firmware and board</h3>
-            <div class="boards editions" role="radiogroup" aria-label="Firmware">
-              <label class="board"><input type="radio" name="edition" value="" checked>
-                <span><strong>Tasky</strong><small>Focus timer, tasks, calendar, weather, GitHub, AI chat</small></span></label>
-              <label class="board" id="edition-agents"><input type="radio" name="edition" value="-agents">
-                <span><strong>Tasky for Agents</strong><small>Computer companion: Claude Code status, Bluetooth volume &amp; shortcuts</small></span></label>
-            </div>
+            <h3>Pick your board</h3>
             <div class="boards" role="radiogroup" aria-label="Board">
               <label class="board"><input type="radio" name="board" value="c3" checked>
                 <span><strong>XIAO ESP32-C3</strong><small>Original Tasky build</small></span></label>
@@ -281,7 +275,7 @@
           <div class="wz-actions"><button class="btn ghost" data-skip>Skip</button><button class="btn primary" data-save="light">Save</button></div>
         </div>
 
-        <!-- Agents (Tasky for Agents only) -->
+        <!-- Agents (Tasky 3.0+ and the 2.x Agents builds) -->
         <div class="wz-step" data-step="agents" hidden>
           <h3 class="wz-title-icon"><svg viewBox="0 0 24 24" width="28" height="28" aria-hidden="true"><path fill="#D97757" fill-rule="evenodd" clip-rule="evenodd" d="M20.998 10.949H24v3.102h-3v3.028h-1.487V20H18v-2.921h-1.487V20H15v-2.921H9V20H7.488v-2.921H6V20H4.487v-2.921H3V14.05H0V10.95h3V5h17.998v5.949zM6 10.949h1.488V8.102H6v2.847zm10.51 0H18V8.102h-1.49v2.847z"/></svg>Connect Claude Code</h3>
           <p>Install the Tasky plugin. In Claude Code, run these two commands:</p>
@@ -308,10 +302,10 @@
             <li><strong>MODE</strong> moves to the next screen; double-press goes back.</li>
           </ul>
           <div class="wz-agents" id="wz-agents-tip" hidden>
-            <p><strong>One last thing:</strong> this page is holding Tasky's USB port. Disconnect (or close the tab) so Claude Code can reach Tasky. Pair "Tasky" in Bluetooth to use the <strong>Controls</strong> screen.</p>
+            <p><strong>One last thing:</strong> this page is holding Tasky's USB port. Disconnect (or close the tab) so Claude Code can reach Tasky. For the <strong>Controls</strong> keys, open Controls on Tasky (Bluetooth starts then) and pair "Tasky" on your computer.</p>
             <button class="btn ghost" id="wz-disconnect" type="button">Disconnect</button>
           </div>
-          <p class="small">Need more? Read the <a href="https://github.com/arampersand/tasky/blob/main/docs/MANUAL.md">manual</a>.</p>
+          <p class="small">Need more? Read the <a href="https://github.com/arampersand/tasky/blob/main/docs/MANUAL.md">manual</a>, or <a href="/start" target="_blank" rel="noopener">print the quick-start card</a>.</p>
         </div>
       </div>
       <p class="wz-unsupported note warn" id="wz-unsupported" hidden>Setup over USB needs Chrome or Edge on a computer. On your phone, open <strong>More → Setup (QR)</strong> on Tasky and scan the code.</p>
@@ -320,36 +314,36 @@
     <p class="small after-note">Already running Tasky? You can also update over Wi-Fi: open <strong>More → Update</strong> on the device, then upload the release's <code>…-ota.bin</code> from its setup page. Reinstalling here keeps your settings unless you choose to erase.</p>
   </section>
 
-  <section id="editions" class="wrap section">
+  <section id="tasky" class="wrap section">
     <div class="section-head">
-      <p class="kicker">Two firmwares</p>
-      <h2>Pick the Tasky you need</h2>
-      <p class="sub">Same hardware, two personalities. Switch any time by flashing the other one.</p>
+      <p class="kicker">One firmware</p>
+      <h2>Everything Tasky does</h2>
+      <p class="sub">Since 3.0 there's a single firmware with it all. Bluetooth turns on the first time you open <strong>Controls</strong>.</p>
     </div>
     <div class="editions-grid">
       <article class="edition">
         <img src="/img/hero.jpg" alt="Tasky showing a 25:00 focus timer" loading="lazy">
         <div>
-          <h3>Tasky</h3>
-          <p>Your calm desk companion. Glance at the time, weather, next meeting and today's tasks; press the knob to focus.</p>
+          <h3>At your desk</h3>
+          <p>Glance at the time, weather, next meeting and today's tasks; press the knob to focus.</p>
           <ul>
-            <li>Home at a glance, rotating phrases</li>
             <li>Focus timer with a "do not disturb" light</li>
-            <li>Calendar, GitHub streak, Notion, weather</li>
-            <li>Ask ChatGPT or Claude from the Agent screen</li>
+            <li>Today's three tasks and your calendar</li>
+            <li>Streak from focus sessions and GitHub, plus Notion</li>
+            <li>Rotating phrases, weather, and ChatGPT or Claude on the AI screen</li>
           </ul>
         </div>
       </article>
       <article class="edition">
         <img src="/img/render-ring.jpg" alt="Tasky render" loading="lazy">
         <div>
-          <h3>Tasky for Agents <span class="tag">new</span></h3>
+          <h3>With your computer <span class="tag">3.0</span></h3>
           <p>A companion for your computer and the AI agents running on it.</p>
           <ul>
-            <li>Claude Code sessions on screen; the light breathes when an agent needs your approval</li>
-            <li>Knob as a Bluetooth volume, brightness and media dial</li>
-            <li>One-press shortcuts: Spotlight, Siri, screenshot, lock</li>
-            <li>Plus focus timer, tasks, calendar and weather</li>
+            <li>Claude Code sessions on screen; the light breathes when an agent needs you</li>
+            <li>Allow or deny permission prompts with the knob</li>
+            <li>Bluetooth controls for Mac and Windows: volume, brightness, media</li>
+            <li>One-press shortcuts: search, screenshot, lock</li>
           </ul>
           <a class="small-link" href="https://github.com/arampersand/tasky/blob/main/companion/README.md">How the Claude Code plugin works →</a>
         </div>

@@ -102,6 +102,7 @@ uint32_t lockToastUntil = 0;
 enum ModeClickType { MODE_NONE, MODE_SHORT, MODE_LONG, MODE_DOUBLE };
 
 uint32_t lightPreviewUntil = 0;
+String morningBrief;  // the AI's "today" lines for the morning notice
 uint32_t pressBlinkUntil = 0;  // a short light blip on every press (no buzzer)
 uint32_t lastAnimAt = 0;
 uint32_t lastBeepAt = 0;
@@ -290,6 +291,7 @@ static int moreN = 0;
 // System entries always at the end of More (Settings and Setup (QR) are in
 // SCREEN_DEFS: More lists them only when they aren't in your carousel)
 static const ScreenDef MORE_SYSTEM[] = {
+    {"screens", "Screens", SCR_SCREENS},
     {"update", "Update", SCR_UPDATE},
     {"tour", "Tour", SCR_TOUR},
 };
@@ -310,6 +312,7 @@ void rebuildMenus() {
     pos = comma + 1;
     if (!def || inCarousel[def - SCREEN_DEFS])
       continue;  // unknown in this edition, or listed twice
+
     inCarousel[def - SCREEN_DEFS] = true;
     carousel[carouselN++] = def->screen;
   }
@@ -327,6 +330,8 @@ void rebuildMenus() {
   }
   if (ui.moreSel >= moreN)
     ui.moreSel = 0;
+  if (screen == SCR_MORE)
+    ui.baseDrawn = false;  // the list changed under you
 }
 
 static int carouselIndex(Screen s) {
@@ -336,7 +341,11 @@ static int carouselIndex(Screen s) {
   return -1;
 }
 
+bool screensEditorFresh = false;  // More > Screens loads your list on entry
+
 void goTo(Screen next) {
+  if (next == SCR_SCREENS)
+    screensEditorFresh = true;
   if (next == SCR_QR || next == SCR_WIFI_INFO || next == SCR_UPDATE) {
     if (!portal.wifiOn) portal.begin();
   }
@@ -558,6 +567,129 @@ void handleStreak(int step, EncClickType click) {
     ui.drawStreak();
   }
   shownSum = streakChecksum();
+}
+
+// Screens editor (More > Screens): row 0 picks the start screen; below,
+// press = in/out of the carousel, hold = grab and turn to move it.
+// Changes are saved at once (the web's Screens step sees the same list).
+static uint8_t edOrder[MAX_MENU];  // SCREEN_DEFS indexes (Home excluded)
+static bool edIncluded[MAX_MENU];
+static const char *edLabels[MAX_MENU];
+static int edN = 0, edSel = 0;
+static bool edGrabbed = false;
+
+static void loadScreensEditor() {
+  // Your saved list, not the carousel: Agents / Controls may be waiting to be
+  // unlocked and must keep their place
+  edN = 0;
+  String list = model.cfg.screens.length() ? model.cfg.screens : String(defaultCarousel());
+  for (int pos = 0; pos < (int)list.length();) {
+    int comma = list.indexOf(',', pos);
+    if (comma < 0)
+      comma = list.length();
+    const ScreenDef *d = findScreen(list.substring(pos, comma));
+    pos = comma + 1;
+    if (!d || d == &SCREEN_DEFS[0])
+      continue;  // unknown, or Home (always first)
+    bool dup = false;
+    for (int k = 0; k < edN; k++)
+      dup |= edOrder[k] == d - SCREEN_DEFS;
+    if (dup)
+      continue;
+    edOrder[edN] = d - SCREEN_DEFS;
+    edIncluded[edN++] = true;
+  }
+  for (int i = 1; i < SCREEN_DEFS_N; i++) {  // then the rest, unticked
+    bool seen = false;
+    for (int k = 0; k < edN; k++)
+      seen |= edOrder[k] == i;
+    if (!seen) {
+      edOrder[edN] = i;
+      edIncluded[edN++] = false;
+    }
+  }
+}
+
+static void saveScreensEditor() {
+  String list = "home";
+  for (int k = 0; k < edN; k++)
+    if (edIncluded[k])
+      list += String(",") + SCREEN_DEFS[edOrder[k]].id;
+  model.cfg.screens = list;
+  model.save();
+  rebuildMenus();
+}
+
+static const ScreenDef *startDef() {
+  const ScreenDef *d = findScreen(model.cfg.startScreen);
+  return d ? d : &SCREEN_DEFS[0];
+}
+
+static void drawScreensEditor() {
+  for (int k = 0; k < edN; k++)
+    edLabels[k] = SCREEN_DEFS[edOrder[k]].label;
+  ui.drawScreens(startDef()->label, edLabels, edIncluded, edN, edSel, edGrabbed);
+}
+
+void handleScreensEditor(int step, EncClickType click) {
+  if (screensEditorFresh) {  // just opened from More (not a redraw)
+    screensEditorFresh = false;
+    loadScreensEditor();
+    edSel = 0;
+    edGrabbed = false;
+  }
+  if (!ui.baseDrawn)
+    drawScreensEditor();
+  int rows = edN + 1;
+  if (step != 0) {
+    ui.uiTick(false);
+    int to = ((edSel - step) % rows + rows) % rows;  // knob up = next
+    if (edGrabbed && edSel > 0 && to > 0) {  // carry the grabbed screen along
+      int a = edSel - 1, b = to - 1;
+      uint8_t o = edOrder[a];
+      bool in = edIncluded[a];
+      int dir = b > a ? 1 : -1;
+      for (int k = a; k != b; k += dir) {
+        edOrder[k] = edOrder[k + dir];
+        edIncluded[k] = edIncluded[k + dir];
+      }
+      edOrder[b] = o;
+      edIncluded[b] = in;
+    }
+    edSel = edGrabbed && to == 0 ? edSel : to;
+    drawScreensEditor();
+  }
+  if (click == ENC_SHORT) {
+    ui.uiTick(true);
+    if (edSel == 0) {  // next start screen: Home or any screen in your carousel
+      int cur = 0;
+      for (int c = 0; c < carouselN - 1; c++)
+        if (carousel[c] == startDef()->screen)
+          cur = c;
+      Screen next = carousel[(cur + 1) % (carouselN - 1)];
+      for (int i = 0; i < SCREEN_DEFS_N; i++)
+        if (SCREEN_DEFS[i].screen == next)
+          model.cfg.startScreen = SCREEN_DEFS[i].id;
+      model.save();
+    } else if (edGrabbed) {
+      edGrabbed = false;
+      saveScreensEditor();
+    } else {
+      int k = edSel - 1;
+      edIncluded[k] = !edIncluded[k];
+      if (!edIncluded[k] && model.cfg.startScreen == SCREEN_DEFS[edOrder[k]].id)
+        model.cfg.startScreen = "home";  // can't start on a screen you took out
+      saveScreensEditor();
+    }
+    drawScreensEditor();
+  }
+  if (click == ENC_LONG && edSel > 0) {
+    ui.uiTick(true);
+    edGrabbed = !edGrabbed;
+    if (!edGrabbed)
+      saveScreensEditor();
+    drawScreensEditor();
+  }
 }
 
 // Quick settings (long press on Home): turn = pick, press = change,
@@ -998,7 +1130,7 @@ void handleNotice(EncClickType click, bool modePressed) {
     if (noticeType == NOTICE_MEETING)
       ui.drawMeetingAlert(noticeEvent, noticeMinutes, noticeTimerPaused);
     else if (noticeType == NOTICE_MORNING)
-      ui.drawMorningBrief();
+      ui.drawMorningBrief(morningBrief);
     else
       ui.drawDayClose();
     ui.baseDrawn = true;
@@ -1069,7 +1201,19 @@ void checkDayBriefs() {
   if (h >= c.dayStartHour && h < c.dayEndHour && c.lastMorningDay != t.tm_yday) {
     c.lastMorningDay = t.tm_yday;
     model.save();
+    morningBrief = "";
     showNotice(NOTICE_MORNING);
+#if FEATURE_LLM
+    // Your day in three lines, if you added an AI key (cached for the day).
+    // The notice is up first; this can take a few seconds online.
+    if (llm.isConfigured() && llm.getTodayMode() == MODE_TODAY && net.isConnected()) {
+      ui.drawMorningBrief();
+      llm.sendDailyPrompt();
+      if (llm.getState() == LLM_DONE && !llm.usedFallback)
+        morningBrief = llm.response;
+      ui.baseDrawn = false;  // redraw with the brief
+    }
+#endif
   } else if (h >= c.dayEndHour && c.lastEveningDay != t.tm_yday) {
     c.lastEveningDay = t.tm_yday;
     model.save();
@@ -1099,6 +1243,32 @@ void updateFocusLight() {
   }
   setLed(on ? model.cfg.ledBright : 0);
 }
+// Bluetooth (the Controls key row) starts the first time you open Controls,
+// then on every boot: it costs RAM and power, so people who never pair skip it.
+void ensureBluetooth() {
+#if FEATURE_BLE_HID
+  static bool started = false;
+  if (started)
+    return;
+  started = true;
+  BleHid::begin("Tasky");
+  if (!model.cfg.btOn) {
+    model.cfg.btOn = true;  // Controls joins the carousel from now on
+    model.save();
+    rebuildMenus();
+  }
+#endif
+}
+
+// The first agent card puts Agents in the carousel
+void markAgentsSeen() {
+  if (model.cfg.agentsSeen)
+    return;
+  model.cfg.agentsSeen = true;
+  model.save();
+  rebuildMenus();
+}
+
 #include "agents_screens.h"
 
 
@@ -1454,16 +1624,16 @@ bool handleUsbCommand(const String &cmd) {
 }
 
 void setup() {
-  delay(500);   // Estabilizar alimentacion antes de init
+  // The backlight is wired to power on the Tasky boards, so until the panel
+  // is initialized it shows noise. Get it to black first, then the rest.
   Serial.begin(115200);
-  delay(500);   // Dar tiempo al Serial
+  SPI.begin(TFT_SCK, -1, TFT_MOSI, TFT_CS);
+  ui.init();
   Serial.println("Booting TaskyFirmware...");
   Serial.printf("Pins: CS=%d DC=%d RST=%d MOSI=%d SCK=%d\n", TFT_CS, TFT_DC,
                 TFT_RST, TFT_MOSI, TFT_SCK);
   Serial.printf("Free heap: %u\n", ESP.getFreeHeap());
 
-  // Initialize SPI - velocidad controlada por tft.setSPISpeed() en ui.init()
-  SPI.begin(TFT_SCK, -1, TFT_MOSI, TFT_CS);
 
   // Input pins
   pinMode(ENCODER_CLK, INPUT_PULLUP);
@@ -1490,8 +1660,7 @@ void setup() {
   Serial.println("Loading model...");
   model.begin();
   initLight();  // needs the saved light type
-  Serial.println("Init display...");
-  ui.init();
+  ui.applyTheme();  // the saved theme (the display is already on)
 
   setLed(0);
   buzzerOff();
@@ -1531,13 +1700,12 @@ void setup() {
   rebuildMenus();
   lastInputAt = millis();
 
-  screen = loadTourAndHints() ? SCR_TOUR : SCR_HOME;
+  screen = loadTourAndHints() ? SCR_TOUR : startDef()->screen;  // your start screen
   ui.baseDrawn = false;
   ui.applyTheme();
 
-#if FEATURE_BLE_HID
-  BleHid::begin("Tasky");
-#endif
+  if (model.cfg.btOn)
+    ensureBluetooth();
   usbSetup.onCommand = handleUsbCommand;
   usbSetup.onChanged = []() {
     rebuildMenus();  // the carousel may have changed
@@ -1785,6 +1953,9 @@ void loop() {
     break;
   case SCR_QUICK:
     handleQuick(step, click);
+    break;
+  case SCR_SCREENS:
+    handleScreensEditor(step, click);
     break;
 #if FEATURE_WEATHER
   case SCR_WEATHER:

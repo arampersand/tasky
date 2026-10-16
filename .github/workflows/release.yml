@@ -12,7 +12,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        env: [xiao_c3, xiao_c6, xiao_c3_agents, xiao_c6_agents]
+        env: [xiao_c3, xiao_c6]
     steps:
       - uses: actions/checkout@v4
       - name: Check tag matches version.h
@@ -29,6 +29,10 @@ jobs:
       - run: pip install -U platformio
       - run: pio run -e ${{ matrix.env }}
         working-directory: firmware
+      - name: App fits its flash slot (partitions.csv app0, 0x1F0000)
+        run: |
+          SIZE=$(stat -c%s firmware/.pio/build/${{ matrix.env }}/firmware.bin)
+          [ "$SIZE" -le 2031616 ] || { echo "::error::firmware.bin is $SIZE bytes, the app slot is 2031616"; exit 1; }
       - name: Collect release files
         run: |
           R=firmware/.pio/build/${{ matrix.env }}/release

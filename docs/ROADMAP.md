@@ -14,7 +14,7 @@ From the first people who built and flashed a Tasky (Oct 2026):
 | "It has to be a gadget you *want* to use, like the Rabbit R1, not something that eats ports, space and setup time." | Zero-config first run, fewer menus, nicer setup. |
 | "You need a nice page to configure it, and a manual. Picking it up and pressing things is confusing." | A guided web onboarding, on-device hints, a printable quick-start card. |
 | "Connect your calendar and see the things you have to do." | Calendar items show up as today's to-dos. |
-| "Make it work for the computer: volume, brightness, Siri/search, switching Claude agents, opening issues." | A desk-companion firmware variant. |
+| "Make it work for the computer: volume, brightness, Siri/search, switching Claude agents, opening issues." | A desk-companion mode (agents + Bluetooth controls), in the main firmware since 3.0. |
 | "The little phrases on the idle screen were great; make that the main screen." | Home = clock + weather + to-dos + a rotating phrase. |
 | "Show my phone's notifications over Bluetooth." | Phone notifications on Tasky Go. |
 
@@ -71,14 +71,14 @@ All of it goes over Web Serial, so it works from the same page that flashed the 
 
 ## Phase 3 — Desk companion (computer) *(started)*
 
-**Shipped in 2.7.0:** the **Tasky for Agents** firmware: Claude Code status over USB via hooks (`companion/`), breathing light when an agent waits, and a Bluetooth Controls screen (volume, brightness, media, shortcuts). **Unreleased (2.12):** agent cards with a pixel robot, allow/deny Claude Code permission prompts from the knob, Controls as a Mac/Windows key row, one-command installer, background companion that owns the USB port. Next: Windows support for the companion, more agents (Codex, Cursor, CI status lights), one firmware for both editions.
+**Shipped in 2.7.0:** the **Tasky for Agents** firmware: Claude Code status over USB via hooks (`companion/`), breathing light when an agent waits, and a Bluetooth Controls screen (volume, brightness, media, shortcuts). **Unreleased (2.12):** agent cards with a pixel robot, allow/deny Claude Code permission prompts from the knob, Controls as a Mac/Windows key row, one-command installer, background companion that owns the USB port. **Shipped in 3.0:** ~~one firmware for both editions~~: Tasky and Tasky for Agents merged, with AI chat, Notion, agent cards and Controls in one build per board (Agents and Controls join the carousel once used; Bluetooth starts the first time you open Controls). Next: Windows support for the companion, more agents (Codex, Cursor, CI status lights).
 
 The XIAO C3/C6 have no native USB (USB-Serial/JTAG only), so they can't be a USB keyboard. Two routes that work on both:
 - **Bluetooth keyboard / media controller (BLE HID)**, no app needed: knob = volume (or brightness, switchable), press = play/pause, long press = mute. Extra actions mapped to shortcuts: Siri / Spotlight search, dictation, screenshot.
 - **Companion app** (tray app or `tasky` CLI) over USB serial or Wi-Fi, for things a keyboard can't do:
   - **Claude Code / AI agents:** a [Claude Code hook](https://docs.anthropic.com/en/docs/claude-code/hooks) tells Tasky when an agent is working, done or **waiting for your approval**. The light bar pulses when an agent needs you; the knob switches sessions; a press focuses that terminal.
   - **Quick actions:** open a GitHub issue from a template, start a meeting transcript, toggle Do Not Disturb when a focus session starts.
-- Shipped as an alternative firmware ("Tasky Desk: Companion") selectable in the web flasher.
+- ~~Shipped as an alternative firmware selectable in the web flasher~~: shipped in 2.7 as *Tasky for Agents*, part of the one firmware since 3.0.
 
 ## Phase 4 — Tasky Go
 - ~~Battery wiring, switch~~ (on the v1.1/v3.1 PCBs). Still to do: battery gauge, backlight control, light/deep sleep (v3.2 board, see above).

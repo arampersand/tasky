@@ -65,6 +65,7 @@ enum Screen {
   SCR_CONTROLS,   // Agents edition: Bluetooth volume / media / shortcuts
   SCR_PHRASES,    // One phrase, big; turn to browse
   SCR_QUICK,      // Quick settings (long press on Home)
+  SCR_SCREENS,    // Pick and order your screens + start screen (More)
   SCR_TOUR,       // First-boot tour (also More -> Tour)
   // Overlays
   SCR_AMBIENT,    // Idle: clock + next event + weather
@@ -147,6 +148,9 @@ public:
   void drawDayTasks(int day); // Show tasks for a specific calendar day
   void drawFocus();           // Focus mode settings
   void drawQuick(int sel);    // Quick settings sheet
+  // Screens editor: row 0 = start screen, then every screen with a check
+  void drawScreens(const char *start, const char *const labels[], const bool included[],
+                   int count, int sel, bool grabbed);
   void drawMore(const char *const labels[], int count);
   void drawAgenda();          // Today's calendar events + Notion tasks
   void drawAmbient(bool weatherOk, float temp, const char *desc, bool celsius);
@@ -168,10 +172,10 @@ public:
 #endif
 #if FEATURE_BLE_HID
   void drawControls(const char *prev, const char *key, const char *next, const char *hint,
-                    bool grabbed, bool connected, bool windows);
+                    bool grabbed, bool connected, const char *osName);
 #endif
   void drawMeetingAlert(const CalendarEventItem &ev, int minutes, bool timerPaused);
-  void drawMorningBrief();
+  void drawMorningBrief(const String &brief = "");  // brief: "a / b / c" from the AI
   void drawDayClose();
   void drawUpdate(bool armed, const String &url, const String &hint,
                   const String &version);

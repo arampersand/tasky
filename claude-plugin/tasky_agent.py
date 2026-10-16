@@ -190,8 +190,9 @@ class Daemon:
         return self.port is not None
 
     def agents_edition(self):
-        """Only Tasky for Agents shows agent cards."""
-        return self.connected() and self.status.get("edition") == "agents"
+        """Tasky 3.0+ (one firmware, "agents": true) or a 2.x Tasky for Agents."""
+        return self.connected() and (self.status.get("agents") is True
+                                     or self.status.get("edition") == "agents")
 
     def can_ask(self):
         """Permission questions need Tasky for Agents 2.12 or newer; older
@@ -558,9 +559,9 @@ def doctor(settings_path):
 
     ping = request({"op": "ping"}, timeout=8) or {}
     if ping.get("edition"):
-        check(ping.get("edition") == "agents", f"Tasky found: {ping.get('edition')} {ping.get('version')}",
-              "Flash Tasky for Agents at https://tasky-flash.vercel.app (keeps your settings)")
-        if ping.get("edition") == "agents":
+        check(bool(ping.get("connected")), f"Tasky found: {ping.get('edition')} {ping.get('version')}",
+              "Update Tasky at https://tasky-flash.vercel.app (keeps your settings)")
+        if ping.get("connected"):
             check(bool(ping.get("asks")), "Firmware answers permission prompts (2.12+)",
                   "Update Tasky at https://tasky-flash.vercel.app")
     else:
@@ -644,7 +645,7 @@ def main():
             print(f"Tasky for Agents {reply.get('version')} connected"
                   + ("" if reply.get("asks") else " (update to 2.12 to answer permission prompts)"))
         elif reply and reply.get("edition"):
-            print("This Tasky runs the standard firmware: flash Tasky for Agents at tasky-flash.vercel.app")
+            print("This Tasky's firmware has no agent cards: update it at tasky-flash.vercel.app")
             sys.exit(1)
         else:
             print("No Tasky found (plug it in, close the web setup page, or set TASKY_PORT)")

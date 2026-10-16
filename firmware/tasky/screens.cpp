@@ -23,7 +23,7 @@ const ScreenDef SCREEN_DEFS[] = {
     {"settings", "Settings", SCR_SETTINGS},
     {"qr", "Setup (QR)", SCR_QR},
 #if FEATURE_LLM
-    {"agent", "Agent", SCR_AGENT},
+    {"agent", "AI brief", SCR_AGENT},
 #endif
 #if FEATURE_SPOTIFY
     {"music", "Music", SCR_SPOTIFY},
@@ -38,11 +38,8 @@ const ScreenDef *findScreen(const String &id) {
   return nullptr;
 }
 
+// What you use while working, then what you check, then setup. Agents and
+// Controls are skipped until you use them (rebuildMenus in tasky.ino).
 const char *defaultCarousel() {
-#if TASKY_EDITION_AGENTS
-  // What you use while working, then what you check, then setup
-  return "home,agents,controls,phrases,timer,tasks,agenda,streak,weather,settings,qr";
-#else
-  return "home,phrases,timer,tasks,agenda,streak,weather,settings,qr";
-#endif
+  return "home,agents,controls,phrases,timer,tasks,agenda,calendar,streak,weather,settings,qr";
 }

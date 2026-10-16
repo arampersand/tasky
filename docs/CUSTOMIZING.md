@@ -305,7 +305,7 @@ The Controls screen's keys are `KEYS[]` in `firmware/tasky/agents_screens.h`. Ea
 {"Mute",            "Mute",         BleHid::MUTE, 0, 0, 0, 0, 0, 0},
 ```
 
-Modifiers: `BleHid::CTRL`, `SHIFT`, `ALT`, `GUI` (Cmd / Windows key). Key ids come from the USB HID usage tables (letters `a`=0x04 … `z`=0x1D, `1`=0x1E … `0`=0x27, Tab 0x2B, Space 0x2C, arrows 0x4F–0x52). Long press on Controls switches between the Mac and Windows combos (saved in NVS `os`).
+Modifiers: `BleHid::CTRL`, `SHIFT`, `ALT`, `GUI` (Cmd / Windows key). Key ids come from the USB HID usage tables (letters `a`=0x04 … `z`=0x1D, `1`=0x1E … `0`=0x27, Tab 0x2B, Space 0x2C, arrows 0x4F–0x52). Long press on Controls cycles Mac → Windows → Phone (saved in NVS `os`). Phone mode uses its own list, `PHONE_KEYS[]`, right below: each entry sends a consumer usage or a keyboard key on press, or is a dial with a usage/key for each knob direction.
 
 ---
 

@@ -21,17 +21,11 @@ Una perilla, una pantalla y una barra de luz: temporizador de foco, tus tareas d
 
 ---
 
-## Dos firmwares
+## Un firmware con todo
 
-| | **Tasky** | **Tasky for Agents** |
-|---|---|---|
-| Para | Tu compañero de escritorio | Compañero de tu compu y sus agentes de IA |
-| Lo principal | Home de un vistazo, Pomodoro, tareas, calendario, clima, GitHub, Notion, pregúntale a ChatGPT/Claude | **Estado de Claude Code** (la luz respira cuando un agente te necesita), **perilla Bluetooth para volumen/brillo/música**, atajos (Spotlight, Siri, captura), además de timer, tareas, calendario y clima |
-| Flashear | [tasky-flash.vercel.app](https://tasky-flash.vercel.app) → *Tasky* | [tasky-flash.vercel.app](https://tasky-flash.vercel.app) → *Tasky for Agents* + el [plugin de Claude Code](companion/README.md) |
+Desde la **3.0** hay un solo firmware para las dos placas (XIAO C3 y C6) con todo: Home de un vistazo, Pomodoro, tareas, calendario, clima, racha de GitHub, Notion, pregúntale a ChatGPT/Claude, **tarjetas de agentes de Claude Code** (la luz respira cuando un agente te necesita y apruebas o rechazas permisos con la perilla) y una **fila de teclas Bluetooth** (volumen, brillo, música y atajos para Mac o Windows). Agents y Controls están en el carrusel desde el inicio; el Bluetooth solo arranca la primera vez que abres Controls.
 
-Mismo hardware; cambias cuando quieras flasheando el otro.
-
-**Conecta Claude Code** (Tasky for Agents): dentro de Claude Code, corre
+**Conecta Claude Code**: dentro de Claude Code, corre
 
 ```
 /plugin marketplace add arampersand/tasky
@@ -54,6 +48,8 @@ Tu celular es la peor herramienta de foco que tienes. Tasky es un objeto de un s
 | 📅 **Calendario y agenda** | Cualquier feed iCal. Aviso 5 minutos antes de cada reunión, resumen de la mañana y cierre del día. |
 | 🌤 **Clima** | Open-Meteo, sin API key. |
 | 🤖 **Agente IA** | Con tu key de Claude u OpenAI. |
+| 🧑‍💻 **Agentes de Claude Code** | Una tarjeta por sesión; la luz respira cuando un agente te espera; apruebas o rechazas permisos con la perilla. |
+| 🎛 **Controls** | Tasky como teclado Bluetooth: volumen, brillo, música y atajos para Mac o Windows. |
 | 🏠 **Home de un vistazo** | Hora, clima, lo que sigue, tus pendientes y una frase que va cambiando. Presiona la perilla para enfocarte. |
 | 🪄 **Setup en dos minutos** | Justo después de flashear, la página te guía por WiFi, calendario, tareas, GitHub e IA por USB. O escanea un QR con el celular. |
 | 🔄 **Actualizaciones** | Desde el navegador, o por WiFi (OTA armado desde el propio dispositivo). |
@@ -82,7 +78,7 @@ pio run -e xiao_c3 -t upload && pio device monitor
 
 ## Lo que viene
 
-**Tasky 3.0**: configuración completa desde el navegador (WiFi → calendario → GitHub → IA), una pantalla principal para ver todo de un vistazo con frases, y dos variantes: **Tasky Desk** (compañero de tu compu: volumen, agentes de Claude Code) y **Tasky Go** (con batería y notificaciones del celular). Detalles en **[docs/ROADMAP.md](docs/ROADMAP.md)**.
+**Tasky 3.0** junta los dos firmwares de la 2.x (Tasky y Tasky for Agents) en uno. Lo siguiente: **Tasky Go** (con batería y notificaciones del celular), más agentes (Codex, Cursor) y soporte de Windows para el companion. Detalles en **[docs/ROADMAP.md](docs/ROADMAP.md)**.
 
 ## Contribuir
 

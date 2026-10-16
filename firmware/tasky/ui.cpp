@@ -32,11 +32,11 @@ void TaskyUI::init() {
   // Reset secuencia completa para estabilidad
   pinMode(_rst, OUTPUT);
   digitalWrite(_rst, HIGH);
-  delay(50);
+  delay(5);
   digitalWrite(_rst, LOW);
-  delay(100);
+  delay(20);
   digitalWrite(_rst, HIGH);
-  delay(250);  // Esperar a que el display este listo
+  delay(130);  // the ST7789 needs ~120 ms after a reset
 
 #if DISPLAY_CIRCULAR
   tft.begin();
@@ -49,13 +49,9 @@ void TaskyUI::init() {
   tft.setRotation(2);
   tft.invertDisplay(true);
   tft.setOffsets(COL_OFFSET, ROW_OFFSET);
-  // Triple limpieza para eliminar artefactos en las primeras filas
+  // Clear twice: the first rows sometimes keep noise after power-up
   tft.fillScreen(0x0000);
-  delay(30);
   tft.fillScreen(0x0000);
-  delay(30);
-  tft.fillScreen(0x0000);
-  delay(30);
 #endif
 
   applyTheme();
@@ -1082,6 +1078,53 @@ void TaskyUI::drawQuick(int sel) {
   }
 }
 
+// ==================== SCREENS EDITOR ====================
+void TaskyUI::drawScreens(const char *start, const char *const labels[], const bool included[],
+                          int count, int sel, bool grabbed) {
+  const int visible = 6, rowH = 24, first = 80;
+  bool full = !baseDrawn;
+  baseDrawn = true;
+  if (full) {
+    clearScreen();
+    centerTextFont("SCREENS", 34, C_TEXT, &FreeSansBold12pt7b);
+    tft.drawFastHLine(40, 44, 160, C_LINE);
+  }
+  tft.fillRect(10, 50, 220, 182, C_BG);
+  int rows = count + 1;  // + the start row
+  int startRow = constrain(sel - visible / 2, 0, max(0, rows - visible));
+  for (int v = 0; v < visible && startRow + v < rows; v++) {
+    int r = startRow + v;
+    int y = first + v * rowH;
+    bool isSel = r == sel;
+    uint16_t bg = isSel ? (grabbed ? C_ORANGE : C_TEAL) : C_BG;
+    if (isSel)
+      tft.fillRoundRect(16, y - 16, 208, 22, 5, bg);
+    uint16_t fg = isSel ? C_BG : C_TEXT;
+    tft.setFont(&FreeSans9pt7b);
+    if (r == 0) {
+      tft.setTextColor(isSel ? C_BG : C_TEAL);
+      tft.setCursor(26, y);
+      tft.print("Start");
+      tft.setFont();
+      rightTextFont(start, 214, y, isSel ? C_BG : C_TEAL, &FreeSans9pt7b);
+      continue;
+    }
+    int i = r - 1;
+    if (included[i])  // a tick, or an empty box
+      tft.fillRoundRect(26, y - 11, 10, 10, 2, isSel ? C_BG : C_TEAL);
+    else
+      tft.drawRoundRect(26, y - 11, 10, 10, 2, isSel ? C_BG : C_MUTED);
+    tft.setTextColor(included[i] ? fg : (isSel ? C_BG : C_MUTED));
+    tft.setCursor(44, y);
+    tft.print(labels[i]);
+    tft.setFont();
+    if (isSel && grabbed)
+      rightTextFont("move", 214, y, C_BG, &FreeSans9pt7b);
+  }
+  centerTextFont(grabbed ? "Turn: move  Press: drop" : "Press: on/off  Hold: move", 226,
+                 C_MUTED, &FreeSans9pt7b);
+}
+
 // ==================== MORE MENU ====================
 void TaskyUI::drawMore(const char *const labels[], int count) {
   const int visible = 6, rowH = 22, first = 74;
@@ -1285,13 +1328,19 @@ void TaskyUI::drawBanner(const char *text) {
                  &FreeSansBold12pt7b);
 }
 
-// Where you are in the MODE carousel: small dots along the top edge
+// Where you are in the MODE carousel: the screen's number, small, in the
+// bottom-right corner (clear of the centered bottom lines and the hint pill)
 void TaskyUI::drawCarouselDots(int index, int count) {
-  const int gap = 9, y = 8;
-  int x0 = CX - (count - 1) * gap / 2;
-  tft.fillRect(x0 - 4, y - 3, (count - 1) * gap + 8, 7, C_BG);
-  for (int i = 0; i < count; i++)
-    tft.fillCircle(x0 + i * gap, y, i == index ? 2 : 1, i == index ? C_TEAL : C_MUTED);
+  (void)count;
+  char buf[4];
+  snprintf(buf, sizeof(buf), "%d", index + 1);
+  tft.setFont();  // the small built-in 6x8 font
+  tft.setTextSize(1);
+  int w = strlen(buf) * 6;
+  tft.fillRect(228 - w, 227, w + 2, 9, C_BG);
+  tft.setTextColor(C_MUTED);
+  tft.setCursor(229 - w, 228);
+  tft.print(buf);
 }
 
 // Phrases screen: one phrase, centered, with its author underneath
@@ -1324,10 +1373,6 @@ void TaskyUI::drawPhrase(int idx) {
   if (author.length())
     centerTextFont(fitText("- " + author, 200, &FreeSans9pt7b).c_str(), top + (n - 1) * lineH + 28,
                    C_TEAL, &FreeSans9pt7b);
-  char buf[12];
-  int count = phraseCount();
-  snprintf(buf, sizeof(buf), "%d/%d", ((idx % count) + count) % count + 1, count);
-  rightTextFont(buf, 222, 222, C_MUTED, &FreeSans9pt7b);  // bottom-right corner
 }
 
 void TaskyUI::drawAmbientClock() {
@@ -1635,13 +1680,12 @@ void TaskyUI::drawAgents(const AgentBoard &board, int sel) {
 // Controls: the key list as a wheel (previous / current / next), so it
 // moves the way the knob turns. Turning repaints the wheel only.
 void TaskyUI::drawControls(const char *prev, const char *key, const char *next,
-                           const char *hint, bool grabbed, bool connected, bool windows) {
+                           const char *hint, bool grabbed, bool connected, const char *osName) {
   bool full = !baseDrawn;
   baseDrawn = true;
   if (full) {
     clearScreen();
-    centerTextFont(windows ? "CONTROLS  -  Windows" : "CONTROLS  -  Mac", 30, C_MUTED,
-                   &FreeSans9pt7b);
+    centerTextFont((String("CONTROLS  -  ") + osName).c_str(), 30, C_MUTED, &FreeSans9pt7b);
     if (connected) {
       tft.fillCircle(26, 216, 4, C_GREEN);
       centerTextFont("  Bluetooth connected", 222, C_MUTED, &FreeSans9pt7b);
@@ -1686,7 +1730,7 @@ void TaskyUI::drawMeetingAlert(const CalendarEventItem &ev, int minutes,
   centerTextFont("Click to dismiss", 212, C_MUTED, &FreeSans9pt7b);
 }
 
-void TaskyUI::drawMorningBrief() {
+void TaskyUI::drawMorningBrief(const String &brief) {
   clearScreen();
   centerTextFont("GOOD MORNING", 40, C_TEAL, &FreeSansBold12pt7b);
 
@@ -1694,6 +1738,30 @@ void TaskyUI::drawMorningBrief() {
   bool hasTime = model->localNow(t);
   if (hasTime)
     centerTextFont(formatDate(t).c_str(), 62, C_MUTED, &FreeSans9pt7b);
+
+  // The AI's brief for today: three short lines split on " / "
+  if (brief.length()) {
+    String rest = brief;
+    int y = 98;
+    for (int i = 0; i < 3 && rest.length(); i++, y += 26) {
+      int cut = rest.indexOf(" / ");
+      String line = cut < 0 ? rest : rest.substring(0, cut);
+      rest = cut < 0 ? "" : rest.substring(cut + 3);
+      line.trim();
+      tft.fillCircle(24, y - 5, 3, C_TEAL);
+      tft.setFont(&FreeSans9pt7b);
+      tft.setTextColor(C_TEXT);
+      tft.setCursor(34, y);
+      tft.print(fitText(line, 186, &FreeSans9pt7b));
+      tft.setFont();
+    }
+    const CalendarEventItem *ev =
+        model->nextEventToday(hasTime ? t.tm_hour * 60 + t.tm_min : 0);
+    if (ev)
+      drawRow("Next", String(ev->startTime) + " " + ev->title, 182, C_TEAL);
+    centerTextFont("Click to start", 214, C_MUTED, &FreeSans9pt7b);
+    return;
+  }
 
   int n = model->todayEventCount;
   drawRow("Events", n ? String(n) + " today" : String("Free day"), 96, C_TEXT);
@@ -2448,12 +2516,12 @@ void TaskyUI::drawAgentModeSelect(int selection, int8_t currentOverride) {
   centerTextFont("SELECT MODE", 28, C_TEXT, &FreeSansBold12pt7b);
   tft.drawFastHLine(40, 38, 160, C_LINE);
 
-  // 10 items: AUTO + 9 modes
-  static const int TOTAL_MODES = 10;
-  static const char* modeLabels[10] = {
+  // AUTO (= TODAY, the daily brief) + every mode
+  static const int TOTAL_MODES = LLM_MODE_COUNT + 1;
+  static const char* modeLabels[TOTAL_MODES] = {
     "AUTO", "FOCUS", "KICKSTART", "TIME",
     "CLARITY", "ORDER", "CLOSING", "MOVEMENT",
-    "GYM", "RECIPES"
+    "GYM", "RECIPES", "TODAY"
   };
 
   // Determine which item is currently active
@@ -2583,20 +2651,21 @@ void TaskyUI::drawQRFull(String ssid, String pass) {
   qrcodegen::QrCode qr =
       qrcodegen::QrCode::encodeText(payload.c_str(), ECC_LOW);
 
+  // As big as it fits: big modules are what phone cameras need. The white
+  // screen around it is the quiet zone (keep at least 2 modules each side).
+  // One text line below shows the network and its password (unique per
+  // Tasky) for joining by hand.
   int size = qr.getSize();
-  int border = 1;
-  int totalModules = size + (border * 2);
-
-  // QR fills most of the screen; one text line below shows the credentials
-  // (the password is unique per device, so people need to be able to read it)
+  int border = 0;
+  int totalModules = size;
   const int TEXT_H = 22;
-  int scale = (220 - TEXT_H) / totalModules;
+  int scale = min(W / (size + 4), (H - TEXT_H - 4) / size);
   if (scale < 1)
     scale = 1;
 
   int dimension = totalModules * scale;
   int startX = (W - dimension) / 2;
-  int startY = (H - dimension - TEXT_H) / 2;
+  int startY = (H - TEXT_H - dimension) / 2;
 
   for (int y = -border; y < size + border; y++) {
     for (int x = -border; x < size + border; x++) {
@@ -2612,8 +2681,8 @@ void TaskyUI::drawQRFull(String ssid, String pass) {
                    scale, scale, color);
     }
   }
-  String creds = ssid + " / " + pass;
-  centerTextFont(creds.c_str(), startY + dimension + 17, 0x0000, &FreeSans9pt7b);
+  String creds = "Wi-Fi " + ssid + " / " + pass;
+  centerTextFont(creds.c_str(), startY + dimension + 18, 0x0000, &FreeSans9pt7b);
 #else
   // Text-only fallback when QR disabled to save ~35-50 KB
   centerTextFont("WiFi Setup", 50, 0x0000, &FreeSansBold12pt7b);
