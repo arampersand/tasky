@@ -72,17 +72,19 @@ A single MODE press takes effect about 0.4 s after you let go, because Tasky fir
 
 ### Screen map
 
-MODE moves through the **main carousel** in a loop. By default:
+MODE moves through the **main carousel** in a loop: first what you use while working, then what you check, then setup. By default:
 
 ```
-Home → Timer → Tasks → Agenda → Weather → Streak → Phrases → Stats → More → (back to Home)
+Home → Phrases → Timer → Tasks → Agenda → Streak → Weather → Settings → Setup (QR) → More
 ```
 
-(Tasky for Agents: `Home → Agents → Controls → Timer → Tasks → Agenda → Weather → Phrases → More`.)
+(Tasky for Agents: `Home → Agents → Controls → Phrases → Timer → Tasks → Agenda → Streak → Weather → Settings → Setup (QR) → More`.)
+
+**Small dots along the top edge** show where you are in the carousel.
 
 **You choose the carousel.** In the web setup's **Screens** step, tick the screens you want and put them in order with ↑/↓. **Home** is always first and **More** always last.
 
-**More** lists every screen that isn't in your carousel (for example Focus, Calendar, Agent), then **Update**, **Setup (QR)**, **Settings** and **Tour**.
+**More** lists every screen that isn't in your carousel (for example Stats, Focus, Calendar, Agent), then **Update** and **Tour**.
 
 ---
 
@@ -96,12 +98,17 @@ The first screen, made for a quick glance:
 - Your **next event** today
 - Today's **open tasks** (the one you're focusing on is in teal)
 - A **phrase** that changes every couple of minutes ("Every second counts", "One thing at a time", …)
+- **Your day** under the date: today's streak square (it gets greener as you use Tasky) and a bar of focus minutes toward your daily goal (120 min by default; it turns green when you reach it)
+
+Not set up yet (no Wi-Fi saved)? Home says **Set me up** with the address of the web setup, and how to do it from your phone.
 
 | Input       | Result                                  |
 | ----------- | --------------------------------------- |
 | Short press | Start a focus session (opens the Timer) |
-| Long press  | Open Tasks                              |
-| MODE        | Next screen (Timer)                     |
+| Long press  | **Quick settings**: theme, light bar level, focus light |
+| MODE        | Next screen                             |
+
+**Quick settings.** Turn to pick, press to change, long press or MODE to go back to Home.
 
 The clock and phrase update every minute; everything else refreshes every 5 minutes or when new weather arrives.
 
@@ -212,22 +219,12 @@ One phrase at a time, big. **Turn** for the next or previous one, **press** for 
 
 ### Streak
 
-This is an activity grid covering the last 84 days (6 rows × 14 columns). Each square has an intensity from 0 to 3. Today has a teal border and the cursor has a white border. Below the grid you'll find the current streak (consecutive active days), the total number of active days, your best streak and how full the grid is.
+Two activity grids of the last 84 days (6 rows × 14 columns), GitHub style: the greener a square, the more you did that day. Today has a white border. **Turn** the knob to switch between them (the two dots under the grid show which one you're on):
 
-| Input       | Result                                                             |
-| ----------- | ------------------------------------------------------------------ |
-| Turn        | Move the cursor                                                    |
-| Short press | Change the intensity of the selected day (0 → 1 → 2 → 3 → 0). Use this to fix a day by hand |
+- **Your streak**: how much you used Tasky. A finished focus session counts 3 points, a task done 2, an agent question answered 1. 1 point = light green, 4 = medium, 8 = dark green.
+- **GitHub**: your public contributions (the last ~90 days of activity from the GitHub API, refreshed every 30 minutes). 1–3 events = light, 4–7 = medium, 8+ = dark. Add your user in the web setup.
 
-**How intensity is set.** Choose the streak source in the portal: GitHub only, Tasky only or Combined (default, which keeps the higher of the two).
-
-| Intensity | Tasky sessions that day | GitHub events that day |
-| --------- | ----------------------- | ---------------------- |
-| 1         | 1–2                     | 1–3                    |
-| 2         | 3–4                     | 4–7                    |
-| 3         | 5+                      | 8+                     |
-
-Marking a task done also adds +1 intensity to today, up to a maximum of 3.
+Below the grid: your current streak (consecutive active days), your best streak and the number of active days. Days that pass while Tasky is off are counted correctly when it comes back.
 
 ### Weather
 
@@ -237,7 +234,7 @@ This screen shows the current temperature, "feels like" temperature, humidity, a
 | ----------- | --------------- |
 | Short press | Refresh now     |
 
-If you haven't set a city, the screen shows the clock and the hint **Connect WiFi for weather**.
+Without data the screen says what's missing: **Set your city** (add it in the web setup), **Waiting for Wi-Fi**, or **Updating...** while the first forecast downloads.
 
 ### Agent
 
@@ -328,12 +325,14 @@ Configure focus mode under **More → Focus**.
 
 ### Ambient (idle screen)
 
-Ambient uses the same layout as [Home](#home). Tasky switches to it in two cases:
+Ambient is the calm screen: a big clock, the date and a quote with its author that changes every 2 minutes. Tasky switches to it in two cases:
 
 - You **hold MODE** for 1.5 s.
 - **5 minutes** pass without any input.
 
-It won't switch while a timer is running or a finished-session alarm is waiting, while you're on Update, Setup (QR) or WiFi info, or while you're already on Home. **Any input** (turn, press or MODE) returns you to the screen you were on. That input is used only to wake the screen.
+It won't switch while a timer is running or a finished-session alarm is waiting, while you're on Update, Setup (QR) or WiFi info, or while you're already on Home or Phrases.
+
+**At night** (well outside your workday hours: 22:00–7:00 with the default 9–18) the light bar runs at a quarter of its level. **Any input** (turn, press or MODE) returns you to the screen you were on. That input is used only to wake the screen.
 
 ### Meeting alert
 

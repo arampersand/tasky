@@ -2,6 +2,27 @@
 
 All notable changes to the Tasky firmware. Versions match `firmware/tasky/version.h` and git tags.
 
+## Unreleased
+
+### Added
+- **Claude Code plugin**: in Claude Code, `/plugin marketplace add arampersand/tasky` and `/plugin install tasky@tasky`. Six hooks (a **Ready** card when a session starts), and `/tasky:status`, which runs the new `tasky_agent.py doctor`: it checks Python, Tasky on USB (and which app holds the port), the firmware, and the hooks, then says what to fix. The plugin version follows the firmware's; `install.sh` stays as the terminal alternative. If both are installed, Tasky shows each question once.
+- **Web setup helpers**: calendar steps for Google, iCloud and Outlook with link checks, and a **Test it** button (new `TASKY CALTEST` command: Tasky downloads your calendar and reports the events it found); GitHub "Is this you?" with your recent activity as green squares; the page goes to Set up by itself after flashing.
+- **Where am I**: small dots along the top edge show your place in the carousel.
+- **Home shows your day**: today's streak square and a focus bar toward a daily goal (120 min, `goal` in the setup protocol). A Tasky that isn't set up says **Set me up** with the web address.
+- **Quick settings**: long press on Home (theme, light bar level, focus light). Tasks is in the carousel.
+- **Streak: yours and GitHub's**, two pages you switch with the knob. Your streak counts Tasky activity; GitHub's counts your contributions over ~90 days.
+- **Rest screen with quotes**: big clock, date and a quote with its author.
+- **Agent banner** on any screen when an agent starts waiting (Tasky for Agents).
+- Hints with knob icons, level bars in Settings (the light bar shows the level while you turn), a short light blip on every press, and a dimmer light bar at night.
+
+### Changed
+- Default carousel, by how often you use it: Home → (Agents → Controls →) Phrases → Timer → Tasks → Agenda → Streak → Weather → Settings → Setup (QR). Settings can be in the carousel.
+- Weather without data says what's missing (city, Wi-Fi, updating) instead of showing the clock.
+- `tasky_agent.py` lives in `claude-plugin/` (the plugin and `install.sh` share it).
+
+### Removed
+- The Streak screen's hidden "press to change a day's level".
+
 ## v2.12.0 — 2026-10-16 · Computer companion
 
 > **Upgrading from 2.11 or older: update once from https://tasky-flash.vercel.app** (keeps your settings). This version has bigger app slots, which only the web flasher can set up. A Wi-Fi update is refused with a message that says so.

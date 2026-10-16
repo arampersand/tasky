@@ -6,7 +6,9 @@
 #
 # Puts tasky_agent.py in ~/.tasky/ and adds its hooks to ~/.claude/settings.json
 # (backup: settings.json.tasky-backup). Your other settings and hooks stay.
-# Source: https://github.com/arampersand/tasky/tree/main/companion
+# Prefer the Claude Code plugin (/plugin marketplace add arampersand/tasky, then
+# /plugin install tasky@tasky); use one or the other, not both.
+# Source: https://github.com/arampersand/tasky/tree/main/claude-plugin
 set -eu
 
 DIR="$HOME/.tasky"

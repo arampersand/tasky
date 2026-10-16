@@ -112,8 +112,10 @@ void WeatherService::geocodeCity() {
   int resultsIdx = response.indexOf("\"results\":");
   if (resultsIdx < 0) {
     Serial.println("[Weather] Geocoding - no results found");
+    cityNotFound = true;
     return;
   }
+  cityNotFound = false;
 
   String results = response.substring(resultsIdx);
   float lat = wJsonNum(results, "latitude");
@@ -162,8 +164,10 @@ void WeatherService::forceUpdate() {
     parseResponse(response);
     lastUpdate = millis();  // Only set on success - retry quickly on failure
     fetches++;
+    failures = 0;
   } else {
     Serial.println("[Weather] Failed to fetch - will retry in 30s");
+    failures++;
     dataValid = false;
     lastUpdate = millis() - UPDATE_INTERVAL_MS + 30000;  // Retry in 30s
   }

@@ -4,6 +4,10 @@
 #include "ota_service.h"
 #include "version.h"
 
+// Same limits as the USB setup protocol (usb_setup.cpp)
+static const int MAX_PHRASES = 12;
+static const unsigned MAX_PHRASE_LEN = 60;
+
 // HTML-escape a value reflected into the page (attributes and text).
 static String esc(const String &in) {
   String out;
@@ -22,6 +26,52 @@ static String esc(const String &in) {
   return out;
 }
 
+// The screen font is plain ASCII: "Mañana sí" becomes "Manana si". Latin-1
+// letters lose their accents, other non-ASCII and control bytes are dropped,
+// runs of spaces collapse (mirrors the web setup's ascii()).
+static String asciiFold(const String &in) {
+  static const char LATIN1[] = "AAAAAAACEEEEIIIIDNOOOOOxOUUUUYTsaaaaaaaceeeeiiiidnooooo/ouuuuyty";
+  String out;
+  out.reserve(in.length());
+  for (size_t i = 0; i < in.length(); i++) {
+    uint8_t c = in[i];
+    if (c >= 0x20 && c < 0x7f) {
+      if (c != ' ' || !out.endsWith(" "))
+        out += (char)c;
+    } else if (c == 0xC3 && i + 1 < in.length() && (uint8_t)in[i + 1] >= 0x80 &&
+               (uint8_t)in[i + 1] <= 0xBF) {
+      out += LATIN1[(uint8_t)in[++i] - 0x80];
+    }
+  }
+  out.trim();
+  return out;
+}
+
+static const char CSS[] =
+    "*{box-sizing:border-box}"
+    "body{margin:0;background:#0b0e0f;color:#e9eeee;font:16px/1.45 -apple-system,system-ui,'Segoe UI',Roboto,sans-serif}"
+    "main{max-width:480px;margin:0 auto;padding:12px 16px 24px}"
+    "header{display:flex;justify-content:space-between;align-items:center}"
+    "h1{font-size:24px;margin:8px 0}"
+    "h2{font-size:18px;margin:0 0 4px;display:flex;align-items:center;gap:10px}"
+    "h2 b{display:inline-grid;place-items:center;width:26px;height:26px;border-radius:50%;background:#29cbbd;color:#06201d;font-size:14px}"
+    "section,.mo{background:#151a1b;border-radius:14px;padding:16px;margin:12px 0}"
+    ".h{color:#98a4a6;font-size:14px;margin:4px 0 8px}"
+    "label{display:block;font-size:14px;color:#c4cdce;margin:12px 0 0}"
+    "input,select,textarea{display:block;width:100%;margin-top:4px;padding:12px;font:inherit;font-size:16px;color:#fff;background:#0b0e0f;border:1px solid #2c3537;border-radius:10px}"
+    "input:focus,select:focus,textarea:focus{outline:none;border-color:#29cbbd}"
+    "input[type=checkbox]{display:inline;width:auto;margin:0 4px 0 0}"
+    "summary{cursor:pointer;font-weight:600}"
+    ".c{border:1px solid #2c3537;border-radius:10px;padding:10px 12px;margin:6px 0}"
+    ".c ol{margin:8px 0 2px;padding-left:20px;font-size:14px}"
+    ".mo summary{font-size:18px}"
+    ".sv{display:flex;justify-content:space-between;font-size:14px;margin-top:4px}"
+    ".ok{color:#29cbbd}.er{color:#ff6b6b}"
+    "a{color:#29cbbd}code{word-break:break-all}"
+    ".sb{position:sticky;bottom:0;padding:12px 0;background:linear-gradient(transparent,#0b0e0f 30%)}"
+    "button{width:100%;padding:14px;font:inherit;font-weight:700;color:#06201d;background:#29cbbd;border:0;border-radius:12px}"
+    "progress{width:100%;margin-top:8px}";
+
 WiFiPortal::WiFiPortal(TaskyModel *m, TaskyNetManager *n, OtaService* otaSvc)
     : server(80), model(m), net(n), ota(otaSvc) {}
 
@@ -37,6 +87,10 @@ void WiFiPortal::begin() {
   // Captive portal DNS: every name resolves to the AP so phones open setup
   dns.start(53, "*", ip);
 
+  // Background scan: its results fill the page's network suggestions.
+  // Non-blocking; the request handlers only read what it found.
+  WiFi.scanNetworks(true);
+
   addRoutes();
   server.begin();
   wifiOn = true;
@@ -49,8 +103,8 @@ void WiFiPortal::addRoutes() {
     return;
   routesAdded = true;
 
-  static const char *headerKeys[] = {"Origin", "Referer"};
-  server.collectHeaders(headerKeys, 2);
+  static const char *headerKeys[] = {"Origin", "Referer", "Accept-Language"};
+  server.collectHeaders(headerKeys, 3);
 
   server.on("/", HTTP_GET, [this]() { handleRoot(); });
   server.on("/save", HTTP_POST, [this]() { handleSave(); });
@@ -154,468 +208,366 @@ String WiFiPortal::getUptimeString() {
   return String(buf);
 }
 
+void WiFiPortal::pickLang() {
+  String lang = server.arg("lang");  // ?lang=, or the form's hidden field
+  if (lang == "es" || lang == "en") {
+    es = lang == "es";
+    return;
+  }
+  String al = server.header("Accept-Language");
+  al.toLowerCase();
+  es = al.startsWith("es") || al.indexOf("es") >= 0;
+}
+
+void WiFiPortal::pageHead(String &s) {
+  s += "<!doctype html><html lang='";
+  s += T("en", "es");
+  s += "'><head><meta charset='UTF-8'>"
+       "<meta name='viewport' content='width=device-width,initial-scale=1'>"
+       "<meta name='color-scheme' content='dark'><title>Tasky</title><style>";
+  s += CSS;
+  s += "</style></head><body><main>";
+}
+
 String WiFiPortal::htmlPage() {
   String s;
-  s += "<!doctype html><html><head>";
-  s += "<meta charset='UTF-8'>";
-  s += "<meta name='viewport' content='width=device-width,initial-scale=1'>";
-  s += "<title>Tasky - Setup</title>";
-  s += "<style>";
-  // Base styles
-  s += "body{font-family:'SF Mono',Monaco,Consolas,monospace;background:#000;color:#fff;padding:16px;max-width:420px;margin:0 auto;font-size:13px}";
-  s += "h2{text-transform:uppercase;letter-spacing:2px;border-bottom:1px solid #333;padding-bottom:8px;margin-bottom:8px}";
-  s += "h3{color:#00e5cc;text-transform:uppercase;font-size:11px;letter-spacing:1px;margin:16px 0 8px 0}";
-  s += "label{display:block;color:#888;font-size:10px;text-transform:uppercase;margin-top:10px;letter-spacing:1px}";
-  s += "input,textarea,select{width:100%;padding:10px;margin:4px 0 6px 0;font-size:13px;background:#111;color:#fff;border:1px solid #333;box-sizing:border-box;font-family:inherit;border-radius:4px}";
-  s += "input:focus,textarea:focus,select:focus{border-color:#00e5cc;outline:none}";
-  s += "button{width:100%;padding:14px;margin:16px 0 8px 0;font-size:13px;background:#00e5cc;border:none;color:#000;font-weight:bold;text-transform:uppercase;letter-spacing:2px;cursor:pointer;border-radius:4px}";
-  s += "button:hover{background:#00ffea}";
-  s += "hr{border:none;border-top:1px solid #222;margin:16px 0}";
-  s += "a{color:#00e5cc}";
-
-  // Status bar styles
-  s += ".status-bar{display:flex;justify-content:space-between;background:#111;padding:10px 12px;border-radius:6px;margin-bottom:16px;font-size:10px;flex-wrap:wrap;gap:8px}";
-  s += ".status-bar .item{display:flex;align-items:center;gap:4px}";
-  s += ".status-bar .label{color:#666}";
-  s += ".status-bar .value{color:#fff}";
-  s += ".status-bar .online{color:#0f0}";
-  s += ".status-bar .offline{color:#f44}";
-
-  // Welcome/intro section
-  s += ".intro{background:#0a0a0a;padding:12px;border-radius:6px;margin-bottom:16px;border-left:3px solid #00e5cc}";
-  s += ".intro h3{margin:0 0 8px 0;color:#00e5cc}";
-  s += ".intro p{margin:0;color:#999;font-size:11px;line-height:1.5}";
-
-  // Setup guide (collapsible)
-  s += "details.guide{background:#0a0a0a;padding:0;border-radius:6px;margin:8px 0;border-left:3px solid #00e5cc}";
-  s += "details.guide summary{cursor:pointer;color:#00e5cc;font-weight:bold;padding:12px;font-size:11px;text-transform:uppercase;letter-spacing:1px}";
-  s += "details.guide summary:hover{background:#111}";
-  s += "details.guide .content{padding:0 12px 12px 12px;font-size:11px;color:#ccc}";
-  s += "details.guide ol{margin:8px 0;padding-left:20px}";
-  s += "details.guide li{margin:6px 0;line-height:1.4}";
-  s += "details.guide .link{display:inline-block;background:#1a1a1a;padding:4px 8px;border-radius:3px;margin:4px 0;font-size:10px;word-break:break-all}";
-
-  // Task card
-  s += ".task-card{background:#111;padding:10px;border-radius:4px;margin:6px 0}";
-  s += ".task-status{display:flex;align-items:center;padding:4px 0;gap:8px}";
-  s += ".task-done{color:#00e5cc}";
-  s += ".task-pending{color:#666}";
-
-  // Section card
-  s += ".section{background:#0a0a0a;padding:12px;border-radius:6px;margin:12px 0}";
-
-  s += "</style>";
-  s += "</head><body>";
+  s.reserve(11000);
+  pageHead(s);
+  int n = 0;  // section number
+  auto section = [&](const char *title) {
+    s += "<section><h2><b>";
+    s += String(++n);
+    s += "</b>";
+    s += title;
+    s += "</h2>";
+  };
+  auto hint = [&](const char *text) {
+    s += "<p class='h'>";
+    s += text;
+    s += "</p>";
+  };
+  // <label>Label<input name value attrs></label>, value HTML-escaped
+  auto field = [&](const char *label, const char *name, const String &value, const char *attrs) {
+    s += "<label>";
+    s += label;
+    s += "<input name='";
+    s += name;
+    s += "' value='";
+    s += esc(value);
+    s += "' ";
+    s += attrs;
+    s += "></label>";
+  };
+  auto number = [&](const char *label, const char *name, int value, int lo, int hi) {
+    s += "<label>";
+    s += label;
+    s += "<input name='";
+    s += name;
+    s += "' type='number' inputmode='numeric' value='";
+    s += String(value);
+    s += "' min='";
+    s += String(lo);
+    s += "' max='";
+    s += String(hi);
+    s += "'></label>";
+  };
+  auto option = [&](int value, bool selected, const char *text) {
+    s += "<option value='";
+    s += String(value);
+    s += selected ? "' selected>" : "'>";
+    s += text;
+    s += "</option>";
+  };
 
   // ===== HEADER =====
-  s += "<h2>&#128337; Tasky</h2>";
-#if TASKY_MODE_DEV
-  s += "<div style='font-size:10px;color:#666;margin-bottom:12px;padding:6px;background:#1a1a1a;border-radius:4px'>&#128295; Modo desarrollador - integraciones avanzadas</div>";
-#endif
-
-  // ===== STATUS BAR =====
-  s += "<div class='status-bar'>";
-  s += "<div class='item'><span class='label'>WiFi:</span>";
+  s += "<header><h1>Tasky</h1><nav>";
+  s += es ? "<a href='/?lang=en'>English</a> · <b>Español</b>"
+          : "<b>English</b> · <a href='/?lang=es'>Español</a>";
+  s += "</nav></header><p class='h'>Wi-Fi: ";
   if (net && net->isConnected()) {
-    s += "<span class='value online'>Conectado</span></div>";
+    s += "<span class='ok'>";
+    s += T("connected", "conectado");
+    s += "</span> (";
+    s += esc(net->getConnectedSSID());
+    s += ", ";
+    s += net->getIP();
+    s += ")";
   } else {
-    s += "<span class='value offline'>Sin conexion</span></div>";
+    s += "<span class='er'>";
+    s += T("not connected", "sin conexión");
+    s += "</span>";
   }
-  s += "<div class='item'><span class='label'>IP:</span><span class='value'>" + WiFi.softAPIP().toString() + "</span></div>";
-  s += "<div class='item'><span class='label'>Uptime:</span><span class='value'>" + getUptimeString() + "</span></div>";
-  s += "</div>";
-
-  // ===== WELCOME INTRO =====
-  s += "<div class='intro'>";
-  s += "<h3>Bienvenido a Tasky</h3>";
-  s += "<p>Tu asistente de productividad personal. Configura tu WiFi, integraciones y preferencias abajo.</p>";
-  s += "</div>";
-
-  // ===== SETUP GUIDES (Collapsible) =====
-  s += "<h3>&#128218; Guias de Configuracion</h3>";
-
-#if FEATURE_NOTION && TASKY_MODE_DEV
-  // Notion Guide (solo modo dev)
-  s += "<details class='guide'>";
-  s += "<summary>&#128221; Como configurar Notion</summary>";
-  s += "<div class='content'>";
-  s += "<ol>";
-  s += "<li>Ir a <a href='https://www.notion.so/my-integrations' target='_blank'>notion.so/my-integrations</a><div class='link'>notion.so/my-integrations</div></li>";
-  s += "<li>Click <strong>\"New integration\"</strong> &rarr; Nombre: \"Tasky\"</li>";
-  s += "<li>Copiar el <strong>\"Internal Integration Token\"</strong> (empieza con secret_...)</li>";
-  s += "<li>En Notion, crear o abrir una base de datos de tareas</li>";
-  s += "<li>Click <strong>\"Share\"</strong> &rarr; Invitar a \"Tasky\"</li>";
-  s += "<li>Copiar el <strong>Database ID</strong> de la URL (32 caracteres despues de notion.so/)</li>";
-  s += "</ol>";
-  s += "<p style='color:#888;margin-top:8px'>Propiedades requeridas: Name (title), Status (checkbox o select), Due (date)</p>";
-  s += "</div></details>";
+  s += " · " + getUptimeString() + "</p>";
+#if TASKY_MODE_DEV
+  hint(T("Developer mode: advanced integrations", "Modo desarrollador: integraciones avanzadas"));
 #endif
+
+  s += "<form method='POST' action='/save'><input type='hidden' name='lang' value='";
+  s += T("en", "es");
+  s += "'>";
+
+  // ===== 1 WI-FI =====
+  section("Wi-Fi");
+  hint(T("Tasky uses Wi-Fi for the time, weather and your calendar. 2.4 GHz networks only.",
+         "Tasky usa Wi-Fi para la hora, el clima y tu calendario. Solo redes de 2.4 GHz."));
+  field(T("Network", "Red"), "ssid", model->cfg.wifiSSID,
+        es ? "maxlength='32' list='nets' autocomplete='off' placeholder='Nombre de la red'"
+           : "maxlength='32' list='nets' autocomplete='off' placeholder='Network name'");
+  {
+    // Networks found by the background scan started in begin() (never blocks)
+    int found = WiFi.scanComplete();
+    if (found > 0) {
+      s += "<datalist id='nets'>";
+      for (int i = 0; i < found && i < 20; i++) {
+        String ssid = WiFi.SSID(i);
+        bool dup = ssid.length() == 0;
+        for (int j = 0; j < i && !dup; j++)
+          dup = WiFi.SSID(j) == ssid;
+        if (dup)
+          continue;
+        s += "<option value='" + esc(ssid) + "'>";
+      }
+      s += "</datalist>";
+    }
+  }
+  s += secretField(T("Password", "Contraseña"), "pass", model->cfg.wifiPass,
+                   T("Wi-Fi password", "Contraseña del Wi-Fi"));
+  s += "<label>";
+  s += T("Time zone (UTC offset, set from this phone)", "Zona horaria (UTC, se toma de este teléfono)");
+  s += "<input id='tz' name='tz' type='number' value='" + String(model->cfg.timezone) +
+       "' min='-12' max='14'></label></section>";
 
 #if FEATURE_CALENDAR
-  // Google Calendar Guide
-  s += "<details class='guide'>";
-  s += "<summary>&#128197; Como obtener URL de Calendar</summary>";
-  s += "<div class='content'>";
-  s += "<ol>";
-  s += "<li>Ir a <a href='https://calendar.google.com/calendar/r/settings' target='_blank'>Google Calendar Settings</a><div class='link'>calendar.google.com/calendar/r/settings</div></li>";
-  s += "<li>En el menu izquierdo, click en tu calendario</li>";
-  s += "<li>Scroll hasta <strong>\"Integrate calendar\"</strong></li>";
-  s += "<li>Copiar <strong>\"Secret address in iCal format\"</strong></li>";
-  s += "</ol>";
-  s += "<p style='color:#888;margin-top:8px'>Esta URL sincroniza tus eventos de hoy en Tasky</p>";
-  s += "</div></details>";
+  // ===== 2 CALENDAR =====
+  section(T("Calendar", "Calendario"));
+  hint(T("Paste your calendar's private iCal link. Today's events show up on Tasky, with a heads-up 5 minutes before each meeting.",
+         "Pega el enlace iCal privado de tu calendario. Los eventos de hoy aparecen en Tasky, con un aviso 5 minutos antes de cada reunión."));
+  hint(T("Where do I find it? Pick yours:", "¿Dónde lo encuentro? Elige el tuyo:"));
+  auto guide = [&](const char *name, const char *s1, const char *s2, const char *s3) {
+    s += "<details class='c'><summary>";
+    s += name;
+    s += "</summary><ol><li>";
+    s += s1;
+    s += "</li><li>";
+    s += s2;
+    s += "</li><li>";
+    s += s3;
+    s += "</li></ol></details>";
+  };
+  guide("Google",
+        T("Open <a href='https://calendar.google.com/' target='_blank'>calendar.google.com</a> on a computer.",
+          "Abre <a href='https://calendar.google.com/' target='_blank'>calendar.google.com</a> en una computadora."),
+        T("In the list on the left, click <b>⋮</b> next to your calendar → <b>Settings and sharing</b>.",
+          "En la lista de la izquierda, haz clic en <b>⋮</b> junto a tu calendario → <b>Configuración y uso compartido</b>."),
+        T("Scroll to <i>Integrate calendar</i> and copy <b>Secret address in iCal format</b>.",
+          "Baja a <i>Integrar el calendario</i> y copia la <b>Dirección secreta en formato iCal</b>."));
+  guide("iCloud",
+        T("Open the Calendar app on your Mac or iPhone (or <a href='https://www.icloud.com/calendar/' target='_blank'>icloud.com/calendar</a>).",
+          "Abre la app Calendario en tu Mac o iPhone (o <a href='https://www.icloud.com/calendar/' target='_blank'>icloud.com/calendar</a>)."),
+        T("Tap the share icon next to the calendar and turn on <b>Public Calendar</b>.",
+          "Toca el ícono de compartir junto al calendario y activa <b>Calendario público</b>."),
+        T("Copy the link. It starts with <code>webcal://</code>; paste it as is.",
+          "Copia el enlace. Empieza con <code>webcal://</code>; pégalo tal cual."));
+  guide("Outlook",
+        T("Open <a href='https://outlook.live.com/calendar/' target='_blank'>outlook.com</a> → <b>Settings</b> (gear) → <b>Calendar</b> → <b>Shared calendars</b>.",
+          "Abre <a href='https://outlook.live.com/calendar/' target='_blank'>outlook.com</a> → <b>Configuración</b> (engrane) → <b>Calendario</b> → <b>Calendarios compartidos</b>."),
+        T("Under <i>Publish a calendar</i>, pick your calendar and <i>Can view all details</i>, then <b>Publish</b>.",
+          "En <i>Publicar un calendario</i>, elige tu calendario y <i>Puede ver todos los detalles</i>, luego <b>Publicar</b>."),
+        T("Copy the <b>ICS</b> link.", "Copia el enlace <b>ICS</b>."));
+  s += secretField(T("iCal link", "Enlace iCal"), "cal", model->cfg.calendarUrl,
+                   "https://calendar.google.com/calendar/ical/…/basic.ics", "text");
+  s += "</section>";
 #endif
 
-#if FEATURE_GITHUB && TASKY_MODE_DEV
-  // GitHub Guide (solo modo dev)
-  s += "<details class='guide'>";
-  s += "<summary>&#128025; Configurar GitHub</summary>";
-  s += "<div class='content'>";
-  s += "<p>Solo necesitas tu <strong>nombre de usuario</strong> de GitHub para mostrar tu streak.</p>";
-  s += "<p style='margin-top:8px'>Opcional: Para mayor rate limit, genera un <a href='https://github.com/settings/tokens' target='_blank'>Personal Access Token</a></p>";
-  s += "<div class='link'>github.com/settings/tokens</div>";
-  s += "</div></details>";
-#endif
-
-  // Focus Mode Guide
-  s += "<details class='guide'>";
-  s += "<summary>&#128737; Como usar Focus Mode</summary>";
-  s += "<div class='content'>";
-  s += "<p>Focus Mode se activa solo cuando corre una sesion de trabajo.</p>";
-  s += "<ol>";
-  s += "<li><strong>Luz:</strong> la barra de luz se enciende como senal de no molestar</li>";
-  s += "<li><strong>Bloqueo:</strong> el boton MODO no cambia de pantalla; pausa el timer para salir</li>";
-  s += "</ol>";
-  s += "<p style='color:#888;margin-top:8px'>Se configura en el Tasky: MODO hasta More &rarr; Focus</p>";
-  s += "</div></details>";
-
-  // ===== FORM START =====
-  s += "<form method='POST' action='/save'>";
-
-  // ===== WIFI CONFIG =====
-  s += "<hr><h3>&#128246; Conexion WiFi</h3>";
-  s += "<label>SSID de tu WiFi</label>";
-  s += "<input name='ssid' value='" + esc(model->cfg.wifiSSID) + "' maxlength='32' placeholder='Nombre de tu red WiFi'>";
-  s += secretField("Password", "pass", model->cfg.wifiPass, "Contrasena de WiFi");
-  s += "<label>Zona Horaria (UTC Offset)</label>";
-  s += "<input name='tz' type='number' value='" + String(model->cfg.timezone) + "' min='-12' max='14' placeholder='-6 para CDMX'>";
-
-  // ===== TASKS =====
-  s += "<hr><h3>&#128203; Tareas de Hoy</h3>";
+  // ===== 3 TASKS =====
+  section(T("Today's three things", "Tus tres pendientes de hoy"));
+  hint(T("Tasky keeps it to three. You can change them any time.",
+         "Tasky se queda con tres. Puedes cambiarlos cuando quieras."));
+  static const char *const TASK_PH_EN[] = {"Most important thing", "Second", "Third"};
+  static const char *const TASK_PH_ES[] = {"Lo más importante", "Segundo", "Tercero"};
   for (int i = 0; i < 3; i++) {
-    s += "<div class='task-card'>";
-    s += "<label>Tarea " + String(i + 1) + "</label>";
-    s += "<input name='t" + String(i) + "' value='" + esc(model->tasks[i]) + "' maxlength='40' placeholder='Nombre de la tarea'>";
-    s += "<textarea name='td" + String(i) + "' maxlength='200' placeholder='Descripcion (opcional)' style='height:50px;resize:vertical'>" + esc(model->taskDescription[i]) + "</textarea>";
-    String checkmark = model->taskDone[i] ? "&#10003; Completada" : "&#9744; Pendiente";
-    String statusClass = model->taskDone[i] ? "task-done" : "task-pending";
-    s += "<div class='task-status " + statusClass + "'>" + checkmark + "</div>";
-    s += "</div>";
+    s += "<label>" + String(i + 1);
+    if (model->taskDone[i]) {
+      s += " <span class='ok'>✓ ";
+      s += T("done", "hecho");
+      s += "</span>";
+    }
+    s += "<input name='t" + String(i) + "' value='" + esc(model->tasks[i]) +
+         "' maxlength='40' autocomplete='off' placeholder='";
+    s += T(TASK_PH_EN[i], TASK_PH_ES[i]);
+    s += "'></label>";
   }
-
-  // ===== TIMER =====
-  s += "<hr><h3>&#9201; Timer Pomodoro</h3>";
-  s += "<label>Minutos por Sesion</label>";
-  s += "<input name='work' type='number' value='" + String(model->cfg.workMin) + "' min='5' max='90'>";
-  s += "<label>Inicio de jornada (hora, 0-23)</label>";
-  s += "<input name='dsh' type='number' value='" + String(model->cfg.dayStartHour) + "' min='0' max='23'>";
-  s += "<label>Fin de jornada (hora, 0-23)</label>";
-  s += "<input name='deh' type='number' value='" + String(model->cfg.dayEndHour) + "' min='0' max='23'>";
-  s += "<p style='font-size:11px;color:#888'>Tasky te da un resumen al empezar y al cerrar el dia.</p>";
-
-  // ===== INTEGRATIONS =====
-  s += "<hr><h3>&#128279; Integraciones</h3>";
+  s += "<details class='c'><summary>";
+  s += T("Notes (optional)", "Notas (opcional)");
+  s += "</summary>";
+  for (int i = 0; i < 3; i++) {
+    s += "<label>" + String(i + 1) + "<textarea name='td" + String(i) + "' maxlength='200' rows='2'>" +
+         esc(model->taskDescription[i]) + "</textarea></label>";
+  }
+  s += "</details></section>";
 
 #if FEATURE_GITHUB
-  // GitHub
-  s += "<div class='section'>";
-  s += "<label>&#128025; GitHub Username</label>";
-  s += "<input name='ghu' value='" + esc(model->cfg.githubUser) + "' placeholder='tu-username'>";
-  s += "</div>";
-#endif
-
-#if FEATURE_CALENDAR
-  // Calendar
-  s += "<div class='section'>";
-  s += secretField("&#128197; Calendar URL (iCal, secreta)", "cal", model->cfg.calendarUrl, "https://calendar.google.com/...");
-  s += "</div>";
-#endif
-
-#if FEATURE_NOTION && TASKY_MODE_DEV
-  // Notion (solo modo dev - requiere API key)
-  s += "<div class='section'>";
-  s += secretField("&#128221; Notion API Key", "nkey", model->cfg.notionApiKey, "secret_...");
-  s += "<label>&#128221; Notion Database ID</label>";
-  s += "<input name='ndb' value='" + esc(model->cfg.notionDatabaseId) + "' placeholder='abc123def456...'>";
-  s += "</div>";
-#endif
-
-  // ===== STREAK =====
-  s += "<hr><h3>&#128293; Streak</h3>";
-  s += "<label>Fuente del Streak</label>";
-  s += "<select name='sks'>";
-  s += "<option value='0'" + String(model->cfg.streakSource == STREAK_GITHUB ? " selected" : "") + ">Solo GitHub</option>";
-  s += "<option value='1'" + String(model->cfg.streakSource == STREAK_TASKY ? " selected" : "") + ">Solo Tasky</option>";
-  s += "<option value='2'" + String(model->cfg.streakSource == STREAK_BOTH ? " selected" : "") + ">Combinado</option>";
-  s += "</select>";
-
-#if FEATURE_FIREBASE
-  // ===== FIREBASE CLOUD SYNC =====
-  s += "<hr><h3>&#9729; Cloud Sync (Firebase)</h3>";
-  s += "<p style='font-size:10px;color:#666;margin-bottom:8px'>Sincroniza estadisticas a la nube para acceder desde cualquier lugar</p>";
-
-  // Firebase Guide
-  s += "<details class='guide'>";
-  s += "<summary>&#128218; Como configurar Firebase</summary>";
-  s += "<div class='content'>";
-  s += "<ol>";
-  s += "<li>Ir a <a href='https://console.firebase.google.com' target='_blank'>Firebase Console</a><div class='link'>console.firebase.google.com</div></li>";
-  s += "<li>Click <strong>\"Create Project\"</strong> &rarr; Nombre: \"tasky-data\"</li>";
-  s += "<li>Build &rarr; <strong>Realtime Database</strong> &rarr; Create</li>";
-  s += "<li>Copiar la <strong>URL de la database</strong> (ej: tasky-xxx.firebaseio.com)</li>";
-  s += "<li>Project Settings &rarr; Service Accounts &rarr; <strong>Database Secrets</strong></li>";
-  s += "<li>Click \"Show\" y copiar el <strong>Secret</strong></li>";
-  s += "</ol>";
-  s += "<p style='color:#888;margin-top:8px'>Reglas de seguridad sugeridas: <code>{\"rules\": {\".read\": true, \".write\": true}}</code> (solo para uso personal)</p>";
-  s += "</div></details>";
-
-  s += "<div class='section'>";
-  s += "<label>Firebase URL</label>";
-  s += "<input name='fbUrl' value='" + esc(model->cfg.firebaseUrl) + "' placeholder='tu-proyecto.firebaseio.com'>";
-  s += secretField("Firebase Secret", "fbKey", model->cfg.firebaseSecret, "Database secret...");
-  s += "<label>Habilitar Sync</label>";
-  s += "<select name='fbOn'>";
-  s += model->cfg.firebaseEnabled ?
-       "<option value='1' selected>ON - Sincronizar datos</option><option value='0'>OFF</option>" :
-       "<option value='1'>ON - Sincronizar datos</option><option value='0' selected>OFF</option>";
-  s += "</select>";
-  s += "</div>";
+  // ===== 4 GITHUB =====
+  section("GitHub");
+  field(T("GitHub username", "Usuario de GitHub"), "ghu", model->cfg.githubUser,
+        es ? "autocomplete='off' autocapitalize='off' placeholder='tu-usuario'"
+           : "autocomplete='off' autocapitalize='off' placeholder='your-username'");
+  hint(T("Your public contributions fill the GitHub page of the Streak screen.",
+         "Tus contribuciones públicas llenan la página de GitHub de la pantalla Streak."));
+  s += "</section>";
 #endif
 
 #if FEATURE_WEATHER
-  // ===== WEATHER WIDGET (Open-Meteo - no API key needed) =====
-  s += "<hr><h3>&#9728; Weather Widget</h3>";
-  s += "<p style='font-size:10px;color:#666;margin-bottom:8px'>Muestra el clima actual via Open-Meteo (gratis, sin API key)</p>";
-
-  s += "<div class='section'>";
-  s += "<label>Ciudad</label>";
-  s += "<input name='wCity' value='" + esc(model->cfg.weatherCity) + "' placeholder='Chihuahua, Monterrey, etc.'>";
-  s += "<label>Latitud (opcional - se autocompleta por ciudad)</label>";
-  s += "<input name='wLat' type='number' step='0.0001' value='" + String(model->cfg.weatherLat, 4) + "' placeholder='28.6353'>";
-  s += "<label>Longitud (opcional - se autocompleta por ciudad)</label>";
-  s += "<input name='wLon' type='number' step='0.0001' value='" + String(model->cfg.weatherLon, 4) + "' placeholder='-106.0889'>";
-  s += "<p style='font-size:10px;color:#666;margin-top:4px'>Deja lat/lon en 0 para geocodificacion automatica por ciudad</p>";
-  s += "<label>Unidades de Temperatura</label>";
+  // ===== 5 WEATHER =====
+  section(T("Weather", "Clima"));
+  field(T("City", "Ciudad"), "wCity", model->cfg.weatherCity,
+        es ? "autocomplete='off' placeholder='Ciudad de México'" : "autocomplete='off' placeholder='Mexico City'");
+  hint(T("Tasky finds it and shows today's weather. No API key needed.",
+         "Tasky la ubica y muestra el clima de hoy. Sin API key."));
+  s += "<label>";
+  s += T("Units", "Unidades");
   s += "<select name='wCel'>";
-  s += model->cfg.weatherCelsius ?
-       "<option value='1' selected>Celsius</option><option value='0'>Fahrenheit</option>" :
-       "<option value='1'>Celsius</option><option value='0' selected>Fahrenheit</option>";
-  s += "</select>";
-  s += "</div>";
+  option(1, model->cfg.weatherCelsius, "Celsius");
+  option(0, !model->cfg.weatherCelsius, "Fahrenheit");
+  s += "</select></label></section>";
 #endif
 
-#if FEATURE_SPOTIFY
-  // ===== SPOTIFY / MUSIC =====
-  s += "<hr><h3>&#127925; Now Playing</h3>";
-#if TASKY_MODE_DEV
-  s += "<p style='font-size:10px;color:#666;margin-bottom:8px'>Muestra y controla la musica via Spotify API (requiere Client ID/Secret)</p>";
+  // ===== 6 PHRASES =====
+  section(T("Your phrases", "Tus frases"));
+  hint(T("Shown on Home and on the Phrases screen. One per line (up to 12, 60 characters each); add an author after a dash: <code>Stay hungry - Steve Jobs</code>. Leave it empty for the built-in ones.",
+         "Salen en Home y en la pantalla Phrases. Una por línea (hasta 12, de 60 caracteres); agrega el autor después de un guion: <code>Paso a paso - Anónimo</code>. Déjalo vacío para usar las que trae Tasky."));
+  s += "<textarea name='ph' rows='6' maxlength='800' placeholder='";
+  s += T("One thing at a time&#10;Deep work, calm mind", "Una cosa a la vez&#10;Enfoque y calma");
+  s += "'>" + esc(model->cfg.phrases) + "</textarea><p class='h'>";
+  s += T("Accents are removed: the screen font is plain ASCII.",
+         "Los acentos se quitan: la pantalla solo tiene letras sin acento.");
+  s += "</p></section>";
 
-  // Spotify Guide (solo modo dev)
-  s += "<details class='guide'>";
-  s += "<summary>&#128218; Como configurar Spotify</summary>";
-  s += "<div class='content'>";
-  s += "<ol>";
-  s += "<li>Ir a <a href='https://developer.spotify.com/dashboard' target='_blank'>Spotify Developer Dashboard</a><div class='link'>developer.spotify.com/dashboard</div></li>";
-  s += "<li>Click <strong>\"Create App\"</strong></li>";
-  s += "<li>Nombre: \"Tasky\", Descripcion: \"Personal music display\"</li>";
-  s += "<li>Redirect URI: <strong>http://" + WiFi.softAPIP().toString() + "/spotify/callback</strong></li>";
-  s += "<li>En la app creada, copiar <strong>Client ID</strong> y <strong>Client Secret</strong></li>";
-  s += "</ol>";
-  s += "<p style='color:#888;margin-top:8px'>Nota: Requiere cuenta Spotify Premium para controles de reproduccion</p>";
-  s += "</div></details>";
+  // ===== MORE (advanced) =====
+  s += "<details class='mo'><summary>";
+  s += T("More", "Más");
+  s += "</summary>";
+  number(T("Minutes per focus session", "Minutos por sesión de enfoque"), "work", model->cfg.workMin, 5, 90);
+  number(T("Workday starts (hour, 0-23)", "Inicio de jornada (hora, 0-23)"), "dsh", model->cfg.dayStartHour, 0, 23);
+  number(T("Workday ends (hour, 0-23)", "Fin de jornada (hora, 0-23)"), "deh", model->cfg.dayEndHour, 0, 23);
+  hint(T("Tasky gives you a summary when the day starts and ends. Focus mode (light + lock while a session runs) is set on Tasky: MODE to More → Focus.",
+         "Tasky te da un resumen al empezar y al cerrar el día. El modo Focus (luz y bloqueo durante la sesión) se ajusta en Tasky: MODE hasta More → Focus."));
 
-  s += "<div class='section'>";
-  s += "<label>Spotify Client ID</label>";
-  s += "<input name='spId' value='" + esc(model->cfg.spotifyClientId) + "' placeholder='abc123...'>";
-  s += secretField("Spotify Client Secret", "spSec", model->cfg.spotifySecret, "xyz789...");
-
-  // Show auth status
-  if (model->cfg.spotifyToken.length() > 0) {
-    s += "<div style='margin:8px 0;padding:10px;background:#143d1a;border-radius:4px;color:#0f0'>";
-    s += "&#10003; Autenticado con Spotify";
-    s += "</div>";
-  } else if (model->cfg.spotifyClientId.length() > 0) {
-    s += "<div style='margin:8px 0;padding:10px;background:#3d3d14;border-radius:4px;color:#ff0'>";
-    s += "&#9888; Configurado pero sin autenticar";
-    s += "</div>";
-  }
-  s += "</div>";
-#else
-  // Modo usuario: mensaje sin API keys
-  s += "<p style='font-size:11px;color:#999;padding:12px;background:#0a0a0a;border-radius:6px;border-left:3px solid #00e5cc'>";
-  s += "&#128276; Conecta tu telefono por Bluetooth para ver la musica que reproduces (Spotify, YouTube Music, etc.) sin configurar nada. ";
-  s += "Usa la rama <strong>dev</strong> del firmware si quieres configurar Spotify con API keys.";
-  s += "</p>";
-#endif
+#if FEATURE_WEATHER
+  s += "<label>";
+  s += T("Latitude / longitude (0 = find by city)", "Latitud / longitud (0 = buscar por ciudad)");
+  s += "<input name='wLat' type='number' step='0.0001' value='" + String(model->cfg.weatherLat, 4) + "'>";
+  s += "<input name='wLon' type='number' step='0.0001' value='" + String(model->cfg.weatherLon, 4) + "'></label>";
 #endif
 
 #if FEATURE_LLM
-  // ===== AI AGENT =====
-  s += "<hr><h3>&#129302; AI Agent</h3>";
-  s += "<p style='font-size:10px;color:#666;margin-bottom:8px'>Asistente de productividad con IA (Claude o GPT)</p>";
-
-  // AI Guide
-  s += "<details class='guide'>";
-  s += "<summary>&#128218; Como configurar el AI Agent</summary>";
-  s += "<div class='content'>";
-  s += "<p><strong>Opcion A - Anthropic (Claude):</strong></p>";
-  s += "<ol>";
-  s += "<li>Ir a <a href='https://console.anthropic.com/settings/keys' target='_blank'>Anthropic Console</a><div class='link'>console.anthropic.com/settings/keys</div></li>";
-  s += "<li>Click <strong>\"Create Key\"</strong></li>";
-  s += "<li>Copiar la API key (empieza con sk-ant-...)</li>";
-  s += "</ol>";
-  s += "<p style='margin-top:8px'><strong>Opcion B - OpenAI (GPT):</strong></p>";
-  s += "<ol>";
-  s += "<li>Ir a <a href='https://platform.openai.com/api-keys' target='_blank'>OpenAI Platform</a><div class='link'>platform.openai.com/api-keys</div></li>";
-  s += "<li>Click <strong>\"Create new secret key\"</strong></li>";
-  s += "<li>Copiar la API key (empieza con sk-...)</li>";
-  s += "</ol>";
-  s += "<p style='color:#888;margin-top:8px'>Costo estimado: ~$0.01-0.03 por consulta con modelos economicos</p>";
-  s += "</div></details>";
-
-  s += "<div class='section'>";
-  s += "<label>Proveedor de IA</label>";
+  s += "<label>";
+  s += T("Ask Tasky (AI)", "Pregúntale a Tasky (IA)");
   s += "<select name='lPrv'>";
-  s += "<option value='0'" + String(model->cfg.llmProvider == 0 ? " selected" : "") + ">Anthropic (Claude)</option>";
-  s += "<option value='1'" + String(model->cfg.llmProvider == 1 ? " selected" : "") + ">OpenAI (GPT)</option>";
-  s += "</select>";
-  s += secretField("API Key", "lKey", model->cfg.llmApiKey, "sk-ant-... o sk-...");
-  s += "</div>";
+  option(1, model->cfg.llmProvider == 1, "ChatGPT (OpenAI)");
+  option(0, model->cfg.llmProvider == 0, "Claude (Anthropic)");
+  s += "</select></label>";
+  s += secretField(T("API key", "API key"), "lKey", model->cfg.llmApiKey, "sk-…");
+  hint(T("Get one at <a href='https://platform.openai.com/api-keys' target='_blank'>platform.openai.com</a> or <a href='https://console.anthropic.com/settings/keys' target='_blank'>console.anthropic.com</a>. The key stays on your Tasky.",
+         "Consíguela en <a href='https://platform.openai.com/api-keys' target='_blank'>platform.openai.com</a> o <a href='https://console.anthropic.com/settings/keys' target='_blank'>console.anthropic.com</a>. La key se queda en tu Tasky."));
 #endif
 
-  // ===== SUBMIT =====
-  s += "<button type='submit'>&#128190; Guardar y Conectar</button>";
-  s += "</form>";
+#if FEATURE_NOTION && TASKY_MODE_DEV
+  // Notion (dev mode only: needs an API key)
+  hint(T("Notion: create an integration at <a href='https://www.notion.so/my-integrations' target='_blank'>notion.so/my-integrations</a>, share your task database with it and paste the database ID (32 characters from its URL). Properties: Name, Status, Due.",
+         "Notion: crea una integración en <a href='https://www.notion.so/my-integrations' target='_blank'>notion.so/my-integrations</a>, comparte tu base de tareas con ella y pega el ID de la base (32 caracteres de su URL). Propiedades: Name, Status, Due."));
+  s += secretField("Notion API key", "nkey", model->cfg.notionApiKey, "secret_...");
+  field("Notion database ID", "ndb", model->cfg.notionDatabaseId, "autocomplete='off'");
+#endif
 
-  // ===== OTA UPDATE SECTION (Outside form) =====
-  s += "<hr><h3>&#128229; Firmware Update</h3>";
-  s += "<p style='font-size:10px;color:#666;margin-bottom:8px'>Actualiza el firmware via WiFi</p>";
-  s += "<p style='font-size:12px;color:#ff6b35'>Primero en el Tasky: MODO hasta More &rarr; Update y presiona la perilla. La actualizacion queda habilitada 5 minutos.</p>";
+#if FEATURE_FIREBASE
+  // Firebase cloud sync
+  hint(T("Cloud sync: <a href='https://console.firebase.google.com' target='_blank'>Firebase</a> Realtime Database URL and its database secret.",
+         "Sincronización: URL de Realtime Database de <a href='https://console.firebase.google.com' target='_blank'>Firebase</a> y su secret."));
+  field("Firebase URL", "fbUrl", model->cfg.firebaseUrl, "placeholder='project.firebaseio.com'");
+  s += secretField("Firebase secret", "fbKey", model->cfg.firebaseSecret, "");
+  s += "<label>Sync<select name='fbOn'>";
+  option(1, model->cfg.firebaseEnabled, "ON");
+  option(0, !model->cfg.firebaseEnabled, "OFF");
+  s += "</select></label>";
+#endif
 
-  // Current version
-  String version = ota ? ota->getVersion() : "Unknown";
-  s += "<div style='margin:8px 0;padding:10px;background:#111;border-radius:4px'>";
-  s += "<span style='color:#888'>Version actual:</span> <span style='color:#00e5cc;font-weight:bold'>v" + version + "</span>";
-  s += "</div>";
+#if FEATURE_SPOTIFY && TASKY_MODE_DEV
+  // Spotify (dev mode only)
+  hint(T("Spotify: create an app at <a href='https://developer.spotify.com/dashboard' target='_blank'>developer.spotify.com</a> with redirect URI",
+         "Spotify: crea una app en <a href='https://developer.spotify.com/dashboard' target='_blank'>developer.spotify.com</a> con redirect URI"));
+  s += "<code>http://" + WiFi.softAPIP().toString() + "/spotify/callback</code>";
+  field("Spotify client ID", "spId", model->cfg.spotifyClientId, "autocomplete='off'");
+  s += secretField("Spotify client secret", "spSec", model->cfg.spotifySecret, "");
+  if (model->cfg.spotifyToken.length() > 0)
+    s += "<p class='ok'>✓ Spotify</p>";
+#endif
+  s += "</details>";
 
-  // Upload form
-  s += "<form id='otaForm' enctype='multipart/form-data' style='margin-top:12px'>";
-  s += "<label>Archivo de Firmware (.bin)</label>";
-  s += "<input type='file' id='firmware' name='firmware' accept='.bin' style='padding:8px'>";
-  s += "<button type='button' id='uploadBtn' onclick='uploadFirmware()' style='background:#ff6b35'>&#128640; Actualizar Firmware</button>";
-  s += "</form>";
+  s += "<div class='sb'><button type='submit'>";
+  s += T("Save", "Guardar");
+  s += "</button></div></form>";
 
-  // Progress bar
-  s += "<div id='otaProgress' style='display:none;margin-top:12px'>";
-  s += "<div style='background:#222;border-radius:4px;overflow:hidden;height:24px'>";
-  s += "<div id='progressBar' style='background:#00e5cc;height:100%;width:0%;transition:width 0.3s'></div>";
-  s += "</div>";
-  s += "<p id='progressText' style='text-align:center;margin:8px 0;color:#888'>0%</p>";
-  s += "</div>";
-
-  // Status message
-  s += "<div id='otaStatus' style='display:none;margin-top:12px;padding:12px;border-radius:4px'></div>";
+  // ===== FIRMWARE UPDATE (outside the settings form) =====
+  s += "<details class='mo'><summary>";
+  s += T("Firmware update", "Actualizar firmware");
+  s += "</summary><p class='h'>";
+  s += T("First, on Tasky: MODE to More → Update and press the knob. Updates stay enabled for 5 minutes.",
+         "Primero en Tasky: MODE hasta More → Update y presiona la perilla. La actualización queda habilitada 5 minutos.");
+  s += "</p><p>";
+  s += T("Current version", "Versión actual");
+  s += ": <b class='ok'>v" + (ota ? ota->getVersion() : String("?")) + "</b></p>";
+  s += "<label>";
+  s += T("Firmware file (.bin)", "Archivo de firmware (.bin)");
+  s += "<input type='file' id='fw' accept='.bin'></label><div style='margin-top:12px'><button type='button' id='ub' onclick='up()'>";
+  s += T("Update firmware", "Actualizar firmware");
+  s += "</button></div><progress id='op' max='100' value='0' hidden></progress><p id='os' hidden></p></details>";
 
   // Send the phone's clock + time zone (no internet needed for the time)
-  s += "<script>fetch('/time',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},"
-       "body:'t='+Math.floor(Date.now()/1000)+'&tz='+Math.round(-new Date().getTimezoneOffset()/60)}).catch(function(){});</script>";
+  s += "<script>var z=Math.round(-new Date().getTimezoneOffset()/60),$=function(i){return document.getElementById(i)};"
+       "$('tz').value=z;"
+       "fetch('/time',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},"
+       "body:'t='+Math.floor(Date.now()/1000)+'&tz='+z}).catch(function(){});";
+  // Firmware upload: multipart POST to /ota/upload with progress
+  s += "function up(){var f=$('fw').files[0],b=$('ub'),p=$('op'),o=$('os');"
+       "if(!f||!/\\.bin$/.test(f.name)){alert('";
+  s += T("Pick the .bin file", "Elige el archivo .bin");
+  s += "');return}"
+       "function fail(m){o.hidden=false;o.className='er';o.textContent='✗ '+m;b.disabled=false;b.textContent='";
+  s += T("Update firmware", "Actualizar firmware");
+  s += "'}"
+       "var d=new FormData();d.append('firmware',f);b.disabled=true;b.textContent='";
+  s += T("Uploading…", "Subiendo…");
+  s += "';p.hidden=false;o.hidden=true;var x=new XMLHttpRequest();x.open('POST','/ota/upload',true);"
+       "x.upload.onprogress=function(e){if(e.lengthComputable)p.value=Math.round(e.loaded/e.total*100)};"
+       "x.onload=function(){try{var r=JSON.parse(x.responseText);if(r.success){o.hidden=false;o.className='ok';"
+       "o.textContent='✓ '+r.message;b.textContent='";
+  s += T("Restarting…", "Reiniciando…");
+  s += "'}else fail('Error: '+r.message)}catch(e){fail('";
+  s += T("Connection error", "Error de conexión");
+  s += "')}};x.onerror=function(){fail('";
+  s += T("Connection error", "Error de conexión");
+  s += "')};x.send(d)}</script>";
 
-  // JavaScript for OTA upload
-  s += "<script>";
-  s += "function uploadFirmware() {";
-  s += "  var fileInput = document.getElementById('firmware');";
-  s += "  var file = fileInput.files[0];";
-  s += "  if (!file) { alert('Selecciona un archivo .bin'); return; }";
-  s += "  if (!file.name.endsWith('.bin')) { alert('Solo archivos .bin'); return; }";
-  s += "  ";
-  s += "  var formData = new FormData();";
-  s += "  formData.append('firmware', file);";
-  s += "  ";
-  s += "  document.getElementById('uploadBtn').disabled = true;";
-  s += "  document.getElementById('uploadBtn').textContent = 'Subiendo...';";
-  s += "  document.getElementById('otaProgress').style.display = 'block';";
-  s += "  document.getElementById('otaStatus').style.display = 'none';";
-  s += "  ";
-  s += "  var xhr = new XMLHttpRequest();";
-  s += "  xhr.open('POST', '/ota/upload', true);";
-  s += "  ";
-  s += "  xhr.upload.onprogress = function(e) {";
-  s += "    if (e.lengthComputable) {";
-  s += "      var pct = Math.round((e.loaded / e.total) * 100);";
-  s += "      document.getElementById('progressBar').style.width = pct + '%';";
-  s += "      document.getElementById('progressText').textContent = pct + '%';";
-  s += "    }";
-  s += "  };";
-  s += "  ";
-  s += "  xhr.onload = function() {";
-  s += "    var status = document.getElementById('otaStatus');";
-  s += "    status.style.display = 'block';";
-  s += "    try {";
-  s += "      var resp = JSON.parse(xhr.responseText);";
-  s += "      if (resp.success) {";
-  s += "        status.style.background = '#143d1a';";
-  s += "        status.style.color = '#0f0';";
-  s += "        status.innerHTML = '&#10003; ' + resp.message;";
-  s += "        document.getElementById('uploadBtn').textContent = 'Reiniciando...';";
-  s += "      } else {";
-  s += "        status.style.background = '#3d1414';";
-  s += "        status.style.color = '#f44';";
-  s += "        status.innerHTML = '&#10007; Error: ' + resp.message;";
-  s += "        document.getElementById('uploadBtn').disabled = false;";
-  s += "        document.getElementById('uploadBtn').textContent = 'Actualizar Firmware';";
-  s += "      }";
-  s += "    } catch(e) {";
-  s += "      status.style.background = '#3d1414';";
-  s += "      status.style.color = '#f44';";
-  s += "      status.innerHTML = '&#10007; Error de conexion';";
-  s += "      document.getElementById('uploadBtn').disabled = false;";
-  s += "      document.getElementById('uploadBtn').textContent = 'Actualizar Firmware';";
-  s += "    }";
-  s += "  };";
-  s += "  ";
-  s += "  xhr.onerror = function() {";
-  s += "    var status = document.getElementById('otaStatus');";
-  s += "    status.style.display = 'block';";
-  s += "    status.style.background = '#3d1414';";
-  s += "    status.style.color = '#f44';";
-  s += "    status.innerHTML = '&#10007; Error de conexion';";
-  s += "    document.getElementById('uploadBtn').disabled = false;";
-  s += "    document.getElementById('uploadBtn').textContent = 'Actualizar Firmware';";
-  s += "  };";
-  s += "  ";
-  s += "  xhr.send(formData);";
-  s += "}";
-  s += "</script>";
-
-  // ===== FOOTER =====
-  s += "<div style='text-align:center;margin:20px 0;padding:16px;border-top:1px solid #222;font-size:10px;color:#666'>";
-  s += "<p>Tasky v" TASKY_VERSION " &bull; <a href='https://github.com/arampersand/tasky' target='_blank'>GitHub</a></p>";
-  s += "</div>";
-
-  s += "</body></html>";
+  s += "<p class='h' style='text-align:center'>Tasky v" TASKY_VERSION
+       " · <a href='https://github.com/arampersand/tasky' target='_blank'>GitHub</a></p></main></body></html>";
   return s;
 }
 
 String WiFiPortal::secretField(const char *label, const char *name, const String &stored,
                                const char *placeholder, const char *type) {
-  String s = "<label>" + String(label) + "</label>";
   bool isSet = stored.length() > 0;
-  s += "<input name='" + String(name) + "' type='" + String(type) + "' value='' autocomplete='off' placeholder='" +
-       (isSet ? String("Guardada - deja vacio para conservarla") : esc(placeholder)) + "'>";
+  String s = "<label>" + String(label) + "<input name='" + String(name) + "' type='" + String(type) +
+             "' value='' autocomplete='off' autocapitalize='off' placeholder='" +
+             (isSet ? String(T("Saved. Leave empty to keep it", "Guardada. Déjalo vacío para conservarla"))
+                    : esc(placeholder)) +
+             "'></label>";
   if (isSet) {
-    s += "<label style='display:flex;gap:6px;align-items:center;text-transform:none;color:#0c8'>&#10003; Configurada"
-         "<span style='margin-left:auto;color:#888'><input type='checkbox' name='" + String(name) +
-         "_clr' value='1' style='width:auto;margin:0'> borrar</span></label>";
+    s += "<div class='sv'><span class='ok'>✓ ";
+    s += T("Set", "Configurada");
+    s += "</span><label style='margin:0'><input type='checkbox' name='" + String(name) + "_clr' value='1'>";
+    s += T("clear", "borrar");
+    s += "</label></div>";
   }
   return s;
 }
@@ -672,7 +624,8 @@ void WiFiPortal::handleRoot() {
   if (!authorized())
     return;
   touch();
-  server.send(200, "text/html", htmlPage());
+  pickLang();
+  server.send(200, "text/html; charset=utf-8", htmlPage());
 }
 
 void WiFiPortal::handleOtaStatus() {
@@ -741,6 +694,7 @@ void WiFiPortal::handleSave() {
   if (!authorized())
     return;
   touch();
+  pickLang();
   for (int i = 0; i < 3; i++) {
     String k = "t" + String(i);
     if (server.hasArg(k)) {
@@ -777,19 +731,62 @@ void WiFiPortal::handleSave() {
   if (server.hasArg("deh"))
     model->cfg.dayEndHour = (uint8_t)constrain(server.arg("deh").toInt(), 0, 23);
 
+  String oldSSID = model->cfg.wifiSSID;
+  String oldPass = model->cfg.wifiPass;
   if (server.hasArg("ssid"))
     model->cfg.wifiSSID = server.arg("ssid");
   applySecret("pass", model->cfg.wifiPass);
+  bool wifiChanged = model->cfg.wifiSSID != oldSSID || model->cfg.wifiPass != oldPass;
   if (server.hasArg("tz"))
     model->cfg.timezone = (int8_t)server.arg("tz").toInt();
 
 #if FEATURE_GITHUB
-  if (server.hasArg("ghu"))
-    model->cfg.githubUser = server.arg("ghu");
+  if (server.hasArg("ghu")) {
+    String ghu = server.arg("ghu");
+    ghu.trim();
+    model->cfg.githubUser = ghu;
+  }
 #endif
 #if FEATURE_CALENDAR
-  applySecret("cal", model->cfg.calendarUrl);
+  // Write-only like applySecret(), plus: pasted links lose spaces/line breaks,
+  // webcal:// becomes https://, and typing "clear"/"borrar" also clears it.
+  if (server.hasArg("cal_clr")) {
+    model->cfg.calendarUrl = "";
+  } else if (server.hasArg("cal")) {
+    String raw = server.arg("cal"), cal;
+    for (size_t i = 0; i < raw.length(); i++)
+      if (!isspace((unsigned char)raw[i]))
+        cal += raw[i];
+    String low = cal;
+    low.toLowerCase();
+    if (low == "clear" || low == "borrar")
+      model->cfg.calendarUrl = "";
+    else if (cal.length() > 0)
+      model->cfg.calendarUrl = low.startsWith("webcal://") ? "https://" + cal.substring(9) : cal;
+  }
 #endif
+
+  // Phrases: one per line, ASCII-folded, up to 12 x 60 chars ("" = built-in)
+  if (server.hasArg("ph")) {
+    const String raw = server.arg("ph");
+    String all;
+    int count = 0;
+    for (int pos = 0; pos <= (int)raw.length() && count < MAX_PHRASES;) {
+      int nl = raw.indexOf('\n', pos);
+      if (nl < 0)
+        nl = raw.length();
+      String ph = asciiFold(raw.substring(pos, nl));
+      pos = nl + 1;
+      if (ph.length() == 0)
+        continue;
+      if (ph.length() > MAX_PHRASE_LEN) {
+        ph = ph.substring(0, MAX_PHRASE_LEN);
+        ph.trim();
+      }
+      all += (count++ ? "\n" : "") + ph;
+    }
+    model->cfg.phrases = all;
+  }
 
   // Notion Integration
 #if FEATURE_NOTION
@@ -797,14 +794,6 @@ void WiFiPortal::handleSave() {
   if (server.hasArg("ndb"))
     model->cfg.notionDatabaseId = server.arg("ndb");
 #endif
-
-  // Streak Source
-  if (server.hasArg("sks")) {
-    int v = server.arg("sks").toInt();
-    if (v >= 0 && v <= 2) {
-      model->cfg.streakSource = (StreakSource)v;
-    }
-  }
 
 #if FEATURE_FIREBASE
   // Firebase Cloud Sync
@@ -819,16 +808,19 @@ void WiFiPortal::handleSave() {
   // Weather Widget (Open-Meteo)
   {
     String oldCity = model->cfg.weatherCity;
-    if (server.hasArg("wCity"))
-      model->cfg.weatherCity = server.arg("wCity");
+    if (server.hasArg("wCity")) {
+      String city = server.arg("wCity");
+      city.trim();
+      model->cfg.weatherCity = city;
+    }
     if (server.hasArg("wLat"))
       model->cfg.weatherLat = server.arg("wLat").toFloat();
     if (server.hasArg("wLon"))
       model->cfg.weatherLon = server.arg("wLon").toFloat();
     if (server.hasArg("wCel"))
       model->cfg.weatherCelsius = server.arg("wCel") == "1";
-    // Reset lat/lon if city changed (force re-geocode)
-    if (oldCity != model->cfg.weatherCity && model->cfg.weatherCity.length() > 0) {
+    // New city: drop the old coordinates so it re-geocodes (like usb_setup)
+    if (oldCity != model->cfg.weatherCity) {
       model->cfg.weatherLat = 0;
       model->cfg.weatherLon = 0;
     }
@@ -854,13 +846,30 @@ void WiFiPortal::handleSave() {
 
   model->save();
 
-  // [NEW] Trigger reconnection
-  if (net) {
+  // Reconnect only for new Wi-Fi details, or to retry while offline
+  bool reconnect = net && (wifiChanged || !net->isConnected());
+  if (reconnect) {
     net->disconnect(); // Clear old state
     net->begin();      // Start new connection attempt
   }
 
-  server.send(200, "text/html",
-              "<h3>Saved & Verify...</h3><p>Check device screen for connection "
-              "status.</p><p><a href='/'>Back</a></p>");
+  String s;
+  pageHead(s);
+  s += "<h1 class='ok'>✓ ";
+  s += T("Saved", "Guardado");
+  s += "</h1><p>";
+  if (reconnect && model->cfg.wifiSSID.length() > 0) {
+    s += T("Tasky is connecting to ", "Tasky se está conectando a ");
+    s += "<b>" + esc(model->cfg.wifiSSID) + "</b>…</p><p class='h'>";
+    s += T("Watch Tasky's screen for the result. Your phone may leave the Tasky network.",
+           "Mira la pantalla de Tasky para ver el resultado. Tu teléfono puede salir de la red Tasky.");
+  } else {
+    s += T("Tasky has your changes.", "Tasky ya tiene tus cambios.");
+  }
+  s += "</p><p><a href='/?lang=";
+  s += T("en", "es");
+  s += "'>";
+  s += T("← Back", "← Volver");
+  s += "</a></p></main></body></html>";
+  server.send(200, "text/html; charset=utf-8", s);
 }

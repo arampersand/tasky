@@ -39,6 +39,12 @@ public:
 private:
   bool routesAdded = false;
   uint32_t lastActivityAt = 0;
+  bool es = false;  // page language for the current request (Spanish / English)
+
+  // Picks the language: ?lang=en|es, else the browser's Accept-Language.
+  void pickLang();
+  const char *T(const char *en, const char *sp) const { return es ? sp : en; }
+  void pageHead(String &s);
 
   void addRoutes();
   // Clients on the setup AP already proved they saw the device (its password is
@@ -51,7 +57,7 @@ private:
   void handleOtaStatus();
   String htmlPage();
   // Secrets are never sent back to the browser: the field renders empty, an
-  // empty submit keeps the stored value, and a checkbox clears it.
+  // empty submit keeps the stored value, and a checkbox ("clear") clears it.
   String secretField(const char *label, const char *name, const String &stored,
                      const char *placeholder, const char *type = "password");
   void applySecret(const char *name, String &stored);

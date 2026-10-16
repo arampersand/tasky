@@ -17,7 +17,7 @@ import tty
 import unittest
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-SCRIPT = os.path.abspath(os.path.join(HERE, "..", "tasky_agent.py"))
+SCRIPT = os.path.abspath(os.path.join(HERE, "..", "..", "claude-plugin", "tasky_agent.py"))
 
 
 class FakeTasky:
@@ -111,6 +111,59 @@ class AgentTest(unittest.TestCase):
         self.assertEqual(len(sent), 1)
         payload = json.loads(sent[0][len("TASKY AGENT "):])
         self.assertEqual(payload, {"id": "abc", "label": "Cancion n", "state": "working", "msg": "Working"})
+
+    def test_session_start_shows_a_ready_card(self):
+        self.plug()
+        self.run_agent("hook", "start", stdin={"session_id": "s9", "cwd": "/x/web"})
+        sent = [json.loads(l[12:]) for l in self.tasky.lines if l.startswith("TASKY AGENT ")]
+        self.assertEqual(sent, [{"id": "s9", "label": "web", "state": "done", "msg": "Ready"}])
+
+    def test_compact_is_not_a_new_session(self):
+        self.plug()
+        self.run_agent("hook", "start", stdin={"session_id": "s9", "cwd": "/x/web", "source": "compact"})
+        self.run_agent("hook", "working", stdin={"session_id": "s9", "cwd": "/x/web"})
+        states = [json.loads(l[12:])["state"] for l in self.tasky.lines if l.startswith("TASKY AGENT ")]
+        self.assertEqual(states, ["working"])
+
+    def test_same_question_twice_is_asked_once(self):
+        # plugin hooks + install.sh hooks: both ask; Tasky shows it once
+        self.plug(choice=0, answer_after=1.5)
+        procs = [subprocess.Popen([sys.executable, SCRIPT, "ask"], stdin=subprocess.PIPE, env=self.env,
+                                  stdout=subprocess.PIPE, text=True) for _ in range(2)]
+        for p in procs:
+            p.stdin.write(json.dumps(self.ask_event()))
+            p.stdin.close()
+            time.sleep(0.4)
+        outs = sorted(p.stdout.read() for p in procs)
+        for p in procs:
+            p.wait()
+        self.assertEqual(outs[0], "")  # the duplicate stays out of it
+        self.assertEqual(json.loads(outs[1])["hookSpecificOutput"]["decision"]["behavior"], "allow")
+        self.assertEqual(sum(l.startswith("TASKY ASK ") for l in self.tasky.lines), 1)
+
+    def test_doctor(self):
+        settings = os.path.join(self.home, "settings.json")
+        with open(settings, "w") as f:
+            json.dump({"enabledPlugins": {"tasky@tasky": True}}, f)
+        self.plug()
+        r = self.run_agent("doctor", "--settings", settings)
+        self.assertEqual(r.returncode, 0, r.stdout)
+        self.assertIn("Tasky found: agents 2.12.0", r.stdout)
+        self.assertIn("Tasky plugin", r.stdout)
+        # the same hooks also installed by install.sh -> duplicate warning
+        with open(settings, "w") as f:
+            json.dump({"enabledPlugins": {"tasky@tasky": True}, "hooks": {"Stop": [{"hooks": [
+                {"type": "command", "command": "python3 ~/.tasky/tasky_agent.py hook done"}]}]}}, f)
+        r = self.run_agent("doctor", "--settings", settings)
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("installed twice", r.stdout)
+
+    def test_doctor_standard_firmware(self):
+        self.plug(edition="tasky")
+        r = self.run_agent("doctor", "--settings", os.path.join(self.home, "none.json"))
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("Flash Tasky for Agents", r.stdout)
+        self.assertIn("/plugin install tasky@tasky", r.stdout)
 
     def test_ask_allow(self):
         self.plug(choice=0)

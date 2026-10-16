@@ -6,12 +6,12 @@
 #include <Preferences.h>
 
 // Agent states
-enum AgentState {
-  AGENT_IDLE = 0,  // Ready - showing today's mode
-  AGENT_SENDING,   // Building & sending request
-  AGENT_THINKING,  // Waiting for LLM response
-  AGENT_DONE,      // Response ready to display
-  AGENT_ERROR      // Config error (no API key)
+enum LlmState {
+  LLM_IDLE = 0,  // Ready - showing today's mode
+  LLM_SENDING,   // Building & sending request
+  LLM_THINKING,  // Waiting for LLM response
+  LLM_DONE,      // Response ready to display
+  LLM_ERROR      // Config error (no API key)
 };
 
 // LLM Provider
@@ -55,7 +55,7 @@ public:
   void reset();
 
   // State
-  AgentState getState() const {
+  LlmState getState() const {
     return state;
   }
   bool isConfigured() const;
@@ -80,7 +80,7 @@ private:
   ApiClient api;
   Preferences cachePref;  // Separate NVS namespace for cache
 
-  AgentState state = AGENT_IDLE;
+  LlmState state = LLM_IDLE;
   uint32_t requestStartMs = 0;
   LlmMode todayMode = MODE_FOCUS;
   uint32_t todayDayIdx = 0;

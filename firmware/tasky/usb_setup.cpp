@@ -70,6 +70,7 @@ void UsbSetup::sendStatus() {
   cfg["city"] = model->cfg.weatherCity;
   cfg["tz"] = model->cfg.timezone;
   cfg["light"] = model->cfg.ledType;
+  cfg["goal"] = model->cfg.dailyGoalMin;
   // Carousel: what this edition offers and what's picked (Home is implied)
   JsonArray choices = cfg["screenChoices"].to<JsonArray>();
   for (int i = 1; i < SCREEN_DEFS_N; i++) {
@@ -170,6 +171,8 @@ void UsbSetup::applySet(const String &json) {
     model->cfg.weatherLat = doc["lat"].as<float>();
     model->cfg.weatherLon = doc["lon"].as<float>();
   }
+  if (doc["goal"].is<int>())
+    model->cfg.dailyGoalMin = (uint16_t)constrain(doc["goal"].as<int>(), 15, 600);
   if (doc["light"].is<int>()) {
     model->cfg.ledType = doc["light"].as<int>() == 1 ? 1 : 0;
     lightSet = true;

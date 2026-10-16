@@ -5,7 +5,8 @@ answer their permission prompts with Tasky's knob.
 Tasky shows each session on its Agents screen and breathes its light bar while
 an agent is waiting for you.
 
-Claude Code hooks (see companion/README.md, or run install.sh):
+Claude Code hooks (the Claude Code plugin sets them up; or run install.sh):
+    tasky_agent.py hook start     # SessionStart: a "Ready" card
     tasky_agent.py hook working   # UserPromptSubmit
     tasky_agent.py hook waiting   # Notification (permission / input needed)
     tasky_agent.py hook done      # Stop
@@ -15,6 +16,9 @@ Claude Code hooks (see companion/README.md, or run install.sh):
 
 Any other tool or script:
     tasky_agent.py send --id build-42 --label "CI" --state working --msg "Running tests"
+
+Something not working?
+    tasky_agent.py doctor         # checks everything and says what to fix
 
 How it talks to Tasky: one small background process (`tasky_agent.py daemon`,
 started on demand) owns the USB serial port; hooks talk to it over a Unix
@@ -30,6 +34,7 @@ TASKY_PORT=/dev/cu.usbmodemXXXX. pyserial is used for detection if installed.
 """
 import argparse
 import glob
+import platform
 import json
 import os
 import select
@@ -43,6 +48,7 @@ import uuid
 
 ESPRESSIF_VID = 0x303A
 STATES = ("working", "waiting", "done", "end")
+HOOK_STATES = STATES + ("start",)  # start = a new Claude Code session
 HOME = os.path.join(os.path.expanduser("~"), ".tasky")
 SOCK = os.environ.get("TASKY_SOCK", os.path.join(HOME, "agent.sock"))
 IDLE_EXIT_S = 2 * 3600
@@ -173,6 +179,7 @@ class Daemon:
         self.lock = threading.Lock()
         self.answers = {}  # ask id -> choice (int), filled by the reader
         self.waiting = set()
+        self.asking = {}  # question key -> request id on Tasky now
         self.last_activity = time.time()
         self.scanned = threading.Event()  # first port search finished
 
@@ -263,6 +270,12 @@ class Daemon:
 
     def ask(self, conn, req):
         rid = req["id"]
+        key = req.get("key")
+        with self.lock:  # two hook processes can ask at the same instant
+            if key and key in self.asking:
+                return None  # the same question from a second set of hooks: the first one answers
+            if key:
+                self.asking[key] = rid
         self.waiting.add(rid)
         try:
             if not self.write(req["line"]):
@@ -281,6 +294,8 @@ class Daemon:
         finally:
             self.waiting.discard(rid)
             self.answers.pop(rid, None)
+            if key and self.asking.get(key) == rid:
+                del self.asking[key]
 
     def run(self):
         import fcntl
@@ -373,8 +388,9 @@ def from_hook(state, event):
         "waiting": event.get("message") or "Needs your input",
         "done": "Finished",
         "working": "Working",
+        "start": "Ready",
     }.get(state, "")
-    return {"id": session, "label": project, "state": state, "msg": msg}
+    return {"id": session, "label": project, "state": "done" if state == "start" else state, "msg": msg}
 
 
 def describe_tool(event):
@@ -415,7 +431,8 @@ def ask_from_hook(event, timeout=ASK_TIMEOUT_S):
     ping = request({"op": "ping"}, timeout=6)  # a fresh daemon may still be scanning
     if not ping or not ping.get("asks"):
         return None
-    reply = request({"op": "ask", "id": rid, "timeout": timeout,
+    key = "|".join((payload["session"], payload["tool"], payload["detail"]))
+    reply = request({"op": "ask", "id": rid, "key": key, "timeout": timeout,
                      "line": "TASKY ASK " + json.dumps(payload)}, timeout=timeout + 5)
     choice = reply.get("choice") if reply else None
     if choice is None or not isinstance(choice, int) or not 0 <= choice < len(options):
@@ -435,6 +452,7 @@ def ask_from_hook(event, timeout=ASK_TIMEOUT_S):
 # Claude Code event -> what this script does. PermissionRequest waits on the
 # knob, so its hook timeout leaves room for TASKY_ASK_TIMEOUT.
 HOOKS = {
+    "SessionStart": "hook start",
     "UserPromptSubmit": "hook working",
     "Notification": "hook waiting",
     "Stop": "hook done",
@@ -505,11 +523,86 @@ def install_hooks(settings_path, script_path, uninstall=False):
     return f"Added Tasky's hooks to {settings_path}{note}"
 
 
+# ------------------------------------------------------------------- doctor
+def port_holders(path):
+    """Names of the programs that have the port open (macOS / Linux), or []."""
+    try:
+        out = subprocess.run(["lsof", "-Fc", path], capture_output=True, text=True, timeout=5).stdout
+    except (OSError, subprocess.SubprocessError):
+        return []
+    return sorted({line[1:] for line in out.splitlines() if line.startswith("c")} - {"python3", "Python"})
+
+
+def plugin_enabled(settings):
+    return bool((settings.get("enabledPlugins") or {}).get("tasky@tasky"))
+
+
+def settings_hooks(settings):
+    hooks = settings.get("hooks") if isinstance(settings.get("hooks"), dict) else {}
+    return sum(1 for groups in hooks.values() if isinstance(groups, list) for g in groups
+               if isinstance(g, dict) for h in g.get("hooks", []) if is_ours(h))
+
+
+def doctor(settings_path):
+    """Check every link between Claude Code and Tasky. Returns True if all good."""
+    problems = []
+
+    def check(good, text, fix=""):
+        print(("  ✓ " if good else "  ✗ ") + text)
+        if not good:
+            problems.append(fix)
+        return good
+
+    print("Tasky doctor")
+    check(sys.version_info >= (3, 8), f"Python {platform.python_version()}", "Install Python 3.8 or newer")
+
+    ping = request({"op": "ping"}, timeout=8) or {}
+    if ping.get("edition"):
+        check(ping.get("edition") == "agents", f"Tasky found: {ping.get('edition')} {ping.get('version')}",
+              "Flash Tasky for Agents at https://tasky-flash.vercel.app (keeps your settings)")
+        if ping.get("edition") == "agents":
+            check(bool(ping.get("asks")), "Firmware answers permission prompts (2.12+)",
+                  "Update Tasky at https://tasky-flash.vercel.app")
+    else:
+        ports = candidate_ports()
+        busy = {p: port_holders(p) for p in ports}
+        held = [f"{p} (in use by {', '.join(h)})" for p, h in busy.items() if h]
+        if not ports:
+            check(False, "No Tasky on USB", "Plug Tasky in with a data USB-C cable (charge-only cables don't work)")
+        elif held:
+            check(False, "Tasky's USB port is busy: " + "; ".join(held),
+                  "Close that app or tab (usually tasky-flash.vercel.app), then try again")
+        else:
+            check(False, f"No answer from {', '.join(ports)}",
+                  "Unplug and replug Tasky. If it still fails, reflash it at https://tasky-flash.vercel.app")
+
+    settings = {}
+    try:
+        with open(settings_path) as f:
+            settings = json.load(f)
+    except (OSError, ValueError):
+        pass
+    plugin, manual = plugin_enabled(settings), settings_hooks(settings)
+    if plugin and manual:
+        check(False, "Hooks installed twice (Claude Code plugin and install.sh)",
+              "Keep the plugin: curl -fsSL https://tasky-flash.vercel.app/agents/install.sh | sh -s -- --uninstall")
+    else:
+        check(plugin or manual > 0,
+              "Claude Code hooks: " + ("Tasky plugin" if plugin else "install.sh" if manual else "not installed"),
+              "In Claude Code run: /plugin marketplace add arampersand/tasky  then  /plugin install tasky@tasky")
+
+    if problems:
+        print("\nTo fix:" + "".join(f"\n  - {p}" for p in problems if p))
+        return False
+    print("\nAll good. Restart Claude Code if you just installed the hooks.")
+    return True
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
     h = sub.add_parser("hook", help="called by a Claude Code hook (reads JSON on stdin)")
-    h.add_argument("state", choices=STATES)
+    h.add_argument("state", choices=HOOK_STATES)
     sub.add_parser("ask", help="PermissionRequest hook: answer on Tasky (reads JSON on stdin)")
     s = sub.add_parser("send", help="send a status by hand")
     s.add_argument("--id", required=True)
@@ -518,6 +611,8 @@ def main():
     s.add_argument("--msg", default="")
     sub.add_parser("daemon", help="own the USB port (started automatically)")
     sub.add_parser("status", help="is Tasky connected?")
+    dr = sub.add_parser("doctor", help="check everything and say what to fix")
+    dr.add_argument("--settings", default=os.path.join(os.path.expanduser("~"), ".claude", "settings.json"))
     i = sub.add_parser("install", help="add the hooks to Claude Code's settings.json")
     i.add_argument("--uninstall", action="store_true", help="remove them instead")
     i.add_argument("--settings", default=os.path.join(os.path.expanduser("~"), ".claude", "settings.json"))
@@ -526,11 +621,17 @@ def main():
     if args.cmd == "daemon":
         Daemon().run()
     elif args.cmd == "hook":
-        send(from_hook(args.state, read_hook_event()))
+        event = read_hook_event()
+        # SessionStart also fires when Claude compacts its context mid-turn:
+        # that's not a new session, keep the card as it is
+        if not (args.state == "start" and event.get("source") == "compact"):
+            send(from_hook(args.state, event))
     elif args.cmd == "ask":
         decision = ask_from_hook(read_hook_event())
         if decision:
             print(json.dumps(decision))
+    elif args.cmd == "doctor":
+        sys.exit(0 if doctor(args.settings) else 1)
     elif args.cmd == "install":
         try:
             print(install_hooks(args.settings, os.path.abspath(__file__), args.uninstall))

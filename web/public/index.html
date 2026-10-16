@@ -157,6 +157,7 @@
         <!-- Wi-Fi -->
         <div class="wz-step" data-step="wifi" hidden>
           <h3>Wi-Fi</h3>
+          <p class="wz-intro" id="wz-wifi-intro" hidden>Let's get Tasky online. This takes about two minutes.</p>
           <p>Tasky uses Wi-Fi for the time, weather and your calendar. 2.4 GHz networks only.</p>
           <div class="wz-networks" id="wz-networks" role="radiogroup" aria-label="Wi-Fi networks"><p class="small">Scanning…</p></div>
           <label class="wz-field">Network<input id="wz-ssid" autocomplete="off" placeholder="Network name"></label>
@@ -169,13 +170,30 @@
         <div class="wz-step" data-step="calendar" hidden>
           <h3>Your calendar</h3>
           <p>Paste your calendar's private iCal link. Today's events show up on Tasky, with a heads-up 5 minutes before each meeting.</p>
+          <p class="small">Where do I find it? Pick yours:</p>
+          <div class="seg" role="radiogroup" aria-label="Calendar provider">
+            <label><input type="radio" name="wz-calprov" value="google"><span>Google</span></label>
+            <label><input type="radio" name="wz-calprov" value="icloud"><span>iCloud</span></label>
+            <label><input type="radio" name="wz-calprov" value="outlook"><span>Outlook</span></label>
+          </div>
+          <ol class="wz-guide" data-prov="google" hidden>
+            <li>Open <a href="https://calendar.google.com/" target="_blank" rel="noopener">calendar.google.com</a> on a computer.</li>
+            <li>In the list on the left, click <strong>⋮</strong> next to your calendar → <strong>Settings and sharing</strong>.</li>
+            <li>Scroll to <em>Integrate calendar</em> and copy <strong>Secret address in iCal format</strong>.</li>
+          </ol>
+          <ol class="wz-guide" data-prov="icloud" hidden>
+            <li>Open the Calendar app on your Mac or iPhone (or <a href="https://www.icloud.com/calendar/" target="_blank" rel="noopener">icloud.com/calendar</a>).</li>
+            <li>Tap the share icon next to the calendar and turn on <strong>Public Calendar</strong>.</li>
+            <li>Copy the link. It starts with <code>webcal://</code>; paste it as is.</li>
+          </ol>
+          <ol class="wz-guide" data-prov="outlook" hidden>
+            <li>Open <a href="https://outlook.live.com/calendar/" target="_blank" rel="noopener">outlook.com</a> → <strong>Settings</strong> (gear) → <strong>Calendar</strong> → <strong>Shared calendars</strong>.</li>
+            <li>Under <em>Publish a calendar</em>, pick your calendar and <em>Can view all details</em>, then <strong>Publish</strong>.</li>
+            <li>Copy the <strong>ICS</strong> link.</li>
+          </ol>
           <label class="wz-field">iCal link<input id="wz-cal" autocomplete="off" placeholder="https://calendar.google.com/calendar/ical/…/basic.ics"></label>
-          <details class="wz-help"><summary>Where do I find it?</summary>
-            <p><strong>Google Calendar:</strong> Settings → your calendar → <em>Integrate calendar</em> → copy <em>Secret address in iCal format</em>.</p>
-            <p><strong>Outlook:</strong> Settings → Calendar → Shared calendars → <em>Publish a calendar</em> → copy the ICS link.</p>
-            <p><strong>iCloud:</strong> Calendar app → share the calendar as <em>Public Calendar</em> → copy the link (change <code>webcal://</code> to <code>https://</code>).</p>
-          </details>
-          <p class="wz-status" role="status"></p>
+          <p class="wz-status" id="wz-cal-status" role="status"></p>
+          <button class="btn ghost" id="wz-caltest" type="button" hidden>Test it</button>
           <div class="wz-actions"><button class="btn ghost" data-skip>Skip</button><button class="btn primary" data-save="calendar">Save</button></div>
         </div>
 
@@ -195,7 +213,16 @@
           <h3>GitHub streak</h3>
           <p>Optional. Your public contributions count toward Tasky's streak.</p>
           <label class="wz-field">GitHub username<input id="wz-ghu" autocomplete="off" placeholder="your-username"></label>
-          <p class="wz-status" role="status"></p>
+          <div class="wz-gh" id="wz-gh-user" hidden>
+            <img id="wz-gh-avatar" alt="" width="40" height="40">
+            <div><strong id="wz-gh-name"></strong><small id="wz-gh-login"></small></div>
+            <span class="wz-gh-ask">Is this you?</span>
+          </div>
+          <div class="wz-gh-activity" id="wz-gh-activity" hidden>
+            <p class="small">Your recent GitHub activity (Tasky's Streak shows it with your focus sessions)</p>
+            <div class="wz-gh-grid" id="wz-gh-grid" role="img"></div>
+          </div>
+          <p class="wz-status" id="wz-github-status" role="status"></p>
           <div class="wz-actions"><button class="btn ghost" data-skip>Skip</button><button class="btn primary" data-save="github">Save</button></div>
         </div>
 
@@ -257,9 +284,16 @@
         <!-- Agents (Tasky for Agents only) -->
         <div class="wz-step" data-step="agents" hidden>
           <h3 class="wz-title-icon"><svg viewBox="0 0 24 24" width="28" height="28" aria-hidden="true"><path fill="#D97757" fill-rule="evenodd" clip-rule="evenodd" d="M20.998 10.949H24v3.102h-3v3.028h-1.487V20H18v-2.921h-1.487V20H15v-2.921H9V20H7.488v-2.921H6V20H4.487v-2.921H3V14.05H0V10.95h3V5h17.998v5.949zM6 10.949h1.488V8.102H6v2.847zm10.51 0H18V8.102h-1.49v2.847z"/></svg>Connect Claude Code</h3>
-          <p>In a terminal on this computer, run:</p>
-          <div class="wz-cmd"><code id="wz-agents-cmd">curl -fsSL https://tasky-flash.vercel.app/agents/install.sh | sh</code><button class="btn ghost" id="wz-copy" type="button">Copy</button></div>
-          <p class="small">It adds Tasky's hooks to Claude Code (your settings are backed up first) and only needs Python 3. Then restart Claude Code. Tasky shows each session, breathes its light when one needs you, and lets you allow or deny permission prompts with the knob. <a href="https://github.com/arampersand/tasky/blob/main/companion/README.md" target="_blank" rel="noopener">What it does</a></p>
+          <p>Install the Tasky plugin. In Claude Code, run these two commands:</p>
+          <div class="wz-cmd"><code>/plugin marketplace add arampersand/tasky</code><button class="btn ghost" data-copy type="button">Copy</button></div>
+          <div class="wz-cmd"><code>/plugin install tasky@tasky</code><button class="btn ghost" data-copy type="button">Copy</button></div>
+          <p>Then restart Claude Code: Tasky shows a <strong>Ready</strong> card.</p>
+          <p class="small">Tasky shows each session, breathes its light when one needs you, and lets you allow or deny permission prompts with the knob. Needs Python 3 (macOS or Linux). Something not working? Run <code>/tasky:status</code> in Claude Code. <a href="https://github.com/arampersand/tasky/blob/main/companion/README.md" target="_blank" rel="noopener">What it does</a></p>
+          <details class="wz-help"><summary>Other ways (terminal)</summary>
+            <p>Without the plugin, run this in a terminal. It adds Tasky's hooks to <code>~/.claude/settings.json</code> (backed up first):</p>
+            <div class="wz-cmd"><code>curl -fsSL https://tasky-flash.vercel.app/agents/install.sh | sh</code><button class="btn ghost" data-copy type="button">Copy</button></div>
+            <p>Use the plugin or this, not both. To remove this one: <code>curl -fsSL https://tasky-flash.vercel.app/agents/install.sh | sh -s -- --uninstall</code></p>
+          </details>
           <button class="btn ghost" id="wz-agent-test" type="button">Show a test card on Tasky</button>
           <p class="wz-status" id="wz-agents-status" role="status"></p>
           <div class="wz-actions"><button class="btn primary" data-skip>Next</button></div>
@@ -317,7 +351,7 @@
             <li>One-press shortcuts: Spotlight, Siri, screenshot, lock</li>
             <li>Plus focus timer, tasks, calendar and weather</li>
           </ul>
-          <a class="small-link" href="https://github.com/arampersand/tasky/blob/main/companion/README.md">How the agent hooks work →</a>
+          <a class="small-link" href="https://github.com/arampersand/tasky/blob/main/companion/README.md">How the Claude Code plugin works →</a>
         </div>
       </article>
     </div>

@@ -47,7 +47,10 @@ class TaskyLink {
           if (!line.startsWith("@tasky ")) continue;
           let msg;
           try { msg = JSON.parse(line.slice(7)); } catch { continue; }
-          this.waiters.shift()?.resolve(msg);
+          // Replies come in order. A request that timed out still owns its
+          // late reply, so it can't be taken for the next command's answer.
+          const w = this.waiters.shift();
+          if (w && !w.abandoned) w.resolve(msg);
         }
       }
     } catch { /* port closed / unplugged */ }
@@ -59,8 +62,7 @@ class TaskyLink {
       const waiter = { resolve, reject };
       this.waiters.push(waiter);
       const timer = setTimeout(() => {
-        const i = this.waiters.indexOf(waiter);
-        if (i >= 0) this.waiters.splice(i, 1);
+        waiter.abandoned = true;  // stays queued: its reply may still arrive
         reject(new Error("timeout"));
       }, timeoutMs);
       const done = (fn) => (v) => { clearTimeout(timer); fn(v); };
@@ -95,6 +97,7 @@ function show(step) {
     li.classList.toggle("current", i === idx);
   }
   if (step === "wifi") scanNetworks();
+  if (step === "github" && $("wz-ghu").value.trim()) lookupGitHub();
   wizard.querySelector(`.wz-step[data-step="${step}"] input:not([type=radio])`)?.focus({ preventScroll: true });
 }
 const next = (from) => show(STEPS[Math.min(STEPS.indexOf(from) + 1, STEPS.length - 1)]);
@@ -115,9 +118,9 @@ async function busy(btn, fn) {
 }
 
 // ---------- Connect ----------
-const older = (v) => {
+const older = (v, min = MIN_VERSION) => {
   const p = String(v).split(".").map(Number);
-  for (let i = 0; i < 3; i++) if ((p[i] || 0) !== MIN_VERSION[i]) return (p[i] || 0) < MIN_VERSION[i];
+  for (let i = 0; i < 3; i++) if ((p[i] || 0) !== min[i]) return (p[i] || 0) < min[i];
   return false;
 };
 
@@ -175,6 +178,7 @@ $("wz-connect").addEventListener("click", (e) => busy(e.currentTarget, async () 
 }));
 
 function prefill(s) {
+  $("wz-wifi-intro").hidden = Boolean(s.wifi?.ssid);  // first time: a friendly hello
   $("wz-ssid").value = s.wifi?.ssid || "";
   if (s.wifi?.connected) setStatus("wz-wifi-status", `Already connected to ${s.wifi.ssid}. Change it below or continue.`, "ok");
   $("wz-ghu").value = s.cfg?.ghu || "";
@@ -220,14 +224,17 @@ function renderScreens(choices, picked) {
 }
 
 // ---------- Agents ----------
-$("wz-copy").addEventListener("click", async () => {
-  try {
-    await navigator.clipboard.writeText($("wz-agents-cmd").textContent);
-    $("wz-copy").textContent = "Copied";
-  } catch {
-    setStatus("wz-agents-status", "Select the command and copy it by hand.", "error");
-  }
-});
+for (const btn of wizard.querySelectorAll("[data-copy]")) {
+  btn.addEventListener("click", async () => {
+    try {
+      await navigator.clipboard.writeText(btn.previousElementSibling.textContent);
+      btn.textContent = "Copied";
+      setTimeout(() => { btn.textContent = "Copy"; }, 2000);
+    } catch {
+      setStatus("wz-agents-status", "Select the command and copy it by hand.", "error");
+    }
+  });
+}
 const testCard = (state) => "TASKY AGENT " + JSON.stringify({ id: "web-test", label: "Test", state, msg: "Hello from the setup page" });
 let testCardTimer = null;
 const removeTestCard = async () => {
@@ -249,7 +256,7 @@ $("wz-disconnect").addEventListener("click", (e) => busy(e.currentTarget, async 
   if (testCardTimer) await removeTestCard();  // don't leave the test card behind
   await link?.close();
   link = null;
-  e.currentTarget.textContent = "Disconnected. Claude Code can use Tasky now.";
+  $("wz-disconnect").textContent = "Disconnected. Claude Code can use Tasky now.";  // e.currentTarget is null after an await
 }));
 
 // ---------- Wi-Fi ----------
@@ -299,13 +306,20 @@ $("wz-wifi-save").addEventListener("click", (e) => busy(e.currentTarget, async (
 // ---------- Simple steps ----------
 const SAVERS = {
   calendar: () => {
-    const cal = $("wz-cal").value.trim().replace(/^webcal:\/\//i, "https://");
+    const cal = calLink();
     if (!cal) return null;
-    if (!/^https?:\/\//i.test(cal)) throw new Error("That doesn't look like a link. It should start with https://");
+    if (/\/embed/i.test(cal) || (/calendar\.google\.com\/calendar\/u\//i.test(cal) && !/\/ical\//i.test(cal))) {
+      throw new Error("That's the web page, not the iCal link — copy the Secret address in iCal format.");
+    }
+    if (!/^https?:\/\/[^/]+\.[^/]+/i.test(cal)) throw new Error("That doesn't look like an iCal link. It should start with https:// or webcal://");
     return { cal };
   },
   tasks: () => ({ tasks: [0, 1, 2].map((i) => $("wz-t" + i).value.trim()) }),
-  github: () => ({ ghu: $("wz-ghu").value.trim().replace(/^@/, "") }),
+  github: async () => {
+    const ghu = ghName();
+    if (ghu && (await lookupGitHub()) === "missing") throw new Error("No GitHub user with that name");
+    return { ghu };
+  },
   ai: () => {
     const key = $("wz-llmkey").value.trim();
     const llm = Number(wizard.querySelector('input[name="wz-llm"]:checked').value);
@@ -337,11 +351,12 @@ for (const btn of wizard.querySelectorAll("[data-save]")) {
   btn.addEventListener("click", () => busy(btn, async () => {
     const statusEl = btn.closest(".wz-step").querySelector(".wz-status");
     try {
-      const payload = SAVERS[step]();
+      const payload = await SAVERS[step]();
       if (payload) {
         const r = await link.set(payload);
         if (!r.ok) throw new Error(r.error || "Tasky didn't accept that");
       }
+      if (payload && AFTER_SAVE[step]?.()) return;  // the step stays open (e.g. to test the calendar)
       next(step);
     } catch (err) {
       if (statusEl) { statusEl.textContent = err.message; statusEl.className = "wz-status error"; }
@@ -349,6 +364,123 @@ for (const btn of wizard.querySelectorAll("[data-save]")) {
     }
   }));
 }
+
+// ---------- Calendar ----------
+// Pasted links often carry spaces or line breaks; webcal:// is https:// for Tasky.
+const calLink = () => $("wz-cal").value.replace(/\s+/g, "").replace(/^webcal:\/\//i, "https://");
+
+for (const radio of wizard.querySelectorAll('input[name="wz-calprov"]')) {
+  radio.addEventListener("change", () => {
+    for (const ol of wizard.querySelectorAll(".wz-guide")) ol.hidden = ol.dataset.prov !== radio.value;
+  });
+}
+
+const AFTER_SAVE = {
+  // Firmware 2.13+ can fetch the calendar right away: offer a test before moving on.
+  calendar: () => {
+    if (older(state.v, [2, 13, 0])) return false;
+    setStatus("wz-cal-status", "Saved ✓ Test it, or continue.", "ok");
+    $("wz-caltest").hidden = false;
+    wizard.querySelector('.wz-step[data-step="calendar"] [data-skip]').textContent = "Next";
+    return true;
+  },
+};
+
+$("wz-caltest").addEventListener("click", (e) => busy(e.currentTarget, async () => {
+  setStatus("wz-cal-status", "Tasky is downloading your calendar…");
+  try {
+    const r = await link.send("TASKY CALTEST", 75000);  // a big calendar takes a while
+    if (!r.ok) { setStatus("wz-cal-status", r.error || "Tasky couldn't read that calendar.", "error"); return; }
+    const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
+    const nextUp = r.next ? ` Next: ${r.next}${r.nextTime ? ` at ${r.nextTime}` : ""}` : "";
+    setStatus("wz-cal-status", `Found ${plural(r.events ?? 0, "event")} this month (${r.today ?? 0} today).${nextUp} ✓`, "ok");
+  } catch {
+    setStatus("wz-cal-status", "Tasky didn't answer in 30 seconds. Check it's on Wi-Fi, then try again.", "error");
+  }
+}));
+
+// ---------- GitHub ----------
+// Preview only: a profile card and the last 12 weeks of public events. API data
+// goes into the page with textContent / setAttribute, never as HTML.
+const ghName = () => $("wz-ghu").value.trim().replace(/^@/, "");
+const ghCache = new Map();  // name -> Promise<user | null>; null = no such user (60 API calls/hour without a token)
+const GH_GREENS = ["#161b22", "#0e4429", "#006d32", "#26a641", "#39d353"];
+
+async function ghFetch(path) {
+  const r = await fetch("https://api.github.com/" + path, { headers: { Accept: "application/vnd.github+json" } });
+  if (r.status === 404) return null;
+  if (!r.ok) throw new Error(`GitHub ${r.status}`);
+  return r.json();
+}
+
+// Resolves to "ok", "missing" or "unknown" (offline, rate-limited: never blocks saving).
+async function lookupGitHub() {
+  const name = ghName();
+  if (!/^[a-z\d][a-z\d-]{0,38}$/i.test(name)) {  // GitHub's username rules
+    $("wz-gh-user").hidden = $("wz-gh-activity").hidden = true;
+    if (!name) return "unknown";
+    setStatus("wz-github-status", "No GitHub user with that name", "error");
+    return "missing";
+  }
+  if (!ghCache.has(name)) ghCache.set(name, ghFetch("users/" + encodeURIComponent(name)));
+  let user;
+  try { user = await ghCache.get(name); } catch { ghCache.delete(name); return "unknown"; }
+  if (name !== ghName()) return user ? "ok" : "missing";  // the user kept typing: don't render a stale answer
+  $("wz-gh-user").hidden = !user;
+  $("wz-gh-activity").hidden = true;
+  if (!user) {
+    setStatus("wz-github-status", "No GitHub user with that name", "error");
+    return "missing";
+  }
+  setStatus("wz-github-status", "");
+  const avatar = $("wz-gh-avatar");
+  if (/^https:\/\//.test(user.avatar_url || "")) avatar.setAttribute("src", user.avatar_url);
+  else avatar.removeAttribute("src");
+  $("wz-gh-name").textContent = user.name || user.login;
+  $("wz-gh-login").textContent = "@" + user.login;
+  showActivity(user.login);
+  return "ok";
+}
+
+async function showActivity(login) {
+  let events;
+  try { events = await ghFetch(`users/${encodeURIComponent(login)}/events/public?per_page=100`); } catch { return; }
+  if (!Array.isArray(events) || login.toLowerCase() !== ghName().toLowerCase()) return;
+  const dayKey = (d) => `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
+  const counts = new Map();
+  for (const ev of events) {
+    const n = ev.type === "PushEvent" ? Number(ev.payload?.size ?? ev.payload?.commits?.length ?? 1) || 1 : 1;
+    const k = dayKey(new Date(ev.created_at));
+    counts.set(k, (counts.get(k) || 0) + n);
+  }
+  // 12 columns (weeks, oldest first) x 7 rows (Sunday on top), ending today.
+  const today = new Date();
+  const days = [];
+  for (const d = new Date(today.getFullYear(), today.getMonth(), today.getDate() - today.getDay() - 77); d <= today; d.setDate(d.getDate() + 1)) {
+    days.push([d.toLocaleDateString(), counts.get(dayKey(d)) || 0]);
+  }
+  const max = Math.max(1, ...days.map(([, c]) => c));
+  const grid = $("wz-gh-grid");
+  grid.textContent = "";
+  let total = 0;
+  for (const [date, c] of days) {
+    total += c;
+    const cell = document.createElement("span");
+    cell.style.background = GH_GREENS[c ? Math.ceil((c / max) * 4) : 0];
+    cell.setAttribute("title", `${c} on ${date}`);
+    grid.append(cell);
+  }
+  grid.setAttribute("aria-label", `${total} public contributions in the last 12 weeks`);
+  $("wz-gh-activity").hidden = false;
+}
+
+let ghTimer = null;
+$("wz-ghu").addEventListener("input", () => {
+  clearTimeout(ghTimer);
+  setStatus("wz-github-status", "");
+  if (!ghName()) { $("wz-gh-user").hidden = $("wz-gh-activity").hidden = true; return; }
+  ghTimer = setTimeout(lookupGitHub, 500);
+});
 
 // ---------- Weather location ----------
 let coords = null;
@@ -365,5 +497,23 @@ $("wz-locate").addEventListener("click", () => {
     { timeout: 10000 },
   );
 });
+
+// ---------- After flashing: on to setup ----------
+// ESP Web Tools adds an <ewt-install-dialog> to <body> and fires "closed" on it.
+// Its install state is internal: if we can't read it, assume the flash went well.
+new MutationObserver((records) => {
+  for (const r of records) for (const el of r.addedNodes) {
+    if (el.localName !== "ewt-install-dialog") continue;
+    el.addEventListener("closed", () => {
+      const knows = "_installState" in el;
+      if ((knows && el._installState?.state !== "finished") || link || !("serial" in navigator)) return;
+      setTimeout(() => {  // the dialog restores page scrolling right after "closed"
+        $("setup").scrollIntoView({ behavior: "smooth", block: "start" });
+        $("wz-connect").focus({ preventScroll: true });
+        setStatus("wz-connect-status", "Now set it up: click Connect Tasky", "ok");
+      }, 50);
+    }, { once: true });
+  }
+}).observe(document.body, { childList: true });
 
 show("connect");

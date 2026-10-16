@@ -1,0 +1,15 @@
+{
+  "name": "tasky",
+  "description": "Tasky, the open-source desk gadget: see your Claude Code sessions and answer permission prompts with a knob",
+  "owner": {
+    "name": "arampersand",
+    "url": "https://github.com/arampersand"
+  },
+  "plugins": [
+    {
+      "name": "tasky",
+      "source": "./claude-plugin",
+      "description": "Shows each Claude Code session on your Tasky and lets you allow or deny permission prompts with its knob"
+    }
+  ]
+}
