@@ -135,6 +135,14 @@ pre { white-space: pre-wrap; word-break: break-word; color: #b4bccb; max-height:
 .seg input:checked + span { background: var(--teal); color: #03211e; }
 .seg input:focus-visible + span { outline: 2px solid var(--blue); }
 #wz-locate { margin-bottom: 14px; }
+.wz-field textarea { font: 500 15px Inter, sans-serif; color: var(--text); background: #0a0f1d; border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; outline: none; resize: vertical; }
+.wz-field textarea:focus { border-color: var(--teal); box-shadow: 0 0 0 3px rgba(41, 203, 189, .15); }
+.wz-screens { list-style: none; padding: 0; margin: 0 0 14px; display: grid; gap: 6px; }
+.wz-screen { display: flex; align-items: center; gap: 6px; padding: 6px 8px 6px 12px; border-radius: 10px; border: 1px solid var(--line); background: #0a0f1d; }
+.wz-screen:has(input:checked) { border-color: var(--teal); background: rgba(41, 203, 189, .08); }
+.wz-screen label { flex: 1; display: flex; align-items: center; gap: 10px; font-weight: 600; cursor: pointer; }
+.wz-move { width: 32px; height: 32px; border-radius: 8px; border: 1px solid var(--line); background: transparent; color: var(--text); cursor: pointer; }
+.wz-move:hover, .wz-move:focus-visible { border-color: var(--teal); }
 .wz-tips { padding-left: 20px; color: #b4bccb; }
 .wz-tips li { margin: 6px 0; }
 .after-note { margin-top: 18px; }

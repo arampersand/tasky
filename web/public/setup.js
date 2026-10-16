@@ -2,7 +2,7 @@
 // firmware/tasky/usb_setup.h ("TASKY?", "TASKY SCAN", "TASKY SET {json}").
 // Replies start with "@tasky "; everything else on the port is debug log.
 
-let STEPS = ["connect", "wifi", "calendar", "tasks", "github", "ai", "place", "light", "done"];
+let STEPS = ["connect", "wifi", "calendar", "tasks", "github", "ai", "place", "screens", "phrases", "light", "done"];
 const MIN_VERSION = [2, 6, 0];
 
 const $ = (id) => document.getElementById(id);
@@ -143,6 +143,11 @@ $("wz-connect").addEventListener("click", (e) => busy(e.currentTarget, async () 
     time: Math.floor(Date.now() / 1000),
   }).catch(() => {});
   prefill(state);
+  if (!state.cfg?.screenChoices) {
+    // Firmware older than 2.11 has a fixed carousel and built-in phrases
+    STEPS = STEPS.filter((s) => s !== "screens" && s !== "phrases");
+    for (const id of ["screens", "phrases"]) wizard.querySelector(`.wz-progress li[data-step="${id}"]`).hidden = true;
+  }
   if (state.cfg?.light === undefined) {
     // Firmware older than 2.8 has a single light type
     STEPS = STEPS.filter((s) => s !== "light");
@@ -168,8 +173,39 @@ function prefill(s) {
   if (s.cfg?.llmKey) $("wz-llmkey").placeholder = "Saved. Paste a new key to replace it";
   const prov = wizard.querySelector(`input[name="wz-llm"][value="${s.cfg?.llm ?? 1}"]`);
   if (prov) prov.checked = true;
+  if (s.cfg?.screenChoices) renderScreens(s.cfg.screenChoices, s.cfg.screens || []);
+  $("wz-phrases").value = (s.cfg?.phrases || []).join("\n");
   const light = wizard.querySelector(`input[name="wz-light"][value="${s.cfg?.light ?? 0}"]`);
   if (light) light.checked = true;
+}
+
+// ---------- Screens ----------
+// Picked screens first (in their order), then the rest unticked. ↑/↓ reorder.
+function renderScreens(choices, picked) {
+  const box = $("wz-screens");
+  box.textContent = "";
+  const ids = [...picked, ...choices.map((c) => c.id).filter((id) => !picked.includes(id))];
+  for (const id of ids) {
+    const choice = choices.find((c) => c.id === id);
+    if (!choice) continue;
+    const li = Object.assign(document.createElement("li"), { className: "wz-screen" });
+    li.dataset.id = id;
+    const label = document.createElement("label");
+    const box_ = Object.assign(document.createElement("input"), { type: "checkbox", checked: picked.includes(id) });
+    label.append(box_, Object.assign(document.createElement("span"), { textContent: choice.label }));
+    const move = (dir, text) => {
+      const b = Object.assign(document.createElement("button"), { type: "button", className: "wz-move", textContent: text });
+      b.setAttribute("aria-label", `Move ${choice.label} ${dir}`);
+      b.addEventListener("click", () => {
+        if (dir === "up" && li.previousElementSibling) box.insertBefore(li, li.previousElementSibling);
+        if (dir === "down" && li.nextElementSibling) box.insertBefore(li.nextElementSibling, li);
+        b.focus();
+      });
+      return b;
+    };
+    li.append(label, move("up", "↑"), move("down", "↓"));
+    box.append(li);
+  }
 }
 
 // ---------- Wi-Fi ----------
@@ -230,6 +266,18 @@ const SAVERS = {
     const key = $("wz-llmkey").value.trim();
     const llm = Number(wizard.querySelector('input[name="wz-llm"]:checked').value);
     return key ? { llm, llmKey: key } : { llm };
+  },
+  screens: () => ({
+    screens: [...$("wz-screens").children].filter((li) => li.querySelector("input").checked).map((li) => li.dataset.id),
+  }),
+  phrases: () => {
+    // The screen font is plain ASCII: "Mañana sí" becomes "Manana si"
+    const ascii = (p) => p.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^\x20-\x7e]/g, "").replace(/ {2,}/g, " ").trim();
+    const list = $("wz-phrases").value.split("\n").map(ascii).filter(Boolean);
+    if (list.length > 12) throw new Error(`Up to 12 phrases (you have ${list.length}).`);
+    const long = list.find((p) => p.length > 60);
+    if (long) throw new Error(`"${long.slice(0, 24)}…" is longer than 60 characters.`);
+    return { phrases: list };  // empty = back to the built-in phrases
   },
   light: () => ({ light: Number(wizard.querySelector('input[name="wz-light"]:checked').value) }),
   place: () => {

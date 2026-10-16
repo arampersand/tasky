@@ -15,6 +15,7 @@ class TaskyNetManager;
 //   TASKY SET {json}  -> @tasky {"ok":true}   keys: ssid pass tz time cal ghu
 //                                                   llm llmKey city lat lon tasks
 //                                                   light (0 = LED, 1 = RGB bar)
+//                                                   screens ["timer",..] phrases [".."]
 //
 // Replies start with "@tasky " so the page can ignore regular debug logs.
 // Secrets are write-only: TASKY? only reports whether they are set.

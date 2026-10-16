@@ -1,11 +1,15 @@
 #include "usb_setup.h"
 #include "config_features.h"
 #include "network_manager.h"
+#include "screens.h"
 #include "version.h"
 #include <ArduinoJson.h>
 #include <WiFi.h>
 
-static const size_t MAX_LINE = 1024;
+static const int MAX_PHRASES = 12;          // 12 x 60 chars fits one SET line
+static const unsigned MAX_PHRASE_LEN = 60;  // up to 4 lines on the Phrases screen
+
+static const size_t MAX_LINE = 2048;
 
 static void reply(const JsonDocument &doc) {
   Serial.print("@tasky ");
@@ -66,6 +70,33 @@ void UsbSetup::sendStatus() {
   cfg["city"] = model->cfg.weatherCity;
   cfg["tz"] = model->cfg.timezone;
   cfg["light"] = model->cfg.ledType;
+  // Carousel: what this edition offers and what's picked (Home is implied)
+  JsonArray choices = cfg["screenChoices"].to<JsonArray>();
+  for (int i = 1; i < SCREEN_DEFS_N; i++) {
+    JsonObject c = choices.add<JsonObject>();
+    c["id"] = SCREEN_DEFS[i].id;
+    c["label"] = SCREEN_DEFS[i].label;
+  }
+  JsonArray screens = cfg["screens"].to<JsonArray>();
+  String list = model->cfg.screens.length() ? model->cfg.screens : String(defaultCarousel());
+  for (int pos = 0; pos < (int)list.length();) {
+    int comma = list.indexOf(',', pos);
+    if (comma < 0)
+      comma = list.length();
+    String id = list.substring(pos, comma);
+    pos = comma + 1;
+    if (id != "home" && findScreen(id))
+      screens.add(id);
+  }
+  JsonArray phrases = cfg["phrases"].to<JsonArray>();
+  const String &p = model->cfg.phrases;
+  for (int pos = 0; p.length() && pos <= (int)p.length();) {
+    int nl = p.indexOf('\n', pos);
+    if (nl < 0)
+      nl = p.length();
+    phrases.add(p.substring(pos, nl));
+    pos = nl + 1;
+  }
   JsonArray tasks = cfg["tasks"].to<JsonArray>();
   for (int i = 0; i < 3; i++)
     tasks.add(model->tasks[i]);
@@ -142,6 +173,30 @@ void UsbSetup::applySet(const String &json) {
   if (doc["light"].is<int>()) {
     model->cfg.ledType = doc["light"].as<int>() == 1 ? 1 : 0;
     lightSet = true;
+  }
+  if (doc["screens"].is<JsonArrayConst>()) {
+    String list = "home";
+    for (JsonVariantConst v : doc["screens"].as<JsonArrayConst>()) {
+      String id = v.as<String>();
+      if (id != "home" && findScreen(id))
+        list += "," + id;
+    }
+    model->cfg.screens = list;
+  }
+  if (doc["phrases"].is<JsonArrayConst>()) {
+    String all;
+    int n = 0;
+    for (JsonVariantConst v : doc["phrases"].as<JsonArrayConst>()) {
+      String ph = v.as<String>();
+      ph.replace("\n", " ");
+      ph.trim();
+      if (ph.length() == 0 || n == MAX_PHRASES)
+        continue;
+      if (ph.length() > MAX_PHRASE_LEN)
+        ph = ph.substring(0, MAX_PHRASE_LEN);
+      all += (n++ ? "\n" : "") + ph;
+    }
+    model->cfg.phrases = all;  // empty list = back to the built-in phrases
   }
   if (doc["tasks"].is<JsonArrayConst>()) {
     JsonArrayConst tasks = doc["tasks"].as<JsonArrayConst>();

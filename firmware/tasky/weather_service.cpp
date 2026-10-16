@@ -161,6 +161,7 @@ void WeatherService::forceUpdate() {
   if (response.length() > 0) {
     parseResponse(response);
     lastUpdate = millis();  // Only set on success - retry quickly on failure
+    fetches++;
   } else {
     Serial.println("[Weather] Failed to fetch - will retry in 30s");
     dataValid = false;

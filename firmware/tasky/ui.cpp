@@ -867,11 +867,15 @@ void TaskyUI::drawTaskDetail(int index) {
 }
 
 void TaskyUI::drawStreak() {
-  tft.fillScreen(C_BG);
-  // No frame - cleaner look
-
-  centerTextFont("STREAK", 34, C_TEXT, &FreeSansBold12pt7b);
-  tft.drawFastHLine(40, 46, 160, C_LINE);
+  // Already on screen: repaint the old and new cursor cells, and the stats
+  // only if they changed
+  bool full = !baseDrawn;
+  baseDrawn = true;
+  if (full) {
+    tft.fillScreen(C_BG);
+    centerTextFont("STREAK", 34, C_TEXT, &FreeSansBold12pt7b);
+    tft.drawFastHLine(40, 46, 160, C_LINE);
+  }
 
   // 6 rows x 14 cols - smaller squares for circular display
   int sz = 12;
@@ -887,9 +891,13 @@ void TaskyUI::drawStreak() {
   for (int r = 0; r < STREAK_ROWS; r++) {
     for (int c = 0; c < STREAK_COLS; c++) {
       int idx = r * STREAK_COLS + c;
+      if (!full && idx != model->streakCursor && idx != lastListSel)
+        continue;
 
       int x = gx + c * (sz + gap);
       int y = gy + r * (sz + gap);
+      if (!full)
+        tft.fillRect(x - 2, y - 2, sz + 4, sz + 4, C_BG);
 
       tft.fillRoundRect(x, y, sz, sz, 2, streakColor(model->streak[idx]));
 
@@ -904,10 +912,19 @@ void TaskyUI::drawStreak() {
     yield();
   }
 
+  lastListSel = model->streakCursor;
+
   // Streak statistics
   int currentStreak = model->calculateCurrentStreak();
   int bestStreak = model->cfg.bestStreak;
   int totalActive = model->calculateTotalActiveDays();
+  static int shownStats = -1;
+  int statsKey = (currentStreak << 20) | (bestStreak << 10) | totalActive;
+  if (!full && statsKey == shownStats)
+    return;
+  shownStats = statsKey;
+  if (!full)
+    tft.fillRect(14, 148, 212, 68, C_BG);
 
   // Current streak (consecutive days)
   char statBuf[32];
@@ -929,10 +946,10 @@ uint16_t TaskyUI::streakColor(uint8_t v) {
   if (v == 0)
     return C_LINE;
   if (v == 1)
-    return 0x1B45; // Dark Blue
+    return 0x0366; // GitHub greens: #006d32
   if (v == 2)
-    return 0x2E47; // Med Blue
-  return C_GREEN;
+    return 0x2528; // #26a641
+  return 0x3E8A;   // #39d353
 }
 
 uint16_t TaskyUI::calendarDayColor(uint8_t eventCount) {
@@ -1103,6 +1120,104 @@ static const char *const PHRASES[] = {
 };
 static const int PHRASES_N = sizeof(PHRASES) / sizeof(PHRASES[0]);
 
+// Your own phrases (web setup, one per line) replace the built-in ones
+int TaskyUI::phraseCount() {
+  const String &p = model->cfg.phrases;
+  if (p.length() == 0)
+    return PHRASES_N;
+  int n = 1;
+  for (unsigned i = 0; i < p.length(); i++)
+    if (p[i] == '\n')
+      n++;
+  return n;
+}
+
+String TaskyUI::phraseAt(int idx) {
+  int n = phraseCount();
+  idx = ((idx % n) + n) % n;
+  const String &p = model->cfg.phrases;
+  if (p.length() == 0)
+    return PHRASES[idx];
+  int start = 0;
+  for (int k = 0; k < idx; k++)
+    start = p.indexOf('\n', start) + 1;
+  int end = p.indexOf('\n', start);
+  return p.substring(start, end < 0 ? p.length() : end);
+}
+
+int TaskyUI::wrapText(const String &s, int maxW, const GFXfont *font,
+                      String lines[], int maxLines) {
+  tft.setFont(font);
+  int16_t x1, y1;
+  uint16_t w, h;
+  int n = 0;
+  String line;
+  int pos = 0;
+  while (pos <= (int)s.length()) {
+    int sp = s.indexOf(' ', pos);
+    if (sp < 0)
+      sp = s.length();
+    String word = s.substring(pos, sp);
+    pos = sp + 1;
+    if (word.length() == 0)
+      continue;
+    String trial = line.length() ? line + " " + word : word;
+    tft.getTextBounds(trial, 0, 0, &x1, &y1, &w, &h);
+    if ((int)w <= maxW || line.length() == 0) {
+      line = trial;
+      continue;
+    }
+    if (n == maxLines) {
+      tft.setFont();
+      return -1;
+    }
+    lines[n++] = line;
+    line = word;
+  }
+  if (line.length()) {
+    if (n == maxLines) {
+      tft.setFont();
+      return -1;
+    }
+    lines[n++] = line;
+  }
+  tft.setFont();
+  return n;
+}
+
+// Phrases screen: one phrase, as big as it fits, centered
+void TaskyUI::drawPhrase(int idx) {
+  bool full = !baseDrawn;
+  baseDrawn = true;
+  if (full) {
+    tft.fillScreen(C_BG);
+    centerTextFont("\"", 52, C_TEAL, &FreeSansBold24pt7b);
+  } else {
+    tft.fillRect(0, 62, W, 168, C_BG);  // text + counter, keep the quote mark
+  }
+  String phrase = phraseAt(idx);
+  String lines[5];
+  const GFXfont *font = &FreeSansBold18pt7b;
+  int lineH = 36;
+  int n = wrapText(phrase, 200, font, lines, 3);
+  if (n < 0) {  // long phrase: smaller type, up to 5 lines
+    font = &FreeSansBold12pt7b;
+    lineH = 26;
+    n = wrapText(phrase, 200, font, lines, 5);
+    if (n < 0) {  // still too long: last line gets cut with ".."
+      n = 5;
+      lines[4] = fitText(lines[4] + "...", 200, font);
+    }
+  }
+  int top = 128 - (n * lineH) / 2 + lineH - 8;  // baseline of the first line
+  for (int i = 0; i < n; i++)
+    centerTextFont(lines[i].c_str(), top + i * lineH, C_TEXT, font);
+  char buf[12];
+  int count = phraseCount();
+  snprintf(buf, sizeof(buf), "%d / %d", ((idx % count) + count) % count + 1, count);
+  centerTextFont(buf, 222, C_MUTED, &FreeSans9pt7b);
+}
+
 void TaskyUI::drawAmbientClock() {
   char buf[6] = "--:--";
   struct tm t;
@@ -1125,9 +1240,9 @@ void TaskyUI::drawAmbientPhrase() {
   struct tm t;
   uint32_t slot = model->localNow(t) ? (uint32_t)(t.tm_yday * 720 + (t.tm_hour * 60 + t.tm_min) / 2)
                                      : millis() / 120000UL;
-  const char *phrase = (millis() < 60000UL && !model->hasCurrentTask())
-                           ? "Press the knob to focus"  // first-minute hint
-                           : PHRASES[slot % PHRASES_N];
+  String phrase = (millis() < 60000UL && !model->hasCurrentTask())
+                      ? String("Press the knob to focus")  // first-minute hint
+                      : phraseAt(slot);
   tft.fillRect(0, 204, W, 26, C_BG);
   if (statusLine.length())
     centerTextFont(fitText(statusLine, 200, &FreeSans9pt7b).c_str(), 222,

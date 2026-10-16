@@ -2,6 +2,18 @@
 
 All notable changes to the Tasky firmware. Versions match `firmware/tasky/version.h` and git tags.
 
+## v2.11.0 — 2026-10-16 · Your screens & phrases
+
+### Added
+- **Pick your screens**: the web setup's new **Screens** step chooses which screens MODE cycles through and in what order (Home first, More last). Everything else is listed in More. Tasky reports the screens its edition has (`screenChoices` in `TASKY?`), and `TASKY SET {"screens":[...]}` saves them.
+- **Phrases screen**: one phrase at a time, big and centered. Turn to browse, press for a random one, and it changes by itself every minute.
+- **Your own phrases**: the web setup's **Phrases** step (up to 12) replaces the built-in phrases on Home and on the Phrases screen.
+- Weather and Streak are in the carousel by default.
+
+### Changed
+- Streak uses GitHub's greens and repaints only the cells that change.
+- Weather redraws by itself when new data arrives.
+
 ## v2.10.0 — 2026-10-16 · Smooth knob & screens
 
 ### Fixed

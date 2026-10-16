@@ -31,6 +31,8 @@ void TaskyModel::load() {
   cfg.screenBright = pref.getUChar("bl", 200);
   cfg.ledBright = pref.getUChar("led", 180);
   cfg.ledType = pref.getUChar("ledT", 0);
+  cfg.screens = pref.getString("scr", "");
+  cfg.phrases = pref.getString("phr", "");
   cfg.soundOn = pref.getBool("snd", true);
   cfg.darkMode = pref.getBool("dark", true);
   cfg.totalFocusMin = pref.getUInt("focus", 0);
@@ -180,6 +182,8 @@ void TaskyModel::save() {
   pref.putUChar("bl", cfg.screenBright);
   pref.putUChar("led", cfg.ledBright);
   pref.putUChar("ledT", cfg.ledType);
+  pref.putString("scr", cfg.screens);
+  pref.putString("phr", cfg.phrases);
   pref.putBool("snd", cfg.soundOn);
   pref.putBool("dark", cfg.darkMode);
   pref.putUInt("focus", cfg.totalFocusMin);

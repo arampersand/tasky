@@ -5,6 +5,7 @@
 #include "ota_service.h"
 #include "usb_setup.h"
 #include "encoder.h"
+#include "screens.h"
 #if FEATURE_BLE_HID
 #include "ble_hid.h"
 #endif
@@ -265,44 +266,61 @@ ModeClickType modeClickType() {
 }
 
 // ==================== NAVIGATION & HANDLERS ====================
-// MODO cycles through the everyday screens; everything else lives in More.
-#if TASKY_EDITION_AGENTS
-static const Screen CAROUSEL[] = {SCR_HOME,  SCR_AGENTS, SCR_CONTROLS, SCR_TIMER,
-                                  SCR_TASKS, SCR_AGENDA, SCR_MORE};
-#else
-static const Screen CAROUSEL[] = {SCR_HOME,   SCR_TIMER, SCR_TASKS,
-                                  SCR_AGENDA, SCR_STATS, SCR_MORE};
-#endif
-static const int CAROUSEL_N = sizeof(CAROUSEL) / sizeof(CAROUSEL[0]);
+// MODE cycles through the carousel you picked in the web setup (Home first,
+// More last); every other screen is listed in More (screens.cpp).
+const int MAX_MENU = 24;
+static Screen carousel[MAX_MENU];
+static int carouselN = 0;
+static Screen moreScreens[MAX_MENU];
+static const char *moreLabels[MAX_MENU];
+static int moreN = 0;
 
-struct MoreItem {
-  const char *label;
-  Screen screen;
+// System entries always at the end of More
+static const ScreenDef MORE_SYSTEM[] = {
+    {"update", "Update", SCR_UPDATE},
+    {"qr", "Setup (QR)", SCR_QR},
+    {"settings", "Settings", SCR_SETTINGS},
+    {"tour", "Tour", SCR_TOUR},
 };
-static const MoreItem MORE_ITEMS[] = {
-    {"Focus", SCR_FOCUS},
-    {"Calendar", SCR_CALENDAR},
-    {"Streak", SCR_STREAK},
-#if FEATURE_WEATHER
-    {"Weather", SCR_WEATHER},
-#endif
-#if FEATURE_LLM
-    {"Agent", SCR_AGENT},
-#endif
-#if FEATURE_SPOTIFY
-    {"Music", SCR_SPOTIFY},
-#endif
-    {"Update", SCR_UPDATE},
-    {"Setup (QR)", SCR_QR},
-    {"Settings", SCR_SETTINGS},
-    {"Tour", SCR_TOUR},
-};
-static const int MORE_N = sizeof(MORE_ITEMS) / sizeof(MORE_ITEMS[0]);
-static const char *moreLabels[MORE_N];
+
+void rebuildMenus() {
+  const String &list = model.cfg.screens.length() ? model.cfg.screens
+                                                  : String(defaultCarousel());
+  bool inCarousel[MAX_MENU] = {};
+  carouselN = 0;
+  carousel[carouselN++] = SCR_HOME;
+  inCarousel[0] = true;  // SCREEN_DEFS[0] is Home
+  int pos = 0;
+  while (pos < (int)list.length() && carouselN < MAX_MENU - 1) {
+    int comma = list.indexOf(',', pos);
+    if (comma < 0)
+      comma = list.length();
+    const ScreenDef *def = findScreen(list.substring(pos, comma));
+    pos = comma + 1;
+    if (!def || inCarousel[def - SCREEN_DEFS])
+      continue;  // unknown in this edition, or listed twice
+    inCarousel[def - SCREEN_DEFS] = true;
+    carousel[carouselN++] = def->screen;
+  }
+  carousel[carouselN++] = SCR_MORE;
+
+  moreN = 0;
+  for (int i = 0; i < SCREEN_DEFS_N; i++)
+    if (!inCarousel[i]) {
+      moreScreens[moreN] = SCREEN_DEFS[i].screen;
+      moreLabels[moreN++] = SCREEN_DEFS[i].label;
+    }
+  for (const ScreenDef &d : MORE_SYSTEM) {
+    moreScreens[moreN] = d.screen;
+    moreLabels[moreN++] = d.label;
+  }
+  if (ui.moreSel >= moreN)
+    ui.moreSel = 0;
+}
 
 static int carouselIndex(Screen s) {
-  for (int i = 0; i < CAROUSEL_N; i++)
-    if (CAROUSEL[i] == s)
+  for (int i = 0; i < carouselN; i++)
+    if (carousel[i] == s)
       return i;
   return -1;
 }
@@ -324,12 +342,12 @@ void goTo(Screen next) {
 // Screens opened from More return to More with MODO (either direction)
 void navigateNext() {
   int i = carouselIndex(screen);
-  goTo(i < 0 ? SCR_MORE : CAROUSEL[(i + 1) % CAROUSEL_N]);
+  goTo(i < 0 ? SCR_MORE : carousel[(i + 1) % carouselN]);
 }
 
 void navigatePrev() {
   int i = carouselIndex(screen);
-  goTo(i < 0 ? SCR_MORE : CAROUSEL[(i + CAROUSEL_N - 1) % CAROUSEL_N]);
+  goTo(i < 0 ? SCR_MORE : carousel[(i + carouselN - 1) % carouselN]);
 }
 
 void handleTimer(int step, EncClickType click) {
@@ -499,10 +517,22 @@ void handleCalendar(int step, EncClickType click) {
   }
 }
 
+// Changes when GitHub sync or midnight rewrites the grid behind our back
+static uint32_t streakChecksum() {
+  uint32_t sum = model.currentDayIndex;
+  for (int i = 0; i < STREAK_N; i++)
+    sum = sum * 31 + model.streak[i];
+  return sum;
+}
+
 void handleStreak(int step, EncClickType click) {
+  static uint32_t shownSum = 0;
+  if (ui.baseDrawn && streakChecksum() != shownSum)
+    ui.baseDrawn = false;  // the grid changed elsewhere: repaint it all
   if (!ui.baseDrawn) {
     ui.drawStreak();
     ui.baseDrawn = true;
+    shownSum = streakChecksum();
   }
   if (step != 0) {
     model.streakCursor = constrain(model.streakCursor + step, 0, STREAK_N - 1);
@@ -515,6 +545,28 @@ void handleStreak(int step, EncClickType click) {
         (model.streak[model.streakCursor] + 1) % 4;
     model.save();
     ui.drawStreak();
+    shownSum = streakChecksum();
+  }
+}
+
+// Phrases: turn = previous/next, press = a random one. Moves on by itself
+// every minute while you just look at it.
+int phraseIdx = 0;
+void handlePhrases(int step, EncClickType click) {
+  static uint32_t shownAt = 0;
+  int before = phraseIdx;
+  if (step != 0)
+    phraseIdx += step;
+  if (click == ENC_SHORT) {
+    ui.uiTick(true);
+    phraseIdx += 1 + random(max(1, ui.phraseCount() - 1));
+  }
+  if (millis() - shownAt > 60000UL)
+    phraseIdx++;
+  if (!ui.baseDrawn || phraseIdx != before) {
+    phraseIdx = ((phraseIdx % ui.phraseCount()) + ui.phraseCount()) % ui.phraseCount();
+    ui.drawPhrase(phraseIdx);
+    shownAt = millis();
   }
 }
 
@@ -656,16 +708,16 @@ void handleFocus(int step, EncClickType click) {
 
 void handleMore(int step, EncClickType click) {
   if (!ui.baseDrawn) {
-    ui.drawMore(moreLabels, MORE_N);
+    ui.drawMore(moreLabels, moreN);
     ui.baseDrawn = true;
   }
   if (step != 0) {
-    ui.moreSel = (ui.moreSel + step + MORE_N) % MORE_N;
-    ui.drawMore(moreLabels, MORE_N);
+    ui.moreSel = (ui.moreSel + step + moreN) % moreN;
+    ui.drawMore(moreLabels, moreN);
   }
   if (click == ENC_SHORT) {
     ui.uiTick(true);
-    goTo(MORE_ITEMS[ui.moreSel].screen);
+    goTo(moreScreens[ui.moreSel]);
   }
 }
 
@@ -800,6 +852,8 @@ const char *hintFor(Screen s) {
   case SCR_CALENDAR: return "Turn: day  Press: open";
   case SCR_STREAK:   return "Turn: day  Press: mark";
   case SCR_SETTINGS: return "Press: edit  Turn: change";
+  case SCR_PHRASES:  return "Turn: next  Press: random";
+  case SCR_WEATHER:  return "Press: refresh";
 #if FEATURE_AGENTS
   case SCR_AGENTS:   return "Press: seen  Hold: clear";
 #endif
@@ -1017,6 +1071,11 @@ void handleAgenda(int step, EncClickType click) {
 
 #if FEATURE_WEATHER
 void handleWeather(int step, EncClickType click) {
+  static uint32_t shownUpdate = 0;
+  if (weather.fetchCount() != shownUpdate) {  // new data arrived: show it
+    shownUpdate = weather.fetchCount();
+    ui.baseDrawn = false;
+  }
   if (!ui.baseDrawn) {
     ui.drawWeather(
       weather.temperature,
@@ -1346,8 +1405,7 @@ void setup() {
 #endif
   ota.begin();
 
-  for (int i = 0; i < MORE_N; i++)
-    moreLabels[i] = MORE_ITEMS[i].label;
+  rebuildMenus();
   lastInputAt = millis();
 
   screen = loadTourAndHints() ? SCR_TOUR : SCR_HOME;
@@ -1361,6 +1419,7 @@ void setup() {
   usbSetup.onCommand = handleAgentCommand;
 #endif
   usbSetup.onChanged = []() {
+    rebuildMenus();  // the carousel may have changed
     if (usbSetup.lightSet) {  // switch driver and blink so the user sees it work
       usbSetup.lightSet = false;
       initLight();
@@ -1374,8 +1433,7 @@ void setup() {
 #if FEATURE_CALENDAR
     calendar.requestRefresh();
 #endif
-    if (screen == SCR_HOME)
-      ui.baseDrawn = false;  // show the new setup right away
+    ui.baseDrawn = false;  // show the new setup (and menus) right away
   };
   Serial.println("Setup complete.");
 }
@@ -1529,7 +1587,8 @@ void loop() {
   bool sessionActive = model.st.running || model.st.finished;
   bool idleAllowed = !sessionActive && screen != SCR_UPDATE &&
                      screen != SCR_QR && screen != SCR_WIFI_INFO &&
-                     screen != SCR_HOME;  // Home already is the calm screen
+                     screen != SCR_HOME &&  // Home already is the calm screen
+                     screen != SCR_PHRASES;
   if (modeClick == MODE_LONG) {
     if (idleAllowed)
       enterAmbient();
@@ -1591,6 +1650,9 @@ void loop() {
     break;
   case SCR_STATS:
     handleStats(step, click);
+    break;
+  case SCR_PHRASES:
+    handlePhrases(step, click);
     break;
 #if FEATURE_WEATHER
   case SCR_WEATHER:

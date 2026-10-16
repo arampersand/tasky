@@ -72,25 +72,17 @@ A single MODE press takes effect about 0.4 s after you let go, because Tasky fir
 
 ### Screen map
 
-MODE moves through the **main carousel** in a loop:
+MODE moves through the **main carousel** in a loop. By default:
 
 ```
-Home → Timer → Tasks → Agenda → Stats → More → (back to Home)
+Home → Timer → Tasks → Agenda → Weather → Streak → Phrases → Stats → More → (back to Home)
 ```
 
-**More** opens the less frequently used screens:
+(Tasky for Agents: `Home → Agents → Controls → Timer → Tasks → Agenda → Weather → Phrases → More`.)
 
-| More item  | Screen                                   |
-| ---------- | ---------------------------------------- |
-| Focus      | [Focus mode settings](#focus)            |
-| Calendar   | [Month calendar](#calendar)              |
-| Streak     | [Activity streak grid](#streak)          |
-| Weather    | [Current weather](#weather)              |
-| Agent      | [AI agent](#agent)                       |
-| Update     | [Allow a firmware upload](#update)       |
-| Setup (QR) | [Setup network QR code](#setup-qr)       |
-| Settings   | [Device settings](#settings)             |
-| Tour       | Replay the first-boot tour               |
+**You choose the carousel.** In the web setup's **Screens** step, tick the screens you want and put them in order with ↑/↓. **Home** is always first and **More** always last.
+
+**More** lists every screen that isn't in your carousel (for example Focus, Calendar, Agent), then **Update**, **Setup (QR)**, **Settings** and **Tour**.
 
 ---
 
@@ -213,6 +205,10 @@ This is a month grid. Each day is colored by how busy it is, based on your [iCal
 | Any press (while showing a day) | Close the day view                                          |
 
 The footer shows the event count for the selected day, or **No calendar linked** when you haven't set a calendar URL.
+
+### Phrases
+
+One phrase at a time, big. **Turn** for the next or previous one, **press** for a random one. It moves on by itself every minute and, like Home, never switches to the rest screen, so you can leave it up. Add your own in the web setup's **Phrases** step (up to 12, one per line). They replace the built-in ones here and on Home. The screen font has no accents, so "Mañana" shows as "Manana".
 
 ### Streak
 

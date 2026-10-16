@@ -24,6 +24,7 @@ public:
   void loop();
   void forceUpdate();
   void requestRefresh() { lastUpdate = 0; }  // fetch on the next loop()
+  uint32_t fetchCount() const { return fetches; }  // successful fetches so far
 
   bool isConfigured() const;
   bool needsGeocode() const;
@@ -42,6 +43,7 @@ private:
   ApiClient api;
 
   uint32_t lastUpdate = 0;
+  uint32_t fetches = 0;
   bool dataValid = false;
 
   static const uint32_t UPDATE_INTERVAL_MS = 30 * 60 * 1000;  // 30 minutes

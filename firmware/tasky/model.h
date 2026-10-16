@@ -46,6 +46,8 @@ struct Config {
   uint8_t screenBright = 200;
   uint8_t ledBright = 180;
   uint8_t ledType = 0;  // 0 = PWM LED(s), 1 = SK6812 RGB chain (see config_hardware.h)
+  String screens = "";  // MODE carousel ids, "home,timer,..." ("" = default)
+  String phrases = "";  // Your phrases, one per line ("" = built-in)
   bool soundOn = true;
   bool darkMode = true;
   uint32_t totalFocusMin = 0;

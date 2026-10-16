@@ -137,6 +137,8 @@
         <li data-step="github">GitHub</li>
         <li data-step="ai">AI</li>
         <li data-step="place">Weather</li>
+        <li data-step="screens">Screens</li>
+        <li data-step="phrases">Phrases</li>
         <li data-step="light">Light</li>
         <li data-step="done">Done</li>
       </ol>
@@ -218,6 +220,24 @@
           <label class="wz-field">City<input id="wz-city" autocomplete="off" placeholder="Mexico City"></label>
           <p class="wz-status" id="wz-place-status" role="status"></p>
           <div class="wz-actions"><button class="btn ghost" data-skip>Skip</button><button class="btn primary" data-save="place">Save</button></div>
+        </div>
+
+        <!-- Screens -->
+        <div class="wz-step" data-step="screens" hidden>
+          <h3>Your screens</h3>
+          <p>Pick what <strong>MODE</strong> cycles through, in order. <strong>Home</strong> is always first; <strong>More</strong> is always last and lists everything else.</p>
+          <ol class="wz-screens" id="wz-screens"></ol>
+          <p class="wz-status" role="status"></p>
+          <div class="wz-actions"><button class="btn ghost" data-skip>Skip</button><button class="btn primary" data-save="screens">Save</button></div>
+        </div>
+
+        <!-- Phrases -->
+        <div class="wz-step" data-step="phrases" hidden>
+          <h3>Your phrases</h3>
+          <p>Write the phrases Tasky shows on Home and on the Phrases screen, one per line (up to 12, 60 characters each). Leave it empty to use the built-in ones. Accents are simplified (ñ → n): the screen font has no special characters.</p>
+          <label class="wz-field">Phrases<textarea id="wz-phrases" rows="6" maxlength="800" placeholder="One thing at a time&#10;Deep work, calm mind&#10;You've got this"></textarea></label>
+          <p class="wz-status" role="status"></p>
+          <div class="wz-actions"><button class="btn ghost" data-skip>Skip</button><button class="btn primary" data-save="phrases">Save</button></div>
         </div>
 
         <!-- Light -->

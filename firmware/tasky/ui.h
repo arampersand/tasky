@@ -63,6 +63,7 @@ enum Screen {
   SCR_HOME,       // Glance: clock, weather, next event, tasks, phrase
   SCR_AGENTS,     // Agents edition: Claude Code sessions
   SCR_CONTROLS,   // Agents edition: Bluetooth volume / media / shortcuts
+  SCR_PHRASES,    // One phrase, big; turn to browse
   SCR_TOUR,       // First-boot tour (also More -> Tour)
   // Overlays
   SCR_AMBIENT,    // Idle: clock + next event + weather
@@ -182,6 +183,9 @@ public:
   void drawWifi(bool wifiOn, String ssid, String pass, String ip);
   void drawQRFull(String ssid, String pass);
   void drawSplashTasky();
+  void drawPhrase(int idx);          // Phrases screen
+  int phraseCount();                 // Your phrases (web setup) or the built-in ones
+  String phraseAt(int idx);          // Wraps around
   void drawTour(int step);           // 0 turn, 1 press, 2 MODE, 3 done
   void drawHint(const char *text);   // One-line pill at the bottom
   void drawFinishScreen(const char *msg);
@@ -197,6 +201,8 @@ private:
   void drawRow(const char *label, const String &value, int baseline,
                uint16_t valueColor);
   String fitText(const String &s, int maxW, const GFXfont *font);
+  int wrapText(const String &s, int maxW, const GFXfont *font, String lines[],
+               int maxLines);  // word wrap; -1 if it needs more lines
   uint16_t accentColor();
   uint16_t streakColor(uint8_t v);
   uint16_t calendarDayColor(uint8_t eventCount);  // Color based on busyness
