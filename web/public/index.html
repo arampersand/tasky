@@ -86,6 +86,7 @@
           <div>
             <h3>Plug it in</h3>
             <p>Use a USB-C <em>data</em> cable. If no port shows up, hold <kbd>BOOT</kbd> on the XIAO while plugging it in.</p>
+            <p class="note ok" id="usb-status" role="status" hidden>✓ Your Tasky is plugged in.</p>
           </div>
         </li>
         <li>
@@ -97,6 +98,9 @@
               <span slot="unsupported" class="note warn">Your browser can't talk to USB devices. Open this page in <strong>Chrome</strong> or <strong>Edge</strong> on a computer.</span>
               <span slot="not-allowed" class="note warn">Web Serial needs a secure page — open <strong>https://tasky-flash.vercel.app</strong>.</span>
             </esp-web-install-button>
+            <p class="small pick-help">The browser lists only Tasky-type devices. Pick <strong>USB JTAG/serial debug unit</strong>: that's your Tasky.</p>
+            <label class="small check"><input type="checkbox" id="show-all-ports"> Not in the list? Show every port</label>
+            <p class="small"><strong>Erase device</strong> in the installer only wipes Tasky's own memory (Wi-Fi, tasks, settings). Leave it off to keep them. It can't touch your disks or anything else on your computer.</p>
             <p id="no-release" class="note" hidden>No firmware release has been published yet. Check back soon or <a href="https://github.com/arampersand/tasky/blob/main/docs/BUILDING.md">build it yourself</a>.</p>
           </div>
         </li>
@@ -141,7 +145,7 @@
         <!-- Connect -->
         <div class="wz-step" data-step="connect">
           <h3>Connect to your Tasky</h3>
-          <p>Close the installer window if it's still open, then pick Tasky's USB port.</p>
+          <p>Close the installer window if it's still open, then pick <strong>USB JTAG/serial debug unit</strong> in the list. That's your Tasky.</p>
           <button class="btn primary" id="wz-connect">Connect Tasky</button>
           <p class="wz-status" id="wz-connect-status" role="status"></p>
           <p class="small">Prefer your phone? On Tasky open <strong>More → Setup (QR)</strong> and scan the code.</p>

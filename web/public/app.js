@@ -1,5 +1,29 @@
-// Edition + board selector and latest-release info for the flasher page.
-const installer = document.getElementById("installer");
+// Edition + board selector, USB port filter and latest-release info for the flasher page.
+const $ = (id) => document.getElementById(id);
+const installer = $("installer");
+
+// ---------- USB port picker: list only Tasky ----------
+// The XIAO C3/C6 show up as Espressif's built-in USB-Serial/JTAG (vendor 0x303A),
+// so filtering on it hides Bluetooth, debug consoles and every other serial port.
+// Patched here so both the installer and the setup wizard use it.
+const ESPRESSIF = 0x303a;
+let showAllPorts = false;
+if ("serial" in navigator) {
+  const requestPort = navigator.serial.requestPort.bind(navigator.serial);
+  navigator.serial.requestPort = (options = {}) =>
+    requestPort(showAllPorts || options.filters ? options : { ...options, filters: [{ usbVendorId: ESPRESSIF }] });
+  $("show-all-ports").addEventListener("change", (e) => { showAllPorts = e.target.checked; });
+
+  // Once you've connected a Tasky here, Chrome reports it when it's plugged in.
+  const showUsbStatus = async () => {
+    const ports = await navigator.serial.getPorts();
+    $("usb-status").hidden = !ports.some((p) => p.getInfo().usbVendorId === ESPRESSIF);
+  };
+  navigator.serial.addEventListener("connect", showUsbStatus);
+  navigator.serial.addEventListener("disconnect", showUsbStatus);
+  showUsbStatus();
+}
+
 const picked = (name) => document.querySelector(`input[name="${name}"]:checked`).value;
 const updateManifest = () =>
   installer.setAttribute("manifest", `/firmware/manifest-${picked("board")}${picked("edition")}.json`);
@@ -13,7 +37,6 @@ try {
   if (res.ok) latest = await res.json();
 } catch { /* offline or not built yet: fall through to "no release" */ }
 
-const $ = (id) => document.getElementById(id);
 if (!latest.version) {
   installer.hidden = true;
   $("no-release").hidden = false;

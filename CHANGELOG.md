@@ -7,6 +7,7 @@ All notable changes to the Tasky firmware. Versions match `firmware/tasky/versio
 ### Added
 - **First-boot tour**: four interactive steps (turn the knob, press it, press MODE, done) that each wait for the action they teach. Hold MODE to skip; replay from **More → Tour**. Devices already in use skip it on upgrade.
 - **On-screen hints**: the first three times you open a screen, a one-line hint at the bottom says what the knob does there. It hides after 3 s or on any input.
+- Website: the USB port picker lists only Tasky (Espressif USB, vendor `0x303A`) instead of every serial port, says what to pick ("USB JTAG/serial debug unit"), shows when a known Tasky is plugged in, and explains that *Erase device* only wipes Tasky. "Show every port" turns the filter off.
 
 ## v2.8.0 — 2026-10-16 · Boards & RGB light
 

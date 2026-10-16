@@ -87,6 +87,9 @@ h3 { font-size: 18px; margin: 0 0 6px; letter-spacing: -.01em; }
 esp-web-install-button { display: block; margin-top: 12px; }
 [hidden] { display: none !important; }
 .note { display: block; margin-top: 12px; font-size: 14px; color: var(--muted); }
+.note.ok { color: #7ee2c8; }
+.small.pick-help { margin-top: 14px; }
+.check { display: flex; align-items: center; gap: 8px; margin: 8px 0; cursor: pointer; }
 .note.warn { color: #ffd38a; background: rgba(255, 180, 60, .08); border: 1px solid rgba(255, 180, 60, .25); padding: 10px 12px; border-radius: 10px; }
 .release { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 24px; align-self: start; }
 .release-head { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 14px; margin-bottom: 14px; }
