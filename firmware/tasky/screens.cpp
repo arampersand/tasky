@@ -23,7 +23,7 @@ const ScreenDef SCREEN_DEFS[] = {
     {"settings", "Settings", SCR_SETTINGS},
     {"qr", "Setup (QR)", SCR_QR},
 #if FEATURE_LLM
-    {"agent", "Agent", SCR_AGENT},
+    {"agent", "AI brief", SCR_AGENT},
 #endif
 #if FEATURE_SPOTIFY
     {"music", "Music", SCR_SPOTIFY},

@@ -1732,7 +1732,7 @@ void TaskyUI::drawMeetingAlert(const CalendarEventItem &ev, int minutes,
   centerTextFont("Click to dismiss", 212, C_MUTED, &FreeSans9pt7b);
 }
 
-void TaskyUI::drawMorningBrief() {
+void TaskyUI::drawMorningBrief(const String &brief) {
   clearScreen();
   centerTextFont("GOOD MORNING", 40, C_TEAL, &FreeSansBold12pt7b);
 
@@ -1740,6 +1740,30 @@ void TaskyUI::drawMorningBrief() {
   bool hasTime = model->localNow(t);
   if (hasTime)
     centerTextFont(formatDate(t).c_str(), 62, C_MUTED, &FreeSans9pt7b);
+
+  // The AI's brief for today: three short lines split on " / "
+  if (brief.length()) {
+    String rest = brief;
+    int y = 98;
+    for (int i = 0; i < 3 && rest.length(); i++, y += 26) {
+      int cut = rest.indexOf(" / ");
+      String line = cut < 0 ? rest : rest.substring(0, cut);
+      rest = cut < 0 ? "" : rest.substring(cut + 3);
+      line.trim();
+      tft.fillCircle(24, y - 5, 3, C_TEAL);
+      tft.setFont(&FreeSans9pt7b);
+      tft.setTextColor(C_TEXT);
+      tft.setCursor(34, y);
+      tft.print(fitText(line, 186, &FreeSans9pt7b));
+      tft.setFont();
+    }
+    const CalendarEventItem *ev =
+        model->nextEventToday(hasTime ? t.tm_hour * 60 + t.tm_min : 0);
+    if (ev)
+      drawRow("Next", String(ev->startTime) + " " + ev->title, 182, C_TEAL);
+    centerTextFont("Click to start", 214, C_MUTED, &FreeSans9pt7b);
+    return;
+  }
 
   int n = model->todayEventCount;
   drawRow("Events", n ? String(n) + " today" : String("Free day"), 96, C_TEXT);

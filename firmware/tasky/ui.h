@@ -175,7 +175,7 @@ public:
                     bool grabbed, bool connected, const char *osName);
 #endif
   void drawMeetingAlert(const CalendarEventItem &ev, int minutes, bool timerPaused);
-  void drawMorningBrief();
+  void drawMorningBrief(const String &brief = "");  // brief: "a / b / c" from the AI
   void drawDayClose();
   void drawUpdate(bool armed, const String &url, const String &hint,
                   const String &version);

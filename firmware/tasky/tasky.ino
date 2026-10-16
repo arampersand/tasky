@@ -102,6 +102,7 @@ uint32_t lockToastUntil = 0;
 enum ModeClickType { MODE_NONE, MODE_SHORT, MODE_LONG, MODE_DOUBLE };
 
 uint32_t lightPreviewUntil = 0;
+String morningBrief;  // the AI's "today" lines for the morning notice
 uint32_t pressBlinkUntil = 0;  // a short light blip on every press (no buzzer)
 uint32_t lastAnimAt = 0;
 uint32_t lastBeepAt = 0;
@@ -1108,7 +1109,7 @@ void handleNotice(EncClickType click, bool modePressed) {
     if (noticeType == NOTICE_MEETING)
       ui.drawMeetingAlert(noticeEvent, noticeMinutes, noticeTimerPaused);
     else if (noticeType == NOTICE_MORNING)
-      ui.drawMorningBrief();
+      ui.drawMorningBrief(morningBrief);
     else
       ui.drawDayClose();
     ui.baseDrawn = true;
@@ -1179,6 +1180,15 @@ void checkDayBriefs() {
   if (h >= c.dayStartHour && h < c.dayEndHour && c.lastMorningDay != t.tm_yday) {
     c.lastMorningDay = t.tm_yday;
     model.save();
+    morningBrief = "";
+#if FEATURE_LLM
+    // Your day in three lines, if you added an AI key (cached for the day)
+    if (llm.isConfigured() && llm.getTodayMode() == MODE_TODAY) {
+      llm.sendDailyPrompt();
+      if (llm.getState() == LLM_DONE)
+        morningBrief = llm.response;
+    }
+#endif
     showNotice(NOTICE_MORNING);
   } else if (h >= c.dayEndHour && c.lastEveningDay != t.tm_yday) {
     c.lastEveningDay = t.tm_yday;
