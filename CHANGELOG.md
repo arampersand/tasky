@@ -5,10 +5,11 @@ All notable changes to the Tasky firmware. Versions match `firmware/tasky/versio
 ## Unreleased (3.0)
 
 ### Changed
-- **One firmware.** Tasky and Tasky for Agents are now the same firmware with everything: focus timer, tasks, calendar, weather, GitHub, Notion, AI, Claude Code agent cards and approvals, and the Bluetooth key row. The web flasher only asks for your board. Bluetooth starts the first time you open Controls (then on every boot); Agents and Controls join the carousel once you use them.
+- **One firmware.** Tasky and Tasky for Agents are now the same firmware with everything: focus timer, tasks, calendar, weather, GitHub, Notion, AI, Claude Code agent cards and approvals, and the Bluetooth key row. The web flasher only asks for your board. Agents and Controls are in the carousel from the start; Bluetooth starts the first time you open Controls (then on every boot).
 - `TASKY?` reports `"edition":"tasky"` with `"agents":true`; the companion and the web setup accept both this and 2.x Agents builds.
 
 ### Added
+- Faster, cleaner boot: the display is set to black first (the backlight is always powered on these boards, so it used to show noise for about a second).
 - **More > Screens** on the device: choose the screen Tasky starts on, and tick, untick and reorder the carousel with the knob.
 - **Daily brief** (with an AI key): the AI screen's default ("auto") mode is now **Today**: your day in three short lines from your calendar and tasks (what matters, what to start with, a tip). It's generated once a day and shown in the morning notice. The other nine modes stay in the mode picker. The screen is called **AI brief**.
 - **Printable quick-start card** (English and Spanish) at tasky-flash.vercel.app/start: controls, setup in two minutes, everyday use, Claude Code.
@@ -19,7 +20,7 @@ All notable changes to the Tasky firmware. Versions match `firmware/tasky/versio
 ### Added
 - **Claude Code plugin**: in Claude Code, `/plugin marketplace add arampersand/tasky` and `/plugin install tasky@tasky`. Six hooks (a **Ready** card when a session starts), and `/tasky:status`, which runs the new `tasky_agent.py doctor`: it checks Python, Tasky on USB (and which app holds the port), the firmware, and the hooks, then says what to fix. The plugin version follows the firmware's; `install.sh` stays as the terminal alternative. If both are installed, Tasky shows each question once.
 - **Web setup helpers**: calendar steps for Google, iCloud and Outlook with link checks, and a **Test it** button (new `TASKY CALTEST` command: Tasky downloads your calendar and reports the events it found); GitHub "Is this you?" with your recent activity as green squares; the page goes to Set up by itself after flashing.
-- **Where am I**: small dots along the top edge show your place in the carousel.
+- **Where am I**: a small number at the top edge (3/11) shows your place in the carousel.
 - **Home shows your day**: today's streak square and a focus bar toward a daily goal (120 min, `goal` in the setup protocol). A Tasky that isn't set up says **Set me up** with the web address.
 - **Quick settings**: long press on Home (theme, light bar level, focus light). Tasks is in the carousel.
 - **Streak: yours and GitHub's**, two pages you switch with the knob. Your streak counts Tasky activity; GitHub's counts your contributions over ~90 days.

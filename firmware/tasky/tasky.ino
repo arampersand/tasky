@@ -312,10 +312,7 @@ void rebuildMenus() {
     pos = comma + 1;
     if (!def || inCarousel[def - SCREEN_DEFS])
       continue;  // unknown in this edition, or listed twice
-    // Agents and Controls wait in More until you've used them
-    if ((def->screen == SCR_AGENTS && !model.cfg.agentsSeen) ||
-        (def->screen == SCR_CONTROLS && !model.cfg.btOn))
-      continue;
+
     inCarousel[def - SCREEN_DEFS] = true;
     carousel[carouselN++] = def->screen;
   }
@@ -1627,16 +1624,16 @@ bool handleUsbCommand(const String &cmd) {
 }
 
 void setup() {
-  delay(500);   // Estabilizar alimentacion antes de init
+  // The backlight is wired to power on the Tasky boards, so until the panel
+  // is initialized it shows noise. Get it to black first, then the rest.
   Serial.begin(115200);
-  delay(500);   // Dar tiempo al Serial
+  SPI.begin(TFT_SCK, -1, TFT_MOSI, TFT_CS);
+  ui.init();
   Serial.println("Booting TaskyFirmware...");
   Serial.printf("Pins: CS=%d DC=%d RST=%d MOSI=%d SCK=%d\n", TFT_CS, TFT_DC,
                 TFT_RST, TFT_MOSI, TFT_SCK);
   Serial.printf("Free heap: %u\n", ESP.getFreeHeap());
 
-  // Initialize SPI - velocidad controlada por tft.setSPISpeed() en ui.init()
-  SPI.begin(TFT_SCK, -1, TFT_MOSI, TFT_CS);
 
   // Input pins
   pinMode(ENCODER_CLK, INPUT_PULLUP);
@@ -1663,8 +1660,7 @@ void setup() {
   Serial.println("Loading model...");
   model.begin();
   initLight();  // needs the saved light type
-  Serial.println("Init display...");
-  ui.init();
+  ui.applyTheme();  // the saved theme (the display is already on)
 
   setLed(0);
   buzzerOff();

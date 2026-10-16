@@ -78,9 +78,9 @@ MODE moves through the **main carousel** in a loop: first what you use while wor
 Home → Agents → Controls → Phrases → Timer → Tasks → Agenda → Streak → Weather → Settings → Setup (QR) → More
 ```
 
-**Agents** and **Controls** join the carousel once you use them: Agents when the first Claude Code card arrives, Controls when you turn Bluetooth on (the first time you open Controls). Until then they wait in **More**.
+**Agents** and **Controls** are in the carousel from the start. Bluetooth turns on the first time you open **Controls**, and stays on from then.
 
-**Small dots along the top edge** show where you are in the carousel.
+A small number at the top edge (for example **3/11**) shows where you are in the carousel.
 
 **You choose the carousel.** In the web setup's **Screens** step, tick the screens you want and put them in order with ↑/↓, or do the same on Tasky in **More → [Screens](#screens-editor)**. **Home** is always first and **More** always last.
 

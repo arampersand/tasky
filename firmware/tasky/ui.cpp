@@ -32,11 +32,11 @@ void TaskyUI::init() {
   // Reset secuencia completa para estabilidad
   pinMode(_rst, OUTPUT);
   digitalWrite(_rst, HIGH);
-  delay(50);
+  delay(5);
   digitalWrite(_rst, LOW);
-  delay(100);
+  delay(20);
   digitalWrite(_rst, HIGH);
-  delay(250);  // Esperar a que el display este listo
+  delay(130);  // the ST7789 needs ~120 ms after a reset
 
 #if DISPLAY_CIRCULAR
   tft.begin();
@@ -49,13 +49,9 @@ void TaskyUI::init() {
   tft.setRotation(2);
   tft.invertDisplay(true);
   tft.setOffsets(COL_OFFSET, ROW_OFFSET);
-  // Triple limpieza para eliminar artefactos en las primeras filas
+  // Clear twice: the first rows sometimes keep noise after power-up
   tft.fillScreen(0x0000);
-  delay(30);
   tft.fillScreen(0x0000);
-  delay(30);
-  tft.fillScreen(0x0000);
-  delay(30);
 #endif
 
   applyTheme();
@@ -1332,13 +1328,17 @@ void TaskyUI::drawBanner(const char *text) {
                  &FreeSansBold12pt7b);
 }
 
-// Where you are in the MODE carousel: small dots along the top edge
+// Where you are in the MODE carousel: a small "3/11" at the top edge
 void TaskyUI::drawCarouselDots(int index, int count) {
-  const int gap = 9, y = 8;
-  int x0 = CX - (count - 1) * gap / 2;
-  tft.fillRect(x0 - 4, y - 3, (count - 1) * gap + 8, 7, C_BG);
-  for (int i = 0; i < count; i++)
-    tft.fillCircle(x0 + i * gap, y, i == index ? 2 : 1, i == index ? C_TEAL : C_MUTED);
+  char buf[8];
+  snprintf(buf, sizeof(buf), "%d/%d", index + 1, count);
+  tft.setFont();  // the small built-in 6x8 font
+  tft.setTextSize(1);
+  int w = strlen(buf) * 6;
+  tft.fillRect(CX - w / 2 - 2, 3, w + 4, 10, C_BG);
+  tft.setTextColor(C_MUTED);
+  tft.setCursor(CX - w / 2, 4);
+  tft.print(buf);
 }
 
 // Phrases screen: one phrase, centered, with its author underneath
@@ -1371,10 +1371,6 @@ void TaskyUI::drawPhrase(int idx) {
   if (author.length())
     centerTextFont(fitText("- " + author, 200, &FreeSans9pt7b).c_str(), top + (n - 1) * lineH + 28,
                    C_TEAL, &FreeSans9pt7b);
-  char buf[12];
-  int count = phraseCount();
-  snprintf(buf, sizeof(buf), "%d/%d", ((idx % count) + count) % count + 1, count);
-  rightTextFont(buf, 222, 222, C_MUTED, &FreeSans9pt7b);  // bottom-right corner
 }
 
 void TaskyUI::drawAmbientClock() {
