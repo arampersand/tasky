@@ -230,6 +230,12 @@ class AgentTest(unittest.TestCase):
         self.pair(ip="192.0.2.1")  # an old DHCP lease: nobody answers there
         r = self.run_agent("hook", "working", stdin={"session_id": "w2"})
         self.assertEqual(r.returncode, 0)
+        # The search can outlast the first hook (slow machines): the card
+        # still arrives, replayed once the daemon connects
+        for _ in range(100):
+            if any('"w2"' in l for l in self.wifi.lines):
+                break
+            time.sleep(0.1)
         self.assertTrue(any('"w2"' in l for l in self.wifi.lines))
         with open(os.path.join(self.home, ".tasky", "link.json")) as f:
             self.assertEqual(json.load(f)["ip"], "127.0.0.1")
