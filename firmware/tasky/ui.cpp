@@ -294,11 +294,14 @@ void TaskyUI::drawTimerTime(int mm, int ss) {
 }
 
 void TaskyUI::drawSettings() {
-  tft.fillScreen(C_BG);
-  // No circle frame in settings - clean look
-
-  centerTextFont("SETTINGS", 32, C_TEXT, &FreeSansBold12pt7b);
-  tft.drawFastHLine(30, 46, 180, C_LINE);
+  // Already on screen: repaint only the rows that changed (no full-screen flash)
+  bool full = !baseDrawn;
+  baseDrawn = true;
+  if (full) {
+    tft.fillScreen(C_BG);
+    centerTextFont("SETTINGS", 32, C_TEXT, &FreeSansBold12pt7b);
+    tft.drawFastHLine(30, 46, 180, C_LINE);
+  }
 
   // Settings: Work, Break, WiFi, Bright, LED, Theme (0-5)
   const int itemCount = 6;
@@ -318,6 +321,10 @@ void TaskyUI::drawSettings() {
   for (int i = 0; i < itemCount; i++) {
     int baseline = yStart + i * rowH;
     bool sel = (i == settingsSel);
+    if (!full && !sel && i != lastListSel)
+      continue;
+    if (!full)  // rows are 28 px apart; 12pt caps reach baseline - 17
+      tft.fillRect(20, baseline - 18, 200, 27, C_BG);
 
     // Draw highlight for selected item
     if (sel) {
@@ -346,20 +353,24 @@ void TaskyUI::drawSettings() {
     tft.print(labels[i]);
     rightTextFont(values[i], 212, baseline, valueColor, &FreeSans12pt7b);
   }
+  lastListSel = settingsSel;
 }
 
 void TaskyUI::drawTasks() {
-  tft.fillScreen(C_BG);
-  // No frame for tasks - cleaner look
-
-  centerTextFont("TASKS", 34, C_TEXT, &FreeSansBold12pt7b);
-  tft.drawFastHLine(40, 46, 160, C_LINE);
-
   // Check if all tasks are empty (no real content)
   bool allEmpty = true;
   for (int i = 0; i < 3; i++) {
     if (model->tasks[i].length() > 0 && model->tasks[i] != "Empty")
       allEmpty = false;
+  }
+
+  // Already on screen: repaint only the rows that changed
+  bool full = !baseDrawn || allEmpty;
+  baseDrawn = true;
+  if (full) {
+    tft.fillScreen(C_BG);
+    centerTextFont("TASKS", 34, C_TEXT, &FreeSansBold12pt7b);
+    tft.drawFastHLine(40, 46, 160, C_LINE);
   }
 
   if (allEmpty) {
@@ -389,6 +400,10 @@ void TaskyUI::drawTasks() {
   for (int i = 0; i < 3; i++) {
     int baseline = yBase + i * rowH;
     bool isSelected = (i == tasksSel);
+    if (!full && !isSelected && i != lastListSel)
+      continue;
+    if (!full)  // rows are 40 px apart; 12pt caps reach baseline - 17
+      tft.fillRect(14, baseline - 18, 214, 32, C_BG);
 
     // Checkbox
     uint16_t boxC =
@@ -444,9 +459,12 @@ void TaskyUI::drawTasks() {
     tft.setFont();
   }
 
+  lastListSel = tasksSel;
   // "Add" row at the bottom
   int addBaseline = yBase + 3 * rowH;
   bool addSelected = (tasksSel == 3);
+  if (!full)
+    tft.fillRect(14, addBaseline - 18, 214, 32, C_BG);
   uint16_t addColor = addSelected ? C_TEAL : C_MUTED;
 
   // Plus icon
@@ -490,8 +508,11 @@ static int getFirstDayOfWeek(int month, int year) {
 }
 
 void TaskyUI::drawCalendar() {
-  tft.fillScreen(C_BG);
-  // No frame - cleaner look
+  // Already on screen: repaint only the old and new selected day + footer
+  bool full = !baseDrawn || calendarLoading;
+  baseDrawn = true;
+  if (full)
+    tft.fillScreen(C_BG);
 
   // Show loading state
   if (calendarLoading) {
@@ -529,7 +550,8 @@ void TaskyUI::drawCalendar() {
   char headerBuf[16];
   snprintf(headerBuf, sizeof(headerBuf), "%s %d", monthNames[currentMonth],
            currentYear);
-  centerTextFont(headerBuf, 28, C_TEXT, &FreeSansBold12pt7b);
+  if (full)
+    centerTextFont(headerBuf, 28, C_TEXT, &FreeSansBold12pt7b);
 
   // Day headers
   const char *dayHeaders[] = {"S", "M", "T", "W", "T", "F", "S"};
@@ -540,7 +562,7 @@ void TaskyUI::drawCalendar() {
 
   tft.setFont(&FreeSans9pt7b);
   tft.setTextColor(C_MUTED);
-  for (int d = 0; d < 7; d++) {
+  for (int d = 0; d < 7 && full; d++) {
     int16_t tx1, ty1;
     uint16_t tw, th;
     tft.getTextBounds(dayHeaders[d], 0, 0, &tx1, &ty1, &tw, &th);
@@ -573,6 +595,12 @@ void TaskyUI::drawCalendar() {
       bool hasEvent = (model->calendarEvents[day - 1] > 0);
       bool isToday = (day == currentDay);
       bool isSelected = (day == calendarSelDay);
+      if (!full && !isSelected && day != lastListSel) {
+        day++;
+        continue;
+      }
+      if (!full)
+        tft.fillRect(x + 1, y - 13, cellW - 2, cellH, C_BG);
 
       // Selection highlight (filled rectangle)
       if (isSelected) {
@@ -619,8 +647,11 @@ void TaskyUI::drawCalendar() {
     yield();
   }
 
+  lastListSel = calendarSelDay;
   // Footer - show event count for selected day
   tft.setFont();
+  if (!full)
+    tft.fillRect(14, 202, 212, 22, C_BG);
   int eventsOnDay = model->calendarEvents[calendarSelDay - 1];
   if (eventsOnDay > 0) {
     char footerBuf[24];
@@ -965,11 +996,17 @@ void TaskyUI::drawRow(const char *label, const String &value, int baseline,
 
 // ==================== FOCUS MODE ====================
 void TaskyUI::drawFocus() {
-  tft.fillScreen(C_BG);
+  // Already on screen: repaint the status line and the rows that changed
+  bool full = !baseDrawn;
+  baseDrawn = true;
   Config &cfg = model->cfg;
-
-  centerTextFont("FOCUS MODE", 34, C_TEAL, &FreeSansBold12pt7b);
-  tft.drawFastHLine(60, 44, 120, C_LINE);
+  if (full) {
+    tft.fillScreen(C_BG);
+    centerTextFont("FOCUS MODE", 34, C_TEAL, &FreeSansBold12pt7b);
+    tft.drawFastHLine(60, 44, 120, C_LINE);
+  } else {
+    tft.fillRect(14, 54, 212, 22, C_BG);
+  }
 
   if (model->isFocusModeActive())
     centerTextFont("Active now", 70, C_GREEN, &FreeSans9pt7b);
@@ -983,6 +1020,10 @@ void TaskyUI::drawFocus() {
   for (int i = 0; i < 3; i++) {
     int baseline = 104 + i * 30;
     bool sel = (i == focusSel);
+    if (!full && !sel && i != lastListSel)
+      continue;
+    if (!full)
+      tft.fillRect(20, baseline - 18, 200, 26, C_BG);
     if (sel)
       tft.drawRoundRect(20, baseline - 18, 200, 26, 6, C_TEAL);
     tft.setFont(&FreeSans9pt7b);
@@ -994,6 +1035,9 @@ void TaskyUI::drawFocus() {
                   values[i] ? C_GREEN : C_MUTED, &FreeSans9pt7b);
   }
 
+  lastListSel = focusSel;
+  if (!full)
+    return;
   tft.drawFastHLine(20, 184, 200, C_LINE);
   char buf[40];
   snprintf(buf, sizeof(buf), "Today: %d sessions, %dm", cfg.dailyPomodoroCount,
@@ -1003,18 +1047,29 @@ void TaskyUI::drawFocus() {
 
 // ==================== MORE MENU ====================
 void TaskyUI::drawMore(const char *const labels[], int count) {
-  tft.fillScreen(C_BG);
-  centerTextFont("MORE", 34, C_TEXT, &FreeSansBold12pt7b);
-  tft.drawFastHLine(40, 44, 160, C_LINE);
-
   const int visible = 6, rowH = 22, first = 74;
   moreSel = constrain(moreSel, 0, count - 1);
   int start = constrain(moreSel - visible / 2, 0, max(0, count - visible));
+
+  // Already on screen: repaint only the rows that changed (all rows if the
+  // list scrolled)
+  bool full = !baseDrawn;
+  baseDrawn = true;
+  bool scrolled = full || start != lastListStart;
+  if (full) {
+    tft.fillScreen(C_BG);
+    centerTextFont("MORE", 34, C_TEXT, &FreeSansBold12pt7b);
+    tft.drawFastHLine(40, 44, 160, C_LINE);
+  }
 
   for (int v = 0; v < visible && start + v < count; v++) {
     int i = start + v;
     int baseline = first + v * rowH;
     bool sel = (i == moreSel);
+    if (!scrolled && !sel && i != lastListSel)
+      continue;
+    if (!full)
+      tft.fillRect(20, baseline - 16, 200, 22, C_BG);
     if (sel)
       tft.fillRoundRect(20, baseline - 15, 200, 20, 4, C_TEAL);
     tft.setFont(&FreeSans9pt7b);
@@ -1026,11 +1081,13 @@ void TaskyUI::drawMore(const char *const labels[], int count) {
     tft.setFont();
   }
 
+  lastListSel = moreSel;
+  lastListStart = start;
+
   // Scroll hints
-  if (start > 0)
-    tft.fillTriangle(CX - 4, 54, CX + 4, 54, CX, 50, C_MUTED);
-  if (start + visible < count)
-    tft.fillTriangle(CX - 4, 200, CX + 4, 200, CX, 205, C_MUTED);
+  tft.fillTriangle(CX - 4, 54, CX + 4, 54, CX, 50, start > 0 ? C_MUTED : C_BG);
+  tft.fillTriangle(CX - 4, 200, CX + 4, 200, CX, 205,
+                   start + visible < count ? C_MUTED : C_BG);
 }
 
 // ==================== HOME / AMBIENT ====================

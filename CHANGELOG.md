@@ -2,6 +2,12 @@
 
 All notable changes to the Tasky firmware. Versions match `firmware/tasky/version.h` and git tags.
 
+## v2.10.0 — 2026-10-16 · Smooth knob & screens
+
+### Fixed
+- **The knob moves one step per click.** It needed two clicks before, and fast turns lost steps while the screen was drawing. The encoder is now decoded on interrupts (`encoder.cpp`). Builders with a different encoder can set `ENCODER_TICKS_PER_DETENT` (2 or 4) in `config_hardware.h`.
+- **No more full-screen flash when you move the selection** in Settings, Tasks, More, Focus and Calendar: only the rows that changed are repainted. Turning the knob on the Timer repaints just the digits.
+
 ## v2.9.0 — 2026-10-16 · Tour & hints
 
 ### Added

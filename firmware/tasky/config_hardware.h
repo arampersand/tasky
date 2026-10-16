@@ -22,6 +22,7 @@
 // INPUTS (Left Side)
 #define ENCODER_CLK D4 // Was GPIO 6 on C3
 #define ENCODER_DT D5  // Was GPIO 7 on C3
+#define ENCODER_TICKS_PER_DETENT 2 // edges per click; 4 for encoders with a full cycle per detent
 #define ENCODER_SW D6  // Was GPIO 21 on C3
 #define MODO_BTN D7    // Was GPIO 20 on C3
 

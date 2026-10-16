@@ -4,6 +4,7 @@
 #include "network_manager.h"
 #include "ota_service.h"
 #include "usb_setup.h"
+#include "encoder.h"
 #if FEATURE_BLE_HID
 #include "ble_hid.h"
 #endif
@@ -193,18 +194,6 @@ void alarmStop() {
 }
 
 // ==================== INPUT FUNCTIONS ====================
-int encoderStep() {
-  static int lastClk = HIGH;
-  int clk = digitalRead(ENCODER_CLK);
-  int dt = digitalRead(ENCODER_DT);
-  if (clk != lastClk && clk == LOW) {
-    lastClk = clk;
-    return (dt == HIGH) ? -1 : +1;
-  }
-  lastClk = clk;
-  return 0;
-}
-
 EncClickType encoderClickType() {
   static uint32_t lastClickAt = 0;
   bool b = digitalRead(ENCODER_SW);
@@ -394,7 +383,10 @@ void handleTimer(int step, EncClickType click) {
       model.cfg.breakMin = constrain(model.cfg.breakMin + delta, 1, 30);
     }
     model.resetTimer();
-    ui.drawTimerBase();
+    uint32_t ms = model.remainingMs();  // repaint the digits only, no flash
+    ui.lastShownMin = ms / 60000;
+    ui.lastShownSec = (ms % 60000) / 1000;
+    ui.drawTimerTime(ui.lastShownMin, ui.lastShownSec);
   }
   if (click == ENC_LONG) {
     ui.uiTick(true);
@@ -439,7 +431,7 @@ void handleTasks(int step, EncClickType click) {
     }
     if (click != ENC_NONE) {
       showingDetail = false;
-      ui.drawTasks();
+      ui.baseDrawn = false;  // back from the detail view: full redraw
     }
     return;
   }
@@ -566,6 +558,7 @@ void handleSettings(int step, EncClickType click) {
       case 5:
         model.cfg.darkMode = !model.cfg.darkMode;
         ui.applyTheme();
+        ui.baseDrawn = false;  // new colors: repaint everything
         break;
       }
       ui.drawSettings();
@@ -1293,6 +1286,7 @@ void setup() {
   // Input pins
   pinMode(ENCODER_CLK, INPUT_PULLUP);
   pinMode(ENCODER_DT, INPUT_PULLUP);
+  encoderBegin();
   pinMode(ENCODER_SW, INPUT_PULLUP);
   pinMode(MODO_BTN, INPUT_PULLUP);
   pinMode(BUZZER_PIN, OUTPUT);

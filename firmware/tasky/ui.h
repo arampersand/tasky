@@ -114,6 +114,9 @@ public:
   // Focus settings / More menu selections
   int focusSel = 0;
   int moreSel = 0;
+  // Partial redraws: what the current list screen last painted
+  int lastListSel = -1;
+  int lastListStart = -1;
 
   // WiFi state (set from main loop)
   bool wifiConnected = false;

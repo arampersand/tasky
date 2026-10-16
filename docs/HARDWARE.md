@@ -81,6 +81,8 @@ The XIAO **D-pin** in the first column is what `config_hardware.h` uses. The GPI
 | SPI MOSI (display SDA) | `TFT_MOSI` | **D10** | 10 | 18 |
 | Power | – | 3V3, GND, 5V | – | – |
 
+**Knob steps.** The encoder is read on interrupts. `ENCODER_TICKS_PER_DETENT` in `config_hardware.h` sets how many signal edges make one click: `2` for the HW-040 / EC11 parts on the Tasky boards, `4` for encoders that run a full cycle per click. If the knob moves two items per click, use `4`. If it needs two clicks per item, use `2`.
+
 **Inputs.** All four inputs (`ENCODER_CLK`, `ENCODER_DT`, `ENCODER_SW` and `MODO_BTN`) use the ESP32's internal pull-ups and are **active-low**. Wire each switch between its pin and **GND**, and connect the encoder's common pin (C) to GND.
 
 ---
