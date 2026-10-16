@@ -1033,22 +1033,47 @@ void TaskyUI::drawMore(const char *const labels[], int count) {
     tft.fillTriangle(CX - 4, 200, CX + 4, 200, CX, 205, C_MUTED);
 }
 
-// ==================== AMBIENT (IDLE) ====================
+// ==================== HOME / AMBIENT ====================
+// Home (first screen) and the idle Ambient overlay share this glance layout:
+// clock, date, weather, what's next, today's open tasks and a rotating phrase.
+static const char *const PHRASES[] = {
+    "Every second counts",      "One thing at a time",
+    "Done is better than perfect", "Small steps, every day",
+    "Deep work, calm mind",     "Start before you're ready",
+    "Progress, not perfection", "Less, but better",
+    "Breathe. Then begin.",     "Protect your focus",
+    "Make it simple",           "You've got this",
+};
+static const int PHRASES_N = sizeof(PHRASES) / sizeof(PHRASES[0]);
+
 void TaskyUI::drawAmbientClock() {
   char buf[6] = "--:--";
   struct tm t;
   if (model->localNow(t))
     snprintf(buf, sizeof(buf), "%02d:%02d", t.tm_hour, t.tm_min);
 
-  tft.fillRect(28, 58, 184, 48, C_BG);
+  tft.fillRect(20, 22, 200, 50, C_BG);
   tft.setFont(&FreeSansBold24pt7b);
   int16_t x1, y1;
   uint16_t w, h;
   tft.getTextBounds(buf, 0, 0, &x1, &y1, &w, &h);
   tft.setTextColor(C_TEXT);
-  tft.setCursor((W - (int)w) / 2 - x1, 100);
+  tft.setCursor((W - (int)w) / 2 - x1, 66);
   tft.print(buf);
   tft.setFont();
+}
+
+void TaskyUI::drawAmbientPhrase() {
+  // New phrase every 2 minutes (or every boot-relative 2 min without NTP)
+  struct tm t;
+  uint32_t slot = model->localNow(t) ? (uint32_t)(t.tm_yday * 720 + (t.tm_hour * 60 + t.tm_min) / 2)
+                                     : millis() / 120000UL;
+  const char *phrase = (millis() < 60000UL && !model->hasCurrentTask())
+                           ? "Press the knob to focus"  // first-minute hint
+                           : PHRASES[slot % PHRASES_N];
+  tft.fillRect(0, 204, W, 26, C_BG);
+  centerTextFont(fitText(phrase, 200, &FreeSans9pt7b).c_str(), 222, C_MUTED,
+                 &FreeSans9pt7b);
 }
 
 void TaskyUI::drawAmbient(bool weatherOk, float temp, const char *desc,
@@ -1058,45 +1083,69 @@ void TaskyUI::drawAmbient(bool weatherOk, float temp, const char *desc,
 
   struct tm t;
   bool hasTime = model->localNow(t);
-  if (hasTime)
-    centerTextFont(formatDate(t).c_str(), 128, C_MUTED, &FreeSans9pt7b);
-  tft.drawFastHLine(40, 146, 160, C_LINE);
 
-  // What's next: upcoming event, else the task in focus
-  String next;
-  if (hasTime) {
-    const CalendarEventItem *ev =
-        model->nextEventToday(t.tm_hour * 60 + t.tm_min);
-    if (ev)
-      next = String(ev->startTime) + "  " + ev->title;
-  }
-  if (next.length() == 0 && model->hasCurrentTask())
-    next = model->tasks[model->currentTask];
-  if (next.length() > 0)
-    centerTextFont(fitText(next, 196, &FreeSans9pt7b).c_str(), 174, C_TEXT,
-                   &FreeSans9pt7b);
-  else
-    centerTextFont("Nothing scheduled", 174, C_MUTED, &FreeSans9pt7b);
-
+  // "Wed 15 Oct  ·  21°C Cloudy" (the font has no degree glyph: draw a ring)
+  String date = hasTime ? formatDate(t) : String("");
   if (weatherOk) {
-    // "21°C  Cloudy" (the font has no degree glyph: draw a small ring)
     String num = String((int)lroundf(temp));
-    String rest = fitText(String(celsius ? "C  " : "F  ") + desc, 150,
-                          &FreeSans9pt7b);
+    String rest = String(celsius ? "C " : "F ") + desc;
     tft.setFont(&FreeSans9pt7b);
     int16_t x1, y1;
-    uint16_t w1, w2, h;
-    tft.getTextBounds(num, 0, 0, &x1, &y1, &w1, &h);
-    tft.getTextBounds(rest, 0, 0, &x1, &y1, &w2, &h);
-    int x = (W - (int)(w1 + 7 + w2)) / 2;
+    uint16_t wd = 0, wn, wr, h;
+    String datePart = date.length() ? date + "   " : String("");
+    if (datePart.length())
+      tft.getTextBounds(datePart, 0, 0, &x1, &y1, &wd, &h);
+    tft.getTextBounds(num, 0, 0, &x1, &y1, &wn, &h);
+    rest = fitText(rest, max(40, 200 - (int)wd - (int)wn - 7), &FreeSans9pt7b);
+    tft.getTextBounds(rest, 0, 0, &x1, &y1, &wr, &h);
+    int x = (W - (int)(wd + wn + 7 + wr)) / 2;
+    tft.setTextColor(C_MUTED);
+    tft.setCursor(x, 96);
+    tft.print(datePart);
+    x += wd;
     tft.setTextColor(C_TEAL);
-    tft.setCursor(x, 204);
+    tft.setCursor(x, 96);
     tft.print(num);
-    tft.drawCircle(x + w1 + 3, 193, 2, C_TEAL);
-    tft.setCursor(x + w1 + 7, 204);
+    tft.drawCircle(x + wn + 3, 85, 2, C_TEAL);
+    tft.setCursor(x + wn + 7, 96);
     tft.print(rest);
     tft.setFont();
+  } else if (date.length()) {
+    centerTextFont(date.c_str(), 96, C_MUTED, &FreeSans9pt7b);
   }
+  tft.drawFastHLine(40, 110, 160, C_LINE);
+
+  // What's next on the calendar
+  int y = 134;
+  if (hasTime) {
+    const CalendarEventItem *ev = model->nextEventToday(t.tm_hour * 60 + t.tm_min);
+    if (ev) {
+      String next = String(ev->startTime) + "  " + ev->title;
+      centerTextFont(fitText(next, 200, &FreeSans9pt7b).c_str(), y, C_TEXT,
+                     &FreeSans9pt7b);
+      y += 24;
+    }
+  }
+
+  // Today's open tasks (up to what fits above the phrase)
+  int shown = 0;
+  tft.setFont(&FreeSans9pt7b);
+  for (int i = 0; i < 3 && y <= 188; i++) {
+    if (model->taskDone[i] || model->tasks[i] == "Empty" || model->tasks[i].length() == 0)
+      continue;
+    bool current = (i == model->currentTask);
+    tft.fillCircle(30, y - 5, 3, current ? C_TEAL : C_MUTED);
+    tft.setTextColor(current ? C_TEAL : C_TEXT);
+    tft.setCursor(42, y);
+    tft.print(fitText(model->tasks[i], 176, &FreeSans9pt7b));
+    y += 22;
+    shown++;
+  }
+  tft.setFont();
+  if (y == 134)
+    centerTextFont("Nothing scheduled", 150, C_MUTED, &FreeSans9pt7b);
+
+  drawAmbientPhrase();
 }
 
 // ==================== NOTICES ====================

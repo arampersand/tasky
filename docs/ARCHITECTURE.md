@@ -345,6 +345,18 @@ stateDiagram-v2
 
 The same web server answers on the station IP when Tasky is on your network, which is how the Update screen can show `http://<device-ip>/`.
 
+### USB setup protocol (`UsbSetup`)
+
+`usb_setup.h/.cpp` reads lines from the USB serial port in `loop()` (non-blocking) so the web setup wizard can configure Tasky over the same cable it was flashed with. Physical USB access is the trust boundary.
+
+| Command | Reply (`@tasky ` + JSON) |
+|---|---|
+| `TASKY?` | version, chip, Wi-Fi status/IP, which settings are set (secrets only as booleans), tasks |
+| `TASKY SCAN` | up to 20 nearby networks `{s, r, o}` (blocking scan, ~2–3 s) |
+| `TASKY SET {json}` | `{ok:true}`; keys `ssid pass tz cal ghu llm llmKey city lat lon tasks` |
+
+Replies are prefixed so the page can ignore ordinary debug logs. After a `SET`, `onChanged` (wired in `setup()`) asks weather and calendar to refresh and redraws Home.
+
 ---
 
 ## Services and polling

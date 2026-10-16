@@ -48,7 +48,7 @@ pio device monitor                 # serial console at 115200 baud
 
 For the XIAO ESP32-C6, use `-e xiao_c6`.
 
-- **First build:** the first build downloads the pioarduino platform, the toolchain and three libraries (Adafruit GFX, Adafruit ST7735 and ST7789, Adafruit BusIO). This takes a few minutes.
+- **First build:** the first build downloads the pioarduino platform, the toolchain and four libraries (Adafruit GFX, Adafruit ST7735 and ST7789, Adafruit BusIO, ArduinoJson 7). This takes a few minutes.
 - **Upload port:** if more than one serial device is connected, add `--upload-port /dev/cu.usbmodemXXXX` (macOS/Linux) or `--upload-port COMx` (Windows).
 - **Settings:** `-t upload` writes the bootloader, partition table and app separately, so the settings stored on the device are kept.
 
@@ -75,6 +75,7 @@ The sketch opens directly in Arduino IDE 2.x.
    - **Adafruit GFX Library**
    - **Adafruit ST7735 and ST7789 Library**
    - **Adafruit BusIO**
+   - **ArduinoJson** (by Benoit Blanchon, version 7.x)
 3. **Open the sketch.** Choose **File → Open** and select `firmware/tasky/tasky.ino`. All the `.cpp/.h` files in that folder are compiled with it.
 4. **Select the board.** Choose **Tools → Board → esp32 → XIAO_ESP32C3**.
 5. **Select the partition scheme.** Choose **Tools → Partition Scheme → Minimal SPIFFS (1.9MB APP with OTA/190KB SPIFFS)**.

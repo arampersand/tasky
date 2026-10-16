@@ -18,12 +18,14 @@
 <script type="module" src="https://unpkg.com/esp-web-tools@10/dist/web/install-button.js?module"></script>
 <script type="module" src="/device/tasky-device.js"></script>
 <script type="module" src="/app.js"></script>
+<script type="module" src="/setup.js"></script>
 </head>
 <body>
 <header class="nav wrap">
   <a class="brand" href="#top" aria-label="Tasky home"><span class="mark"></span>Tasky</a>
   <nav>
     <a href="#flash">Flash</a>
+    <a href="#setup">Set up</a>
     <a href="#features">Features</a>
     <a href="#build">Build your own</a>
     <a class="gh" href="https://github.com/arampersand/tasky" rel="noopener">GitHub</a>
@@ -107,15 +109,121 @@
       </aside>
     </div>
 
-    <div class="after">
-      <h3>After flashing</h3>
-      <ol>
-        <li>On Tasky, double-press <kbd>MODE</kbd> → <strong>More</strong> → <strong>Setup (QR)</strong> to turn on the setup network.</li>
-        <li>Scan the QR, or join Wi-Fi <code>Tasky</code> with the password shown on screen (every Tasky has its own). The setup page opens by itself — or go to <code>192.168.4.1</code>.</li>
-        <li>Add your Wi-Fi and, if you like, your calendar, GitHub, Notion, weather and AI keys.</li>
-      </ol>
-      <p class="small">Already running Tasky? You can also update over Wi-Fi: open <strong>More → Update</strong> on the device, then upload the release's <code>…-ota.bin</code> from the setup page. Reinstalling here keeps your settings unless you choose to erase.</p>
+  </section>
+
+  <section id="setup" class="wrap section">
+    <div class="section-head">
+      <p class="kicker">Set up</p>
+      <h2>Make it yours in two minutes</h2>
+      <p class="sub">With Tasky still plugged in, set up Wi-Fi, your calendar and the rest right here. Every step is optional.</p>
     </div>
+
+    <div class="wizard" id="wizard">
+      <ol class="wz-progress" aria-label="Setup steps">
+        <li data-step="connect">Connect</li>
+        <li data-step="wifi">Wi-Fi</li>
+        <li data-step="calendar">Calendar</li>
+        <li data-step="tasks">Tasks</li>
+        <li data-step="github">GitHub</li>
+        <li data-step="ai">AI</li>
+        <li data-step="place">Weather</li>
+        <li data-step="done">Done</li>
+      </ol>
+
+      <div class="wz-card">
+        <!-- Connect -->
+        <div class="wz-step" data-step="connect">
+          <h3>Connect to your Tasky</h3>
+          <p>Close the installer window if it's still open, then pick Tasky's USB port.</p>
+          <button class="btn primary" id="wz-connect">Connect Tasky</button>
+          <p class="wz-status" id="wz-connect-status" role="status"></p>
+          <p class="small">Prefer your phone? On Tasky open <strong>More → Setup (QR)</strong> and scan the code.</p>
+        </div>
+
+        <!-- Wi-Fi -->
+        <div class="wz-step" data-step="wifi" hidden>
+          <h3>Wi-Fi</h3>
+          <p>Tasky uses Wi-Fi for the time, weather and your calendar. 2.4 GHz networks only.</p>
+          <div class="wz-networks" id="wz-networks" role="radiogroup" aria-label="Wi-Fi networks"><p class="small">Scanning…</p></div>
+          <label class="wz-field">Network<input id="wz-ssid" autocomplete="off" placeholder="Network name"></label>
+          <label class="wz-field">Password<input id="wz-pass" type="password" autocomplete="off" placeholder="Wi-Fi password"></label>
+          <p class="wz-status" id="wz-wifi-status" role="status"></p>
+          <div class="wz-actions"><button class="btn ghost" data-skip>Skip</button><button class="btn ghost" id="wz-rescan">Rescan</button><button class="btn primary" id="wz-wifi-save">Connect</button></div>
+        </div>
+
+        <!-- Calendar -->
+        <div class="wz-step" data-step="calendar" hidden>
+          <h3>Your calendar</h3>
+          <p>Paste your calendar's private iCal link. Today's events show up on Tasky, with a heads-up 5 minutes before each meeting.</p>
+          <label class="wz-field">iCal link<input id="wz-cal" autocomplete="off" placeholder="https://calendar.google.com/calendar/ical/…/basic.ics"></label>
+          <details class="wz-help"><summary>Where do I find it?</summary>
+            <p><strong>Google Calendar:</strong> Settings → your calendar → <em>Integrate calendar</em> → copy <em>Secret address in iCal format</em>.</p>
+            <p><strong>Outlook:</strong> Settings → Calendar → Shared calendars → <em>Publish a calendar</em> → copy the ICS link.</p>
+            <p><strong>iCloud:</strong> Calendar app → share the calendar as <em>Public Calendar</em> → copy the link (change <code>webcal://</code> to <code>https://</code>).</p>
+          </details>
+          <p class="wz-status" role="status"></p>
+          <div class="wz-actions"><button class="btn ghost" data-skip>Skip</button><button class="btn primary" data-save="calendar">Save</button></div>
+        </div>
+
+        <!-- Tasks -->
+        <div class="wz-step" data-step="tasks" hidden>
+          <h3>Today's three things</h3>
+          <p>Tasky keeps it to three. You can change them any time.</p>
+          <label class="wz-field">1<input id="wz-t0" maxlength="40" autocomplete="off" placeholder="Most important thing"></label>
+          <label class="wz-field">2<input id="wz-t1" maxlength="40" autocomplete="off" placeholder="Second"></label>
+          <label class="wz-field">3<input id="wz-t2" maxlength="40" autocomplete="off" placeholder="Third"></label>
+          <p class="wz-status" role="status"></p>
+          <div class="wz-actions"><button class="btn ghost" data-skip>Skip</button><button class="btn primary" data-save="tasks">Save</button></div>
+        </div>
+
+        <!-- GitHub -->
+        <div class="wz-step" data-step="github" hidden>
+          <h3>GitHub streak</h3>
+          <p>Optional. Your public contributions count toward Tasky's streak.</p>
+          <label class="wz-field">GitHub username<input id="wz-ghu" autocomplete="off" placeholder="your-username"></label>
+          <p class="wz-status" role="status"></p>
+          <div class="wz-actions"><button class="btn ghost" data-skip>Skip</button><button class="btn primary" data-save="github">Save</button></div>
+        </div>
+
+        <!-- AI -->
+        <div class="wz-step" data-step="ai" hidden>
+          <h3>Ask Tasky</h3>
+          <p>Optional. Add a ChatGPT or Claude API key for the Agent screen. The key stays on your Tasky.</p>
+          <div class="seg" role="radiogroup" aria-label="AI provider">
+            <label><input type="radio" name="wz-llm" value="1" checked><span>ChatGPT</span></label>
+            <label><input type="radio" name="wz-llm" value="0"><span>Claude</span></label>
+          </div>
+          <label class="wz-field">API key<input id="wz-llmkey" type="password" autocomplete="off" placeholder="sk-…"></label>
+          <p class="small">Get one at <a href="https://platform.openai.com/api-keys" rel="noopener" target="_blank">platform.openai.com</a> or <a href="https://console.anthropic.com/settings/keys" rel="noopener" target="_blank">console.anthropic.com</a>.</p>
+          <p class="wz-status" role="status"></p>
+          <div class="wz-actions"><button class="btn ghost" data-skip>Skip</button><button class="btn primary" data-save="ai">Save</button></div>
+        </div>
+
+        <!-- Weather -->
+        <div class="wz-step" data-step="place" hidden>
+          <h3>Weather</h3>
+          <p>Use your location, or type a city.</p>
+          <button class="btn ghost" id="wz-locate">Use my location</button>
+          <label class="wz-field">City<input id="wz-city" autocomplete="off" placeholder="Mexico City"></label>
+          <p class="wz-status" id="wz-place-status" role="status"></p>
+          <div class="wz-actions"><button class="btn ghost" data-skip>Skip</button><button class="btn primary" data-save="place">Save</button></div>
+        </div>
+
+        <!-- Done -->
+        <div class="wz-step" data-step="done" hidden>
+          <h3>Your Tasky is ready ✨</h3>
+          <ul class="wz-tips">
+            <li><strong>Home</strong> shows the time, weather, what's next and your tasks.</li>
+            <li><strong>Press the knob</strong> to start focusing. Press again to pause.</li>
+            <li><strong>MODE</strong> moves to the next screen; double-press goes back.</li>
+          </ul>
+          <p class="small">Need more? Read the <a href="https://github.com/arampersand/tasky/blob/main/docs/MANUAL.md">manual</a>. You can unplug Tasky now.</p>
+        </div>
+      </div>
+      <p class="wz-unsupported note warn" id="wz-unsupported" hidden>Setup over USB needs Chrome or Edge on a computer. On your phone, open <strong>More → Setup (QR)</strong> on Tasky and scan the code.</p>
+    </div>
+
+    <p class="small after-note">Already running Tasky? You can also update over Wi-Fi: open <strong>More → Update</strong> on the device, then upload the release's <code>…-ota.bin</code> from its setup page. Reinstalling here keeps your settings unless you choose to erase.</p>
   </section>
 
   <section id="features" class="wrap section">

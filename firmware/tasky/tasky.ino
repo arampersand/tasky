@@ -3,6 +3,7 @@
 #include "model.h"
 #include "network_manager.h"
 #include "ota_service.h"
+#include "usb_setup.h"
 #include "ui.h"
 #include "wifi_portal.h"
 #if FEATURE_CALENDAR
@@ -60,10 +61,11 @@ LlmService llm(&model);
 #endif
 OtaService ota(&model);
 WiFiPortal portal(&model, &net, &ota);
+UsbSetup usbSetup(&model, &net);
 
 // ==================== STATE ====================
-Screen screen = SCR_TIMER;
-Screen screenBeforeOverlay = SCR_TIMER; // Where Ambient / notices return to
+Screen screen = SCR_HOME;
+Screen screenBeforeOverlay = SCR_HOME; // Where Ambient / notices return to
 
 // Input state
 bool lastEncBtn = HIGH;
@@ -224,8 +226,8 @@ ModeClickType modeClickType() {
 
 // ==================== NAVIGATION & HANDLERS ====================
 // MODO cycles through the everyday screens; everything else lives in More.
-static const Screen CAROUSEL[] = {SCR_TIMER, SCR_TASKS, SCR_AGENDA, SCR_STATS,
-                                  SCR_MORE};
+static const Screen CAROUSEL[] = {SCR_HOME,   SCR_TIMER, SCR_TASKS,
+                                  SCR_AGENDA, SCR_STATS, SCR_MORE};
 static const int CAROUSEL_N = sizeof(CAROUSEL) / sizeof(CAROUSEL[0]);
 
 struct MoreItem {
@@ -550,7 +552,7 @@ void handleQR(int step, EncClickType click) {
   }
   if (click == ENC_SHORT) {
     ui.uiTick(true);
-    screen = SCR_TIMER;
+    screen = SCR_HOME;
     ui.baseDrawn = false;
   }
 }
@@ -665,21 +667,54 @@ void enterAmbient() {
   ui.baseDrawn = false;
 }
 
-void handleAmbient() {
+// Home and Ambient share the glance layout. Full redraw every 5 min or when
+// weather first arrives; clock and phrase every minute (no flicker).
+void refreshGlance() {
   static int lastMin = -1;
   static uint32_t lastFullAt = 0;
+  static bool hadWeather = false;
+#if FEATURE_WEATHER
+  bool haveWeather = weather.hasData();
+#else
+  bool haveWeather = false;
+#endif
   struct tm t;
   bool hasTime = model.localNow(t);
-  // Full refresh every 10 min (next event, weather); clock every minute
-  if (!ui.baseDrawn || millis() - lastFullAt > 10UL * 60UL * 1000UL) {
+  int minuteKey = hasTime ? t.tm_min : (int)(millis() / 60000UL % 60);
+  if (!ui.baseDrawn || millis() - lastFullAt > 5UL * 60UL * 1000UL ||
+      haveWeather != hadWeather) {
     drawAmbientScreen();
     ui.baseDrawn = true;
     lastFullAt = millis();
-    lastMin = hasTime ? t.tm_min : -1;
-  } else if (hasTime && t.tm_min != lastMin) {
-    lastMin = t.tm_min;
+    lastMin = minuteKey;
+    hadWeather = haveWeather;
+  } else if (minuteKey != lastMin) {
+    lastMin = minuteKey;
     ui.drawAmbientClock();
+    ui.drawAmbientPhrase();
   }
+}
+
+void handleAmbient() { refreshGlance(); }
+
+// Home: press = start focusing, long press = tasks
+void handleHome(EncClickType click) {
+  if (click == ENC_SHORT) {
+    ui.uiTick(true);
+    goTo(SCR_TIMER);
+    if (!model.st.running && !model.st.finished) {
+      model.save();
+      model.startTimer();
+      ui.lastShownMin = -1;
+    }
+    return;
+  }
+  if (click == ENC_LONG) {
+    ui.uiTick(true);
+    goTo(SCR_TASKS);
+    return;
+  }
+  refreshGlance();
 }
 
 void showNotice(NoticeType type) {
@@ -1149,9 +1184,20 @@ void setup() {
     moreLabels[i] = MORE_ITEMS[i].label;
   lastInputAt = millis();
 
-  screen = SCR_TIMER;
+  screen = SCR_HOME;
   ui.baseDrawn = false;
   ui.applyTheme();
+
+  usbSetup.onChanged = []() {
+#if FEATURE_WEATHER
+    weather.requestRefresh();
+#endif
+#if FEATURE_CALENDAR
+    calendar.requestRefresh();
+#endif
+    if (screen == SCR_HOME)
+      ui.baseDrawn = false;  // show the new setup right away
+  };
   Serial.println("Setup complete.");
 }
 
@@ -1163,6 +1209,7 @@ void loop() {
   if (screen == SCR_QR || screen == SCR_WIFI_INFO || screen == SCR_UPDATE)
     portal.touch();
   portal.loop();
+  usbSetup.loop();
   net.loop();
 
 #if TFT_BL >= 0
@@ -1281,7 +1328,8 @@ void loop() {
   // Idle: hold MODO, or 5 min without input while no session is running
   bool sessionActive = model.st.running || model.st.finished;
   bool idleAllowed = !sessionActive && screen != SCR_UPDATE &&
-                     screen != SCR_QR && screen != SCR_WIFI_INFO;
+                     screen != SCR_QR && screen != SCR_WIFI_INFO &&
+                     screen != SCR_HOME;  // Home already is the calm screen
   if (modeClick == MODE_LONG) {
     if (idleAllowed)
       enterAmbient();
@@ -1303,6 +1351,9 @@ void loop() {
   }
 
   switch (screen) {
+  case SCR_HOME:
+    handleHome(click);
+    break;
   case SCR_TIMER:
     handleTimer(step, click);
     break;

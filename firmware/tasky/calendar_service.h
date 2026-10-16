@@ -50,6 +50,7 @@ public:
   void begin();
   void loop(); // Call periodically
   void forceUpdate();
+  void requestRefresh() { lastUpdate = 0; }  // fetch on the next loop()
 
 private:
   TaskyModel *model;

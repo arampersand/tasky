@@ -59,6 +59,7 @@ enum Screen {
   SCR_SETTINGS,
   SCR_QR,
   SCR_WIFI_INFO,
+  SCR_HOME,       // Glance: clock, weather, next event, tasks, phrase
   // Overlays
   SCR_AMBIENT,    // Idle: clock + next event + weather
   SCR_NOTICE      // Meeting alert / morning brief / day close
@@ -139,6 +140,7 @@ public:
   void drawAgenda();          // Today's calendar events + Notion tasks
   void drawAmbient(bool weatherOk, float temp, const char *desc, bool celsius);
   void drawAmbientClock();    // Only the clock digits (called each minute)
+  void drawAmbientPhrase();   // Only the rotating phrase line
   void drawMeetingAlert(const CalendarEventItem &ev, int minutes, bool timerPaused);
   void drawMorningBrief();
   void drawDayClose();

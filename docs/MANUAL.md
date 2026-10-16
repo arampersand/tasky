@@ -1,6 +1,6 @@
 # Tasky User Manual
 
-Firmware version: **2.5.0**
+Firmware version: **2.6.0**
 
 Tasky is a small desk device that keeps your focus sessions, your three tasks for the day, your calendar and your streak in front of you. You operate it with one knob and one button.
 
@@ -20,7 +20,16 @@ Tasky is a small desk device that keeps your focus sessions, your three tasks fo
 
 ## Quick start
 
-1. **Power it up.** Plug in a USB-C cable. You'll see the Tasky splash screen and then the **Timer**. The timer works offline right away.
+### The easy way: from your computer (recommended)
+
+1. Open **https://tasky-flash.vercel.app** in Chrome or Edge and flash the latest firmware (if your Tasky doesn't have it yet).
+2. Scroll to **Set up** and click **Connect Tasky**. Pick Tasky's USB port.
+3. Follow the steps: **Wi-Fi → calendar → today's tasks → GitHub → AI → weather**. Every step is optional, and the time zone is set from your computer.
+4. That's it. Tasky shows the **Home** screen with the time, weather, what's next and your tasks.
+
+### From your phone (no computer)
+
+1. **Power it up.** Plug in a USB-C cable. You'll see the Tasky splash screen and then **Home**. The focus timer works offline right away.
 2. **Turn on the setup network.** Tasky doesn't broadcast its setup network until you ask it to. Double-press **MODE** to jump to **More**, turn the knob to **Setup (QR)** and press the knob. The screen fills with a QR code.
 3. **Join the network.** Scan the QR code with your phone's camera, or join this WiFi network by hand:
 
@@ -60,7 +69,7 @@ A single MODE press takes effect about 0.4 s after you let go, because Tasky fir
 MODE moves through the **main carousel** in a loop:
 
 ```
-Timer → Tasks → Agenda → Stats → More → (back to Timer)
+Home → Timer → Tasks → Agenda → Stats → More → (back to Home)
 ```
 
 **More** opens the less frequently used screens:
@@ -79,6 +88,23 @@ Timer → Tasks → Agenda → Stats → More → (back to Timer)
 ---
 
 ## Screens
+
+### Home
+
+The first screen, made for a quick glance:
+
+- **Clock** (once the time is synced) and the **date**, with the **weather** next to it
+- Your **next event** today
+- Today's **open tasks** (the one you're focusing on is in teal)
+- A **phrase** that changes every couple of minutes ("Every second counts", "One thing at a time", …)
+
+| Input       | Result                                  |
+| ----------- | --------------------------------------- |
+| Short press | Start a focus session (opens the Timer) |
+| Long press  | Open Tasks                              |
+| MODE        | Next screen (Timer)                     |
+
+The clock and phrase update every minute; everything else refreshes every 5 minutes or when new weather arrives.
 
 ### Timer
 
@@ -299,20 +325,12 @@ Configure focus mode under **More → Focus**.
 
 ### Ambient (idle screen)
 
-Tasky switches to a calm idle screen in two cases:
+Ambient uses the same layout as [Home](#home). Tasky switches to it in two cases:
 
 - You **hold MODE** for 1.5 s.
 - **5 minutes** pass without any input.
 
-It won't switch while a timer is running or a finished-session alarm is waiting, or while you're on Update, Setup (QR) or WiFi info.
-
-The Ambient screen shows:
-
-- The large clock (once time is synced) and the date
-- Your next event today, or the current task if there's no event
-- The weather, when configured
-
-The clock updates every minute and everything else refreshes every 10 minutes. **Any input** (turn, press or MODE) returns you to the screen you were on. That input is used only to wake the screen.
+It won't switch while a timer is running or a finished-session alarm is waiting, while you're on Update, Setup (QR) or WiFi info, or while you're already on Home. **Any input** (turn, press or MODE) returns you to the screen you were on. That input is used only to wake the screen.
 
 ### Meeting alert
 

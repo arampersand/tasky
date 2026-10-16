@@ -23,6 +23,7 @@ public:
   void begin();
   void loop();
   void forceUpdate();
+  void requestRefresh() { lastUpdate = 0; }  // fetch on the next loop()
 
   bool isConfigured() const;
   bool needsGeocode() const;

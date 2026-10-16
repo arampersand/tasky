@@ -35,7 +35,8 @@ Tu celular es la peor herramienta de foco que tienes. Tasky es un objeto de un s
 | 📅 **Calendario y agenda** | Cualquier feed iCal. Aviso 5 minutos antes de cada reunión, resumen de la mañana y cierre del día. |
 | 🌤 **Clima** | Open-Meteo, sin API key. |
 | 🤖 **Agente IA** | Con tu key de Claude u OpenAI. |
-| 📶 **Portal WiFi** | Tasky crea su propia red con portal cautivo y QR. Se configura todo desde el celular. |
+| 🏠 **Home de un vistazo** | Hora, clima, lo que sigue, tus pendientes y una frase que va cambiando. Presiona la perilla para enfocarte. |
+| 🪄 **Setup en dos minutos** | Justo después de flashear, la página te guía por WiFi, calendario, tareas, GitHub e IA por USB. O escanea un QR con el celular. |
 | 🔄 **Actualizaciones** | Desde el navegador, o por WiFi (OTA armado desde el propio dispositivo). |
 
 ## Flashear en 60 segundos
@@ -43,7 +44,7 @@ Tu celular es la peor herramienta de foco que tienes. Tasky es un objeto de un s
 1. Abre **[tasky-flash.vercel.app](https://tasky-flash.vercel.app)** en Chrome o Edge desde una computadora.
 2. Elige **XIAO ESP32-C3** o **C6** y conecta la placa con un cable USB-C *de datos*. Si no aparece el puerto, mantén `BOOT` presionado al conectarla.
 3. Click en **Connect & flash**.
-4. En Tasky, doble click en **MODE** → **More** → **Setup (QR)**. Escanea el QR (o conéctate a la red **`Tasky`** con la contraseña que aparece en pantalla; cada Tasky tiene la suya) y se abre la página de configuración (o entra a `192.168.4.1`).
+4. Déjalo conectado y sigue **Set up** en la misma página: WiFi → calendario → tareas → GitHub → IA → clima, todo por el cable USB. (¿Sin compu? En Tasky abre **More → Setup (QR)** y escanea el código con el celular.)
 
 La página siempre sirve la [release](https://github.com/arampersand/tasky/releases/latest) más nueva y conserva tus ajustes al reinstalar.
 

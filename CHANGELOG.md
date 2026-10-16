@@ -2,6 +2,18 @@
 
 All notable changes to the Tasky firmware. Versions match `firmware/tasky/version.h` and git tags.
 
+## v2.6.0 — 2026-10-15 · Home & web setup (3.0 beta)
+
+### Added
+- **Home screen**: the new first screen. Clock, date and weather, next event, today's open tasks and a rotating phrase. Press the knob to start focusing; long press for Tasks.
+- **Set up from the browser**: after flashing, https://tasky-flash.vercel.app walks you through Wi-Fi (with a network scan), calendar, tasks, GitHub, AI and weather over the USB cable. The time zone comes from your computer.
+- USB setup protocol (`TASKY?`, `TASKY SCAN`, `TASKY SET {json}`) in `usb_setup.cpp`.
+- The 3D model on the website shows the Home screen.
+
+### Changed
+- Ambient (idle) uses the Home layout and never triggers while you're already on Home.
+- New library dependency: ArduinoJson 7.
+
 ## v2.5.0 — 2026-10-15 · Portal login
 
 ### Security

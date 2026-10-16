@@ -295,6 +295,12 @@ Fonts are Adafruit GFX FreeSans fonts (`ui.h`). They only contain ASCII, so acce
 
 ---
 
+## Changing the Home phrases
+
+The rotating phrases on Home/Ambient live in `PHRASES[]` near the top of the Home section of `firmware/tasky/ui.cpp`. Add, remove or translate them; keep each under ~24 characters so it fits on one line. A new phrase shows every 2 minutes.
+
+---
+
 ## Changing the WiFi setup network name and password
 
 The network name is `apSSID` in `wifi_portal.h`:

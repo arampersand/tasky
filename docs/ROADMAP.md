@@ -36,12 +36,14 @@ The variant is a build flag (`TASKY_VARIANT_DESK` / `TASKY_VARIANT_GO` in `confi
 - A slide switch on `BAT+`; the light bar becomes optional to save power.
 - Rough budget (IPS): Wi-Fi active ≈ 80–100 mA, backlight ≈ 20–40 mA. A 1000 mAh cell lasts ~8 h fully on, so Go relies on light sleep, short Wi-Fi bursts and a sleeping screen.
 
-## Phase 1 — Stable 3.0: setup that flows *(next)*
+## Phase 1 — Stable 3.0: setup that flows *(in progress)*
+
+**Shipped in 2.6.0 (beta):** web setup wizard over USB (Wi-Fi scan, calendar, tasks, GitHub, AI, weather, time zone), Home glance screen with rotating phrases as the first screen, Ambient sharing the Home layout. **Still to do:** Improv Wi-Fi inside the installer dialog, on-device first-boot tour + hints, portal in English/Spanish, quick-start card, hardware validation.
 
 **Guided onboarding on the website**, one screen at a time, each step skippable:
 
 1. **Flash** (as today).
-2. **Wi-Fi** right in the browser ([Improv Wi-Fi](https://www.improv-wifi.com/) over serial, built into ESP Web Tools). No captive portal needed.
+2. **Wi-Fi** right in the browser: Tasky scans nearby networks over USB, you pick one and type the password. No captive portal needed. (Later: [Improv Wi-Fi](https://www.improv-wifi.com/) inside the installer dialog too.)
 3. **Calendar**: paste your Google/Outlook/iCloud iCal link (with a 3-step "where do I find it" helper). Today's events appear as to-dos.
 4. **GitHub** username (optional): your streak.
 5. **AI** (optional): ChatGPT or Claude key, so you can ask Tasky things.

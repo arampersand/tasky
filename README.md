@@ -44,7 +44,8 @@ Your phone is the worst focus tool you own. Tasky is a single-purpose object tha
 | 🌤 **Weather** | Open-Meteo, so no API key is needed. Just your city. |
 | 🤖 **AI agent** | Bring your Claude or OpenAI key. |
 | 📊 **Stats** | Total focus time, sessions and minutes today. |
-| 📶 **Wi-Fi setup portal** | Tasky creates its own network with a captive portal and a QR code. Configure everything from your phone. |
+| 🏠 **Home at a glance** | Time, weather, what's next, your open tasks and a rotating phrase. Press the knob to start focusing. |
+| 🪄 **Two-minute setup** | Right after flashing, the website walks you through Wi-Fi, calendar, tasks, GitHub and AI over USB. Or scan a QR with your phone. |
 | 🔄 **Updates** | Flash from the browser, or OTA over Wi-Fi (armed from the device itself for safety). |
 
 ## Flash in 60 seconds
@@ -52,7 +53,7 @@ Your phone is the worst focus tool you own. Tasky is a single-purpose object tha
 1. Open **[tasky-flash.vercel.app](https://tasky-flash.vercel.app)** in Chrome or Edge on a computer.
 2. Pick **XIAO ESP32-C3** or **C6** and plug the board in with a USB-C *data* cable. If no port shows up, hold `BOOT` while plugging in.
 3. Click **Connect & flash**.
-4. On Tasky, double-press **MODE** → **More** → **Setup (QR)**. Scan the QR (or join Wi-Fi **`Tasky`** with the password shown on screen; every Tasky has its own) and the setup page opens (or go to `192.168.4.1`).
+4. Keep it plugged in and follow **Set up** on the same page: Wi-Fi → calendar → tasks → GitHub → AI → weather, all over the USB cable. (No computer? On Tasky open **More → Setup (QR)** and scan the code with your phone.)
 
 The page always serves the newest [release](https://github.com/arampersand/tasky/releases/latest) and keeps your settings when you reinstall. Prefer the command line? (full image, erases settings)
 

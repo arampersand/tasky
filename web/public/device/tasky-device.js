@@ -4,12 +4,12 @@
 //
 // Usage:  <script type="module" src="/device/tasky-device.js"></script>
 //         <tasky-device style="--size: 260px"></tasky-device>
-// Attributes: screen="focus|tasks|stats|more" (pins one screen, disables cycling)
+// Attributes: screen="home|focus|tasks|stats|more" (pins one screen, disables cycling)
 
 const TEAL = "#29CBBD";
 const BG = "#050a14";
 const MUTED = "#7b8494";
-const SCREENS = ["focus", "tasks", "stats", "more"];
+const SCREENS = ["home", "focus", "tasks", "stats", "more"];
 const CYCLE_MS = 4200;
 
 const NOISE = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='1.4' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 .09 0'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23n)'/%3E%3C/svg%3E")`;
@@ -96,7 +96,7 @@ class TaskyDevice extends HTMLElement {
     this.ctx.scale(2, 2); // draw in the firmware's 240x240 coordinate space
     this.reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
     this.pinned = this.getAttribute("screen");
-    this.idx = Math.max(0, SCREENS.indexOf(this.pinned ?? "focus"));
+    this.idx = Math.max(0, SCREENS.indexOf(this.pinned ?? "home"));
     this.screenAt = performance.now();
     this.rot = { x: -14, y: -32 };
     this.drag = null;
@@ -271,6 +271,24 @@ class TaskyDevice extends HTMLElement {
     c.fillStyle = "#fff"; c.font = this.font(22, 800); c.fillText(title, 120, 30);
     c.strokeStyle = "#5d6b80"; c.lineWidth = 1.5;
     c.beginPath(); c.moveTo(40, 48); c.lineTo(200, 48); c.stroke();
+  }
+
+  home(c) {
+    // Glance: clock, date + weather, next event, open tasks, phrase
+    c.fillStyle = "#fff"; c.font = this.font(46, 800); c.fillText("09:41", 120, 48);
+    c.font = this.font(14, 500);
+    c.fillStyle = MUTED; c.textAlign = "right"; c.fillText("Wed 15 Oct", 128, 92);
+    c.fillStyle = TEAL; c.textAlign = "left"; c.fillText("21°C Sunny", 138, 92);
+    c.textAlign = "center";
+    c.strokeStyle = "#2a3448"; c.lineWidth = 1.5; c.beginPath(); c.moveTo(40, 108); c.lineTo(200, 108); c.stroke();
+    c.fillStyle = "#fff"; c.font = this.font(15, 600); c.fillText("10:30  Design review", 120, 130);
+    [["Ship v3.0", true], ["Write the docs", false]].forEach(([t, cur], i) => {
+      const y = 156 + i * 22;
+      c.fillStyle = cur ? TEAL : MUTED; c.beginPath(); c.arc(30, y, 3, 0, Math.PI * 2); c.fill();
+      c.textAlign = "left"; c.fillStyle = cur ? TEAL : "#fff"; c.font = this.font(15, 600); c.fillText(t, 42, y + 1);
+      c.textAlign = "center";
+    });
+    c.fillStyle = MUTED; c.font = this.font(13, 500); c.fillText("Every second counts", 120, 220);
   }
 
   focus(c, t) {
