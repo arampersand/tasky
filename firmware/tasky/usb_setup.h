@@ -33,6 +33,7 @@ public:
   std::function<bool(const String &cmd)> onCommand;
   // Set when a SET carried "light"; onChanged clears it after re-init.
   bool lightSet = false;
+  uint32_t lastCommandAt = 0;  // a computer talked to Tasky (the tour moves on)
 
 private:
   TaskyModel *model;

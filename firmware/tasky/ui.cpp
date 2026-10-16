@@ -2770,21 +2770,34 @@ void TaskyUI::rightTextFont(const String &s, int xRight, int baselineY,
 
 // ==================== TOUR & HINTS ====================
 // Tour: each step shows the control it teaches and waits for that action.
-void TaskyUI::drawTour(int step) {
-  clearScreen();
-  for (int i = 0; i < 4; i++) {  // progress dots
-    int x = CX - 24 + i * 16;
+void TaskyUI::tourDots(int step) {
+  for (int i = 0; i < 6; i++) {  // progress dots
+    int x = CX - 40 + i * 16;
     if (i <= step)
       tft.fillCircle(x, 26, 4, C_TEAL);
     else
       tft.drawCircle(x, 26, 4, C_LINE);
   }
-  if (step == 3) {
+}
+
+void TaskyUI::drawTour(int step) {
+  clearScreen();
+  tourDots(step);
+  if (step == 5) {
     centerTextFont("You're set!", 84, C_TEXT, &FreeSansBold18pt7b);
     centerTextFont("MODE: next screen", 124, C_MUTED, &FreeSans9pt7b);
     centerTextFont("MODE twice: go back", 148, C_MUTED, &FreeSans9pt7b);
     centerTextFont("Hold MODE: rest screen", 172, C_MUTED, &FreeSans9pt7b);
     centerTextFont("Press the knob for Home", 212, C_TEAL, &FreeSans9pt7b);
+    return;
+  }
+  if (step == 3) {  // connect: a computer over USB, or the phone
+    centerTextFont("Set me up", 70, C_TEXT, &FreeSansBold18pt7b);
+    centerTextFont("On a computer, open", 106, C_MUTED, &FreeSans9pt7b);
+    centerTextFont("tasky-flash.vercel.app", 130, C_TEAL, &FreeSans9pt7b);
+    centerTextFont("with Tasky plugged in", 154, C_MUTED, &FreeSans9pt7b);
+    centerTextFont("Phone? Press the knob", 190, C_TEXT, &FreeSans9pt7b);
+    centerTextFont("Hold MODE to skip", 218, C_MUTED, &FreeSans9pt7b);
     return;
   }
   static const char *const TITLE[] = {"Turn the knob", "Press the knob", "Press MODE"};
@@ -2811,6 +2824,36 @@ void TaskyUI::drawTour(int step) {
   centerTextFont(TITLE[step], 160, C_TEXT, &FreeSansBold12pt7b);
   centerTextFont(SUB[step], 184, C_MUTED, &FreeSans9pt7b);
   centerTextFont("Hold MODE to skip", 218, C_MUTED, &FreeSans9pt7b);
+}
+
+// Tour "set up": what's ready ticks itself while you fill in the web setup
+// or the phone page
+void TaskyUI::drawTourSetup(uint8_t checks, const char *ssid) {
+  clearScreen();
+  tourDots(4);
+  centerTextFont("Setting up", 62, C_TEXT, &FreeSansBold12pt7b);
+  String wifi = String("Wi-Fi") + (ssid[0] ? String(": ") + ssid : String(""));
+  const String rows[5] = {fitText(wifi, 150, &FreeSans9pt7b), "Calendar", "Tasks", "Weather",
+                          "AI brief"};
+  for (int i = 0; i < 5; i++) {
+    int y = 94 + i * 24;
+    bool ok = checks & (1 << i);
+    if (ok) {  // a tick
+      tft.drawLine(42, y - 5, 46, y - 1, C_TEAL);
+      tft.drawLine(46, y - 1, 54, y - 10, C_TEAL);
+      tft.drawLine(42, y - 4, 46, y, C_TEAL);
+      tft.drawLine(46, y, 54, y - 9, C_TEAL);
+    } else {
+      tft.drawCircle(48, y - 5, 4, C_LINE);
+    }
+    tft.setFont(&FreeSans9pt7b);
+    tft.setTextColor(ok ? C_TEXT : C_MUTED);
+    tft.setCursor(64, y);
+    tft.print(rows[i]);
+  }
+  tft.setFont();
+  centerTextFont("Optional, except Wi-Fi", 210, C_MUTED, &FreeSans9pt7b);
+  centerTextFont("Press when you're done", 230, C_TEAL, &FreeSans9pt7b);
 }
 
 // Hint pill. "Turn:", "Press:" and "Hold:" become small knob glyphs, so

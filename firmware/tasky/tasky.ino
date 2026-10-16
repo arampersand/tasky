@@ -1043,7 +1043,10 @@ void showNotice(NoticeType type) {
 }
 
 // ==================== TOUR & HINTS ====================
-// First boot: a 4-step tour that waits for the action each step teaches.
+// First boot: turn, press, MODE (each waits for the action it teaches), then
+// connect (the web setup over USB, or the phone with the QR code), set up
+// (a checklist that ticks itself as you go) and done. The two setup steps
+// are skipped when Tasky is already online.
 // Afterwards each screen shows a one-line hint on its first HINT_VISITS visits.
 // Both live in the "tasky" NVS namespace, so a factory reset brings them back.
 const int HINT_VISITS = 3;
@@ -1051,6 +1054,15 @@ const uint32_t HINT_MS = 3000;
 uint8_t hintVisits[SCR_NOTICE + 1];
 uint32_t hintUntil = 0;
 int tourStep = 0;
+bool tourQR = false;  // connect step: the phone's QR code is up
+const int TOUR_CONNECT = 3, TOUR_SETUP = 4, TOUR_DONE = 5;
+
+// What the setup checklist shows (a change repaints it)
+static uint8_t setupChecks() {
+  return (net.isConnected() ? 1 : 0) | (model.cfg.calendarUrl.length() ? 2 : 0) |
+         (model.hasAnyTask() ? 4 : 0) | (model.cfg.weatherCity.length() ? 8 : 0) |
+         (model.cfg.llmApiKey.length() ? 16 : 0);
+}
 
 const char *hintFor(Screen s) {
   switch (s) {
@@ -1096,25 +1108,59 @@ void endTour() {
 }
 
 void handleTour(int step, EncClickType click, ModeClickType mode) {
+  static uint8_t shownChecks = 0xFF;
+  static uint32_t usbSeen = 0;
   if (!ui.baseDrawn) {
-    ui.drawTour(tourStep);
+    if (tourStep == TOUR_CONNECT && tourQR)
+      ui.drawQRFull(portal.apSSID, model.cfg.apPass);
+    else if (tourStep == TOUR_SETUP)
+      ui.drawTourSetup(shownChecks = setupChecks(), model.cfg.wifiSSID.c_str());
+    else
+      ui.drawTour(tourStep);
     ui.baseDrawn = true;
+    usbSeen = usbSetup.lastCommandAt;
   }
   if (mode == MODE_LONG) {
+    tourQR = false;
     endTour();
     return;
   }
-  bool done = (tourStep == 0 && step != 0) ||
-              ((tourStep == 1 || tourStep == 3) && click != ENC_NONE) ||
-              (tourStep == 2 && (mode == MODE_SHORT || mode == MODE_DOUBLE));
+  if (tourStep >= TOUR_CONNECT && portal.wifiOn)
+    portal.touch();  // keep the phone's setup network up during setup
+  bool done = false;
+  if (tourStep == 0)
+    done = step != 0;
+  else if (tourStep == 1 || tourStep == TOUR_DONE)
+    done = click != ENC_NONE;
+  else if (tourStep == 2)
+    done = mode == MODE_SHORT || mode == MODE_DOUBLE;
+  else if (tourStep == TOUR_CONNECT) {
+    // The web setup talking over USB, or Wi-Fi saved from the phone
+    done = usbSetup.lastCommandAt != usbSeen || model.cfg.wifiSSID.length() > 0;
+    if (!done && click == ENC_SHORT) {  // the phone: show the QR code (press again: back)
+      ui.uiTick(true);
+      tourQR = !tourQR;
+      if (tourQR && !portal.wifiOn)
+        portal.begin();
+      ui.baseDrawn = false;
+      return;
+    }
+  } else if (tourStep == TOUR_SETUP) {
+    if (setupChecks() != shownChecks)
+      ui.baseDrawn = false;  // something got set up: tick it
+    done = click == ENC_SHORT;  // "Press when you're done"
+  }
   if (!done)
     return;
   ui.uiTick(true);
-  if (tourStep == 3) {
+  if (tourStep == TOUR_DONE) {
     endTour();
     return;
   }
+  tourQR = false;
   tourStep++;
+  if (tourStep == TOUR_CONNECT && net.isConnected())
+    tourStep = TOUR_DONE;  // already online: nothing to set up
   ui.baseDrawn = false;
 }
 

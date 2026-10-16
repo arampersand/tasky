@@ -206,7 +206,10 @@ public:
   int phraseCount();                 // Your phrases (web setup) or the built-in ones
   String phraseAt(int idx);          // Text only; wraps around
   void phraseAt(int idx, String &text, String &author);
-  void drawTour(int step);           // 0 turn, 1 press, 2 MODE, 3 done
+  void drawTour(int step);
+  // Tour "set up" step: bits 1 Wi-Fi, 2 calendar, 4 tasks, 8 weather, 16 AI brief
+  void drawTourSetup(uint8_t checks, const char *ssid);
+  void tourDots(int step);  // the tour's 6 progress dots           // 0 turn, 1 press, 2 MODE, 3 done
   void drawHint(const char *text);   // One-line pill at the bottom
   void drawBanner(const char *text); // Notice across the top (agent needs you)
   void drawCarouselDots(int index, int count);  // position in the MODE carousel

@@ -462,12 +462,14 @@ String WiFiPortal::htmlPage() {
 
 #if FEATURE_LLM
   s += "<label>";
-  s += T("Ask Tasky (AI)", "Pregúntale a Tasky (IA)");
+  s += T("AI brief", "Resumen con IA");
   s += "<select name='lPrv'>";
   option(1, model->cfg.llmProvider == 1, "ChatGPT (OpenAI)");
   option(0, model->cfg.llmProvider == 0, "Claude (Anthropic)");
   s += "</select></label>";
   s += secretField(T("API key", "API key"), "lKey", model->cfg.llmApiKey, "sk-…");
+  hint(T("Optional. Every morning Tasky writes your day in three lines (what matters, what to start with, a tip) from your calendar and tasks.",
+         "Opcional. Cada mañana Tasky resume tu día en tres líneas (lo importante, por dónde empezar, un consejo) con tu calendario y tus tareas."));
   hint(T("Get one at <a href='https://platform.openai.com/api-keys' target='_blank'>platform.openai.com</a> or <a href='https://console.anthropic.com/settings/keys' target='_blank'>console.anthropic.com</a>. The key stays on your Tasky.",
          "Consíguela en <a href='https://platform.openai.com/api-keys' target='_blank'>platform.openai.com</a> o <a href='https://console.anthropic.com/settings/keys' target='_blank'>console.anthropic.com</a>. La key se queda en tu Tasky."));
 #endif

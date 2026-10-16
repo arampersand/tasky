@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Connect Claude Code to Tasky</title>
-<meta name="description" content="See your Claude Code sessions on Tasky and approve requests with the knob. One command to set it up.">
+<meta name="description" content="See your Claude Code sessions on Tasky and answer Claude's requests with the knob. Set it up with one command.">
 <meta name="theme-color" content="#05070d">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='3' y='3' width='26' height='26' rx='7' fill='%23111'/%3E%3Crect x='7' y='6' width='18' height='4' rx='2' fill='%233f7dff'/%3E%3Crect x='8' y='12' width='16' height='14' rx='3' fill='%2329CEBD'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -41,7 +41,7 @@
 <header class="nav wrap">
   <a class="brand" href="/" aria-label="Tasky home"><span class="mark"></span>Tasky</a>
   <nav>
-    <a href="/#flash">Flash</a>
+    <a href="/#flash">Install</a>
     <a href="/#setup">Set up</a>
     <div class="lang" role="group" aria-label="Language">
       <button type="button" data-set="en" aria-pressed="true">EN</button>
@@ -55,31 +55,31 @@
   <section data-lang="en" class="on" lang="en">
     <p class="kicker">Claude Code</p>
     <h1>Your Claude Code sessions on Tasky</h1>
-    <p class="lede">One card per session: working, waiting for you, done. When Claude asks permission, answer with the knob.</p>
+    <p class="lede">Tasky shows one card for each Claude Code session: working, waiting for you, or done. When Claude asks for permission, you answer with the knob.</p>
     <ol class="howto">
       <li>
         <h2>Plug Tasky into your computer</h2>
-        <p>With the USB cable, on the computer where Claude Code runs (Tasky 3.0 or newer). Only the first time: after that it also works over Wi-Fi. Close any page that is using Tasky, like the setup page: only one app can hold its USB port.</p>
+        <p>Use the USB cable. Plug it into the computer where you use Claude Code. You need Tasky 3.0 or newer. You only need the cable the first time. After that, it also works over Wi-Fi (Tasky 3.1 or newer). First, close any other page that is using Tasky, like the setup page. Only one app can use Tasky's USB connection at a time.</p>
       </li>
       <li>
-        <h2>Paste this in Terminal</h2>
+        <h2>Paste this in the Terminal app and press Enter</h2>
         <div class="cmd"><code>claude plugin marketplace add arampersand/tasky &amp;&amp; claude plugin install tasky@tasky</code><button class="btn ghost" data-copy type="button">Copy</button></div>
-        <details><summary>Or from inside Claude Code</summary>
+        <details><summary>Or type these inside Claude Code</summary>
           <div class="cmd"><code>/plugin marketplace add arampersand/tasky</code><button class="btn ghost" data-copy type="button">Copy</button></div>
           <div class="cmd"><code>/plugin install tasky@tasky</code><button class="btn ghost" data-copy type="button">Copy</button></div>
         </details>
       </li>
       <li>
         <h2>Start Claude Code</h2>
-        <p>Open (or restart) Claude Code. Tasky shows a <strong>Ready</strong> card on the <strong>Agents</strong> screen. Each session gets its own card; turn the knob to go through them.</p>
+        <p>Open Claude Code, or restart it if it was already open. Tasky shows a <strong>Ready</strong> card on the <strong>Agents</strong> screen. Each session gets its own card. Turn the knob to see them all.</p>
       </li>
     </ol>
     <div class="faq">
-      <article><h3>Approving from the knob</h3><p>When Claude asks to run a command or edit a file, Tasky jumps to that card and the light breathes. Turn to pick <strong>Allow</strong>, <strong>Deny</strong> or <strong>Allow edits</strong>, press to answer. Hold the knob to answer in the terminal instead.</p></article>
-      <article><h3>Something not working?</h3><p>In Claude Code, run <code>/tasky:status</code>. It checks Python, the USB port, the firmware and the hooks, and says what to fix.</p></article>
-      <article><h3>What you need</h3><p>macOS or Linux with Python 3 (on a Mac: <code>xcode-select --install</code> if it's missing). Windows isn't supported yet.</p></article>
-      <article><h3>Unplugged, on battery?</h3><p>Yes, with Tasky 3.1 or newer. Plug Tasky in once (step 1) and the plugin pairs with it. After that it works over Wi-Fi when Tasky and your computer are on the same network.</p></article>
-      <article><h3>Without the plugin</h3><p><code>curl -fsSL https://tasky-flash.vercel.app/agents/install.sh | sh</code> adds the same hooks to <code>~/.claude/settings.json</code>. Use one or the other, not both. <a href="https://github.com/arampersand/tasky/blob/main/companion/README.md">How it works →</a></p></article>
+      <article><h3>Answering with the knob</h3><p>When Claude wants to run a command or change a file, Tasky jumps to that card and the light breathes. Turn the knob to pick <strong>Allow</strong>, <strong>Deny</strong> or <strong>Allow edits</strong>. Press to answer. To answer on your computer instead, hold the knob.</p></article>
+      <article><h3>Something not working?</h3><p>In Claude Code, type <code>/tasky:status</code>. It checks your setup and tells you what to fix.</p></article>
+      <article><h3>What you need</h3><p>A Mac or Linux computer with Python 3. On a Mac, if Python is missing, run <code>xcode-select --install</code> in Terminal. Windows doesn't work yet.</p></article>
+      <article><h3>Unplugged, on battery?</h3><p>Yes, with Tasky 3.1 or newer. Plug Tasky in once (step 1) so the plugin can pair with it. After that it works over Wi-Fi, as long as Tasky and your computer are on the same network.</p></article>
+      <article><h3>Without the plugin</h3><p>For advanced users: <code>curl -fsSL https://tasky-flash.vercel.app/agents/install.sh | sh</code> adds the same setup to your Claude Code settings file, <code>~/.claude/settings.json</code>. Use this or the plugin, not both. <a href="https://github.com/arampersand/tasky/blob/main/companion/README.md">How it works →</a></p></article>
     </div>
   </section>
 
@@ -87,31 +87,31 @@
   <section data-lang="es" lang="es">
     <p class="kicker">Claude Code</p>
     <h1>Tus sesiones de Claude Code en Tasky</h1>
-    <p class="lede">Una tarjeta por sesión: trabajando, esperándote, lista. Cuando Claude pide permiso, respondes con la perilla.</p>
+    <p class="lede">Tasky muestra una tarjeta por cada sesión de Claude Code: trabajando, esperándote o lista. Cuando Claude te pide permiso, respondes con la perilla.</p>
     <ol class="howto">
       <li>
         <h2>Conecta Tasky a tu computadora</h2>
-        <p>Con el cable USB, en la compu donde corre Claude Code (Tasky 3.0 o más nuevo). Solo la primera vez: después también funciona por Wi-Fi. Cierra cualquier página que esté usando a Tasky, como la de configuración: solo una app puede usar su puerto USB.</p>
+        <p>Usa el cable USB. Conéctalo a la computadora donde usas Claude Code. Necesitas Tasky 3.0 o más nuevo. El cable solo hace falta la primera vez. Después también funciona por Wi-Fi (Tasky 3.1 o más nuevo). Antes, cierra cualquier otra página que esté usando a Tasky, como la de configuración. Solo una app a la vez puede usar la conexión USB de Tasky.</p>
       </li>
       <li>
-        <h2>Pega esto en la Terminal</h2>
+        <h2>Pega esto en la app Terminal y presiona Enter</h2>
         <div class="cmd"><code>claude plugin marketplace add arampersand/tasky &amp;&amp; claude plugin install tasky@tasky</code><button class="btn ghost" data-copy type="button">Copiar</button></div>
-        <details><summary>O desde Claude Code</summary>
+        <details><summary>O escribe esto dentro de Claude Code</summary>
           <div class="cmd"><code>/plugin marketplace add arampersand/tasky</code><button class="btn ghost" data-copy type="button">Copiar</button></div>
           <div class="cmd"><code>/plugin install tasky@tasky</code><button class="btn ghost" data-copy type="button">Copiar</button></div>
         </details>
       </li>
       <li>
         <h2>Abre Claude Code</h2>
-        <p>Ábrelo (o reinícialo). Tasky muestra una tarjeta <strong>Ready</strong> en la pantalla <strong>Agents</strong>. Cada sesión tiene su tarjeta; gira la perilla para recorrerlas.</p>
+        <p>Abre Claude Code, o reinícialo si ya estaba abierto. Tasky muestra una tarjeta <strong>Ready</strong> en la pantalla <strong>Agents</strong>. Cada sesión tiene su propia tarjeta. Gira la perilla para verlas todas.</p>
       </li>
     </ol>
     <div class="faq">
-      <article><h3>Aprobar con la perilla</h3><p>Cuando Claude pide correr un comando o editar un archivo, Tasky salta a esa tarjeta y la luz respira. Gira para elegir <strong>Allow</strong>, <strong>Deny</strong> o <strong>Allow edits</strong> y presiona para responder. Mantén presionada la perilla para responder en la terminal.</p></article>
-      <article><h3>¿Algo no funciona?</h3><p>En Claude Code corre <code>/tasky:status</code>. Revisa Python, el puerto USB, el firmware y los hooks, y te dice qué arreglar.</p></article>
-      <article><h3>Qué necesitas</h3><p>macOS o Linux con Python 3 (en Mac: <code>xcode-select --install</code> si no lo tienes). Windows todavía no.</p></article>
-      <article><h3>¿Desconectado, con batería?</h3><p>Sí, con Tasky 3.1 o más nuevo. Conéctalo una vez (paso 1) y el plugin se empareja. Después funciona por Wi-Fi cuando Tasky y tu compu están en la misma red.</p></article>
-      <article><h3>Sin el plugin</h3><p><code>curl -fsSL https://tasky-flash.vercel.app/agents/install.sh | sh</code> agrega los mismos hooks a <code>~/.claude/settings.json</code>. Usa uno u otro, no los dos. <a href="https://github.com/arampersand/tasky/blob/main/companion/README.md">Cómo funciona →</a></p></article>
+      <article><h3>Responder con la perilla</h3><p>Cuando Claude quiere correr un comando o cambiar un archivo, Tasky salta a esa tarjeta y la luz respira. Gira la perilla para elegir <strong>Allow</strong> (permitir), <strong>Deny</strong> (rechazar) o <strong>Allow edits</strong> (permitir cambios). Presiona para responder. Si prefieres responder en tu computadora, mantén presionada la perilla.</p></article>
+      <article><h3>¿Algo no funciona?</h3><p>En Claude Code, escribe <code>/tasky:status</code>. Revisa tu configuración y te dice qué arreglar.</p></article>
+      <article><h3>Qué necesitas</h3><p>Una Mac o una computadora con Linux, con Python 3. En Mac, si no tienes Python, corre <code>xcode-select --install</code> en la Terminal. Windows todavía no funciona.</p></article>
+      <article><h3>¿Desconectado, con batería?</h3><p>Sí, con Tasky 3.1 o más nuevo. Conéctalo una vez (paso 1) para que el plugin se empareje con él. Después funciona por Wi-Fi, siempre que Tasky y tu computadora estén en la misma red.</p></article>
+      <article><h3>Sin el plugin</h3><p>Para usuarios avanzados: <code>curl -fsSL https://tasky-flash.vercel.app/agents/install.sh | sh</code> agrega lo mismo a tu archivo de configuración de Claude Code, <code>~/.claude/settings.json</code>. Usa esto o el plugin, no los dos. <a href="https://github.com/arampersand/tasky/blob/main/companion/README.md">Cómo funciona →</a></p></article>
     </div>
   </section>
 </main>

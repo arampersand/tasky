@@ -3,10 +3,10 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Tasky — open-source desk focus companion</title>
-<meta name="description" content="Tasky is an open-source ESP32 desk companion: focus timer, tasks, streaks, calendar and an AI agent. Flash it straight from your browser.">
-<meta property="og:title" content="Tasky — flash it from your browser">
-<meta property="og:description" content="Open-source ESP32 desk companion. Focus timer, tasks, streaks, calendar, AI agent.">
+<title>Tasky — a small desk device that helps you focus</title>
+<meta name="description" content="Tasky is a small open-source desk device with a screen, a knob and a light. It shows your tasks, calendar and weather, and helps you focus. Install its software right from your browser.">
+<meta property="og:title" content="Tasky — install it from your browser">
+<meta property="og:description" content="A small open-source desk device: focus timer, today's tasks, calendar, weather and an AI morning brief.">
 <meta property="og:image" content="https://tasky-flash.vercel.app/img/og.jpg">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="theme-color" content="#05070d">
@@ -24,7 +24,7 @@
 <header class="nav wrap">
   <a class="brand" href="#top" aria-label="Tasky home"><span class="mark"></span>Tasky</a>
   <nav>
-    <a href="#flash">Flash</a>
+    <a href="#flash">Install</a>
     <a href="#setup">Set up</a>
     <a href="#tasky">What it does</a>
     <a href="/claude">Claude Code</a>
@@ -37,29 +37,29 @@
   <section class="hero wrap">
     <div class="hero-copy">
       <p class="eyebrow"><span class="dot"></span><span id="hero-version">Open source · ESP32-C3 / C6</span></p>
-      <h1>A tiny desk companion that keeps you <em>in focus</em>.</h1>
-      <p class="lede">Tasky is a knob, a screen and a light bar. Focus sessions, today's tasks, your streak, your next meeting and an AI agent — without picking up your phone.</p>
+      <h1>A small desk device that helps you <em>focus</em>.</h1>
+      <p class="lede">Tasky has a screen, a knob and a light. It shows the time, your tasks, your next meeting and the weather. Press the knob to start focusing. No need to pick up your phone.</p>
       <div class="cta">
-        <a class="btn primary" href="#flash">Flash from your browser</a>
-        <a class="btn ghost" href="https://github.com/arampersand/tasky" rel="noopener">View on GitHub</a>
+        <a class="btn primary" href="#flash">Install from your browser</a>
+        <a class="btn ghost" href="https://github.com/arampersand/tasky" rel="noopener">See the code on GitHub</a>
       </div>
       <ul class="facts">
-        <li><strong>1-click</strong> flashing</li>
-        <li><strong>GPL-3.0</strong> firmware</li>
-        <li><strong>XIAO</strong> C3 or C6</li>
+        <li><strong>1 click</strong> to install</li>
+        <li><strong>Open source</strong> (GPL-3.0)</li>
+        <li><strong>XIAO</strong> C3 or C6 board</li>
       </ul>
     </div>
     <div class="hero-device">
       <tasky-device></tasky-device>
-      <p class="hint">Drag to rotate · tap the screen</p>
+      <p class="hint">Drag to turn it · tap the screen</p>
     </div>
   </section>
 
   <section id="flash" class="wrap section">
     <div class="section-head">
       <p class="kicker">Install</p>
-      <h2>Flash the latest firmware</h2>
-      <p class="sub">Straight from this page over USB. No toolchain, no drivers on macOS/Linux/Windows 10+.</p>
+      <h2>Install the Tasky software</h2>
+      <p class="sub">Do it from this page with a USB cable. Nothing else to install. You need Chrome or Edge on a computer (Mac, Windows 10 or newer, or Linux).</p>
     </div>
 
     <div class="flash-card">
@@ -67,36 +67,36 @@
         <li>
           <span class="num">1</span>
           <div>
-            <h3>Pick your board</h3>
+            <h3>Choose your board</h3>
             <div class="boards" role="radiogroup" aria-label="Board">
               <label class="board"><input type="radio" name="board" value="c3" checked>
-                <span><strong>XIAO ESP32-C3</strong><small>Original Tasky build</small></span></label>
+                <span><strong>XIAO ESP32-C3</strong><small>The original Tasky board</small></span></label>
               <label class="board"><input type="radio" name="board" value="c6">
-                <span><strong>XIAO ESP32-C6</strong><small>Wi-Fi 6 · same pinout</small></span></label>
+                <span><strong>XIAO ESP32-C6</strong><small>Newer, with Wi-Fi 6 · same wiring</small></span></label>
             </div>
           </div>
         </li>
         <li>
           <span class="num">2</span>
           <div>
-            <h3>Plug it in</h3>
-            <p>Use a USB-C <em>data</em> cable. If no port shows up, hold <kbd>BOOT</kbd> on the XIAO while plugging it in.</p>
+            <h3>Plug Tasky into your computer</h3>
+            <p>Use a USB-C cable that carries <em>data</em>. Some cables only charge. If Tasky doesn't show up in step 3, unplug it. Then hold the small <kbd>BOOT</kbd> button on the board while you plug it back in.</p>
             <p class="note ok" id="usb-status" role="status" hidden>✓ Your Tasky is plugged in.</p>
           </div>
         </li>
         <li>
           <span class="num">3</span>
           <div>
-            <h3>Flash</h3>
+            <h3>Install</h3>
             <esp-web-install-button id="installer" manifest="/firmware/manifest-c3.json">
-              <button slot="activate" class="btn primary big">Connect &amp; flash</button>
-              <span slot="unsupported" class="note warn">Your browser can't talk to USB devices. Open this page in <strong>Chrome</strong> or <strong>Edge</strong> on a computer.</span>
-              <span slot="not-allowed" class="note warn">Web Serial needs a secure page — open <strong>https://tasky-flash.vercel.app</strong>.</span>
+              <button slot="activate" class="btn primary big">Connect and install</button>
+              <span slot="unsupported" class="note warn">This browser can't connect to USB devices. Open this page in <strong>Chrome</strong> or <strong>Edge</strong> on a computer.</span>
+              <span slot="not-allowed" class="note warn">This page needs a secure connection. Open <strong>https://tasky-flash.vercel.app</strong> instead.</span>
             </esp-web-install-button>
-            <p class="small pick-help">The browser lists only Tasky-type devices. Pick <strong>USB JTAG/serial debug unit</strong>: that's your Tasky.</p>
-            <label class="small check"><input type="checkbox" id="show-all-ports"> Not in the list? Show every port</label>
-            <p class="small"><strong>Erase device</strong> in the installer only wipes Tasky's own memory (Wi-Fi, tasks, settings). Leave it off to keep them. It can't touch your disks or anything else on your computer.</p>
-            <p id="no-release" class="note" hidden>No firmware release has been published yet. Check back soon or <a href="https://github.com/arampersand/tasky/blob/main/docs/BUILDING.md">build it yourself</a>.</p>
+            <p class="small pick-help">A small window opens with a list. Pick <strong>USB JTAG/serial debug unit</strong>. That's your Tasky.</p>
+            <label class="small check"><input type="checkbox" id="show-all-ports"> Don't see it? Show every device</label>
+            <p class="small">The installer offers <strong>Erase device</strong>. Leave it off to keep your Wi-Fi, tasks and settings. If you turn it on, it only clears Tasky's memory. It never touches your computer.</p>
+            <p id="no-release" class="note" hidden>There's no Tasky software to install yet. Check back soon, or <a href="https://github.com/arampersand/tasky/blob/main/docs/BUILDING.md">build it yourself</a>.</p>
           </div>
         </li>
       </ol>
@@ -107,10 +107,10 @@
           <span id="rel-date"></span>
         </div>
         <details>
-          <summary>Release notes</summary>
+          <summary>What's new</summary>
           <pre id="rel-notes">Loading…</pre>
         </details>
-        <a id="rel-link" class="small-link" href="https://github.com/arampersand/tasky/releases" rel="noopener">All releases →</a>
+        <a id="rel-link" class="small-link" href="https://github.com/arampersand/tasky/releases" rel="noopener">All versions →</a>
       </aside>
     </div>
 
@@ -119,8 +119,8 @@
   <section id="setup" class="wrap section">
     <div class="section-head">
       <p class="kicker">Set up</p>
-      <h2>Make it yours in two minutes</h2>
-      <p class="sub">With Tasky still plugged in, set up Wi-Fi, your calendar and the rest right here. Every step is optional.</p>
+      <h2>Set up your Tasky</h2>
+      <p class="sub">Keep Tasky plugged in. Then add your Wi-Fi, calendar and more, right here. It takes about two minutes. You can skip any step.</p>
     </div>
 
     <div class="wizard" id="wizard">
@@ -144,29 +144,37 @@
         <!-- Connect -->
         <div class="wz-step" data-step="connect">
           <h3>Connect to your Tasky</h3>
-          <p>Close the installer window if it's still open, then pick <strong>USB JTAG/serial debug unit</strong> in the list. That's your Tasky.</p>
+          <p>If the installer window is still open, close it. Click Connect Tasky, then pick <strong>USB JTAG/serial debug unit</strong> in the list. That's your Tasky.</p>
           <button class="btn primary" id="wz-connect">Connect Tasky</button>
           <p class="wz-status" id="wz-connect-status" role="status"></p>
-          <p class="small">Prefer your phone? On Tasky open <strong>Settings → More → Setup (QR)</strong> and scan the code.</p>
+          <p class="small">Want to use your phone instead? On Tasky, open <strong>Settings → More → Setup (QR)</strong>. Scan the code with your phone's camera.</p>
+        </div>
+
+        <!-- Overview: a Tasky that's already set up -->
+        <div class="wz-step" data-step="overview" hidden>
+          <h3>Your Tasky</h3>
+          <p>These settings are saved on your Tasky. Change any of them, or go through every step again.</p>
+          <ul class="wz-overview" id="wz-overview"></ul>
+          <div class="wz-actions"><button class="btn ghost" id="wz-overview-all" type="button">Go through every step</button></div>
         </div>
 
         <!-- Wi-Fi -->
         <div class="wz-step" data-step="wifi" hidden>
           <h3>Wi-Fi</h3>
-          <p class="wz-intro" id="wz-wifi-intro" hidden>Let's get Tasky online. This takes about two minutes.</p>
-          <p>Tasky uses Wi-Fi for the time, weather and your calendar. 2.4 GHz networks only.</p>
-          <div class="wz-networks" id="wz-networks" role="radiogroup" aria-label="Wi-Fi networks"><p class="small">Scanning…</p></div>
-          <label class="wz-field">Network<input id="wz-ssid" autocomplete="off" placeholder="Network name"></label>
+          <p class="wz-intro" id="wz-wifi-intro" hidden>Let's get Tasky online. It takes about two minutes.</p>
+          <p>Tasky uses Wi-Fi to get the time, the weather and your calendar. Most home Wi-Fi works. Tasky can't join a network that is 5 GHz only. If your router shows a second name ending in “5G”, pick the other one.</p>
+          <div class="wz-networks" id="wz-networks" role="radiogroup" aria-label="Wi-Fi networks"><p class="small">Looking for networks…</p></div>
+          <label class="wz-field">Network name<input id="wz-ssid" autocomplete="off" placeholder="Pick one above or type it"></label>
           <label class="wz-field">Password<input id="wz-pass" type="password" autocomplete="off" placeholder="Wi-Fi password"></label>
           <p class="wz-status" id="wz-wifi-status" role="status"></p>
-          <div class="wz-actions"><button class="btn ghost" data-skip>Skip</button><button class="btn ghost" id="wz-rescan">Rescan</button><button class="btn primary" id="wz-wifi-save">Connect</button></div>
+          <div class="wz-actions"><button class="btn ghost" data-skip>Skip</button><button class="btn ghost" id="wz-rescan">Search again</button><button class="btn primary" id="wz-wifi-save">Connect</button></div>
         </div>
 
         <!-- Calendar -->
         <div class="wz-step" data-step="calendar" hidden>
           <h3>Your calendar</h3>
-          <p>Paste your calendar's private iCal link. Today's events show up on Tasky, with a heads-up 5 minutes before each meeting.</p>
-          <p class="small">Where do I find it? Pick yours:</p>
+          <p>Tasky can show today's events and remind you 5 minutes before each meeting. For that, it needs a private link to your calendar. Anyone with the link can see your events, so don't share it.</p>
+          <p class="small">Where's my link? Pick your calendar:</p>
           <div class="seg" role="radiogroup" aria-label="Calendar provider">
             <label><input type="radio" name="wz-calprov" value="google"><span>Google</span></label>
             <label><input type="radio" name="wz-calprov" value="icloud"><span>iCloud</span></label>
@@ -179,26 +187,26 @@
           </ol>
           <ol class="wz-guide" data-prov="icloud" hidden>
             <li>Open the Calendar app on your Mac or iPhone (or <a href="https://www.icloud.com/calendar/" target="_blank" rel="noopener">icloud.com/calendar</a>).</li>
-            <li>Tap the share icon next to the calendar and turn on <strong>Public Calendar</strong>.</li>
-            <li>Copy the link. It starts with <code>webcal://</code>; paste it as is.</li>
+            <li>Click the share icon next to your calendar. Turn on <strong>Public Calendar</strong>.</li>
+            <li>Copy the link. It starts with <code>webcal://</code>. Paste it as it is.</li>
           </ol>
           <ol class="wz-guide" data-prov="outlook" hidden>
             <li>Open <a href="https://outlook.live.com/calendar/" target="_blank" rel="noopener">outlook.com</a> → <strong>Settings</strong> (gear) → <strong>Calendar</strong> → <strong>Shared calendars</strong>.</li>
-            <li>Under <em>Publish a calendar</em>, pick your calendar and <em>Can view all details</em>, then <strong>Publish</strong>.</li>
+            <li>Under <em>Publish a calendar</em>, pick your calendar and <em>Can view all details</em>. Click <strong>Publish</strong>.</li>
             <li>Copy the <strong>ICS</strong> link.</li>
           </ol>
-          <label class="wz-field">iCal link<input id="wz-cal" autocomplete="off" placeholder="https://calendar.google.com/calendar/ical/…/basic.ics"></label>
+          <label class="wz-field">Calendar link<input id="wz-cal" autocomplete="off" placeholder="https://calendar.google.com/calendar/ical/…/basic.ics"></label>
           <p class="wz-status" id="wz-cal-status" role="status"></p>
-          <button class="btn ghost" id="wz-caltest" type="button" hidden>Test it</button>
+          <button class="btn ghost" id="wz-caltest" type="button" hidden>Test the link</button>
           <div class="wz-actions"><button class="btn ghost" data-skip>Skip</button><button class="btn primary" data-save="calendar">Save</button></div>
         </div>
 
         <!-- Tasks -->
         <div class="wz-step" data-step="tasks" hidden>
           <h3>Today's three things</h3>
-          <p>Tasky keeps it to three. You can change them any time.</p>
+          <p>Write up to three tasks for today. Short lists get done. You can change them any time.</p>
           <label class="wz-field">1<input id="wz-t0" maxlength="40" autocomplete="off" placeholder="Most important thing"></label>
-          <label class="wz-field">2<input id="wz-t1" maxlength="40" autocomplete="off" placeholder="Second"></label>
+          <label class="wz-field">2<input id="wz-t1" maxlength="40" autocomplete="off" placeholder="Second most important"></label>
           <label class="wz-field">3<input id="wz-t2" maxlength="40" autocomplete="off" placeholder="Third"></label>
           <p class="wz-status" role="status"></p>
           <div class="wz-actions"><button class="btn ghost" data-skip>Skip</button><button class="btn primary" data-save="tasks">Save</button></div>
@@ -207,7 +215,7 @@
         <!-- GitHub -->
         <div class="wz-step" data-step="github" hidden>
           <h3>GitHub streak</h3>
-          <p>Optional. Your public contributions count toward Tasky's streak.</p>
+          <p>Optional. Tasky's streak counts the days you focus. If you use GitHub, your public activity there counts too.</p>
           <label class="wz-field">GitHub username<input id="wz-ghu" autocomplete="off" placeholder="your-username"></label>
           <div class="wz-gh" id="wz-gh-user" hidden>
             <img id="wz-gh-avatar" alt="" width="40" height="40">
@@ -215,7 +223,7 @@
             <span class="wz-gh-ask">Is this you?</span>
           </div>
           <div class="wz-gh-activity" id="wz-gh-activity" hidden>
-            <p class="small">Your recent GitHub activity (Tasky's Streak shows it with your focus sessions)</p>
+            <p class="small">Your recent GitHub activity. Tasky's Streak screen shows it next to your focus sessions.</p>
             <div class="wz-gh-grid" id="wz-gh-grid" role="img"></div>
           </div>
           <p class="wz-status" id="wz-github-status" role="status"></p>
@@ -224,14 +232,14 @@
 
         <!-- AI -->
         <div class="wz-step" data-step="ai" hidden>
-          <h3>Ask Tasky</h3>
-          <p>Optional. Add a ChatGPT or Claude API key for the Agent screen. The key stays on your Tasky.</p>
+          <h3>AI brief</h3>
+          <p>Optional. Each morning, Tasky writes your <strong>day in three lines</strong>: what matters, what to start with, and a tip. It uses your calendar and tasks. Read it on the <strong>AI brief</strong> screen. For this you need an API key from ChatGPT or Claude. An API key is like a private password that lets Tasky use your account. The provider may charge you for use. The key stays on your Tasky.</p>
           <div class="seg" role="radiogroup" aria-label="AI provider">
             <label><input type="radio" name="wz-llm" value="1" checked><span>ChatGPT</span></label>
             <label><input type="radio" name="wz-llm" value="0"><span>Claude</span></label>
           </div>
           <label class="wz-field">API key<input id="wz-llmkey" type="password" autocomplete="off" placeholder="sk-…"></label>
-          <p class="small">Get one at <a href="https://platform.openai.com/api-keys" rel="noopener" target="_blank">platform.openai.com</a> or <a href="https://console.anthropic.com/settings/keys" rel="noopener" target="_blank">console.anthropic.com</a>.</p>
+          <p class="small">Get a key at <a href="https://platform.openai.com/api-keys" rel="noopener" target="_blank">platform.openai.com</a> (ChatGPT) or <a href="https://console.anthropic.com/settings/keys" rel="noopener" target="_blank">console.anthropic.com</a> (Claude).</p>
           <p class="wz-status" role="status"></p>
           <div class="wz-actions"><button class="btn ghost" data-skip>Skip</button><button class="btn primary" data-save="ai">Save</button></div>
         </div>
@@ -239,7 +247,7 @@
         <!-- Weather -->
         <div class="wz-step" data-step="place" hidden>
           <h3>Weather</h3>
-          <p>Use your location, or type a city.</p>
+          <p>Use your location, or type your city. No account needed.</p>
           <button class="btn ghost" id="wz-locate">Use my location</button>
           <label class="wz-field">City<input id="wz-city" autocomplete="off" placeholder="Mexico City"></label>
           <p class="wz-status" id="wz-place-status" role="status"></p>
@@ -249,7 +257,7 @@
         <!-- Screens -->
         <div class="wz-step" data-step="screens" hidden>
           <h3>Your screens</h3>
-          <p>Pick what <strong>MODE</strong> cycles through, in order. <strong>Home</strong> is always first; <strong>More</strong> is always last and lists everything else.</p>
+          <p>Each press of the <strong>MODE</strong> button shows the next screen. Choose which screens appear, and in what order. <strong>Home</strong> is always first. <strong>More</strong> is always last and holds everything else.</p>
           <ol class="wz-screens" id="wz-screens"></ol>
           <p class="wz-status" role="status"></p>
           <div class="wz-actions"><button class="btn ghost" data-skip>Skip</button><button class="btn primary" data-save="screens">Save</button></div>
@@ -258,7 +266,7 @@
         <!-- Phrases -->
         <div class="wz-step" data-step="phrases" hidden>
           <h3>Your phrases</h3>
-          <p>Write the phrases Tasky shows on Home and on the Phrases screen, one per line (up to 12, 60 characters each). Add an author after a dash: <code>Stay hungry - Steve Jobs</code>. Leave it empty to use the built-in ones (about 50 quotes from philosophers, founders and builders). Accents are simplified (ñ → n): the screen font has no special characters.</p>
+          <p>Tasky shows short phrases on Home and on the Phrases screen. Write your own, one per line (up to 12, 60 characters each). To add an author, put it after a dash: <code>Stay hungry - Steve Jobs</code>. Leave it empty to use about 50 built-in quotes. Accents are removed (ñ → n) because the screen can't show them.</p>
           <label class="wz-field">Phrases<textarea id="wz-phrases" rows="6" maxlength="800" placeholder="One thing at a time&#10;Deep work, calm mind&#10;You've got this"></textarea></label>
           <p class="wz-status" role="status"></p>
           <div class="wz-actions"><button class="btn ghost" data-skip>Skip</button><button class="btn primary" data-save="phrases">Save</button></div>
@@ -267,12 +275,12 @@
         <!-- Light -->
         <div class="wz-step" data-step="light" hidden>
           <h3>Light</h3>
-          <p>Which light does your Tasky have? It blinks once when you save.</p>
+          <p>Which light does your Tasky have? It blinks once when you save, so you can check.</p>
           <div class="seg" role="radiogroup" aria-label="Light type">
-            <label><input type="radio" name="wz-light" value="0" checked><span>One or two LEDs</span></label>
-            <label><input type="radio" name="wz-light" value="1"><span>RGB bar (6 LEDs)</span></label>
+            <label><input type="radio" name="wz-light" value="0" checked><span>One or two small lights</span></label>
+            <label><input type="radio" name="wz-light" value="1"><span>Color light bar (6 lights)</span></label>
           </div>
-          <p class="small">Hand-built and v1.1 boards have plain LEDs. The v3.1 board has the RGB bar along the top.</p>
+          <p class="small">Hand-built and v1.1 boards have one or two plain lights. The v3.1 board has a color light bar along the top.</p>
           <p class="wz-status" role="status"></p>
           <div class="wz-actions"><button class="btn ghost" data-skip>Skip</button><button class="btn primary" data-save="light">Save</button></div>
         </div>
@@ -280,12 +288,12 @@
         <!-- Bluetooth keys (Tasky 3.0+) -->
         <div class="wz-step" data-step="bluetooth" hidden>
           <h3>Bluetooth keys</h3>
-          <p>Tasky can also be a row of keys for your computer or phone: volume, play / pause, screenshot, lock, your assistant… Pair it once.</p>
+          <p>Tasky can also work as extra keys for your Mac, Windows PC or phone. Turn the knob for volume. Use it for play / pause, screenshots, locking the screen or opening your assistant. You only pair it once.</p>
           <button class="btn primary" id="wz-bt-on" type="button">Turn on Bluetooth on Tasky</button>
           <ol class="wz-guide">
-            <li>Open Bluetooth settings: <a href="x-apple.systempreferences:com.apple.BluetoothSettings">on a Mac</a> · <a href="ms-settings:bluetooth">on Windows</a> · on a phone, Settings → Bluetooth.</li>
-            <li>Connect to <strong>Tasky</strong> (it shows up as a keyboard). On a Mac, close the “Keyboard Setup Assistant” window if it opens: the keys work anyway.</li>
-            <li>On Tasky, <strong>hold the knob</strong> to pick Mac, Windows or Phone. It remembers each device.</li>
+            <li>Open Bluetooth settings: <a href="x-apple.systempreferences:com.apple.BluetoothSettings">on a Mac</a> · <a href="ms-settings:bluetooth">on Windows</a> · on a phone, go to Settings → Bluetooth.</li>
+            <li>Pick <strong>Tasky</strong> in the list. It shows up as a keyboard. On a Mac, a “Keyboard Setup Assistant” window may open. Close it. The keys work anyway.</li>
+            <li>On Tasky, <strong>hold the knob</strong> and pick Mac, Windows or Phone. Tasky remembers this for each device.</li>
           </ol>
           <p class="wz-status" id="wz-bt-status" role="status"></p>
           <div class="wz-actions"><button class="btn primary" data-skip>Next</button></div>
@@ -294,15 +302,15 @@
         <!-- Agents (Tasky 3.0+ and the 2.x Agents builds) -->
         <div class="wz-step" data-step="agents" hidden>
           <h3 class="wz-title-icon"><svg viewBox="0 0 24 24" width="28" height="28" aria-hidden="true"><path fill="#D97757" fill-rule="evenodd" clip-rule="evenodd" d="M20.998 10.949H24v3.102h-3v3.028h-1.487V20H18v-2.921h-1.487V20H15v-2.921H9V20H7.488v-2.921H6V20H4.487v-2.921H3V14.05H0V10.95h3V5h17.998v5.949zM6 10.949h1.488V8.102H6v2.847zm10.51 0H18V8.102h-1.49v2.847z"/></svg>Connect Claude Code</h3>
-          <p>Paste this in Terminal to install the Tasky plugin:</p>
+          <p>Claude Code is an AI coding assistant. To see it on Tasky, copy this command, paste it in the Terminal app and press Enter:</p>
           <div class="wz-cmd"><code>claude plugin marketplace add arampersand/tasky &amp;&amp; claude plugin install tasky@tasky</code><button class="btn ghost" data-copy type="button">Copy</button></div>
-          <p>Then start (or restart) Claude Code: Tasky shows a <strong>Ready</strong> card. Step by step: <a href="/claude" target="_blank" rel="noopener">tasky-flash.vercel.app/claude</a></p>
-          <p class="small">Tasky shows each session, breathes its light when one needs you, and lets you allow or deny permission prompts with the knob. Needs Python 3 (macOS or Linux). Something not working? Run <code>/tasky:status</code> in Claude Code. <a href="https://github.com/arampersand/tasky/blob/main/companion/README.md" target="_blank" rel="noopener">What it does</a></p>
-          <details class="wz-help"><summary>Other ways</summary>
-            <p>From inside Claude Code: <code>/plugin marketplace add arampersand/tasky</code>, then <code>/plugin install tasky@tasky</code>.</p>
-            <p>Without the plugin, run this in a terminal. It adds Tasky's hooks to <code>~/.claude/settings.json</code> (backed up first):</p>
+          <p>Then open Claude Code, or restart it. Tasky shows a <strong>Ready</strong> card. Full guide: <a href="/claude" target="_blank" rel="noopener">tasky-flash.vercel.app/claude</a></p>
+          <p class="small">Each Claude Code session gets a card on Tasky. The light breathes when Claude needs you. You say yes or no to its requests with the knob. Needs a Mac or Linux computer with Python 3. Not working? Type <code>/tasky:status</code> in Claude Code. <a href="https://github.com/arampersand/tasky/blob/main/companion/README.md" target="_blank" rel="noopener">How it works</a></p>
+          <details class="wz-help"><summary>Other ways to install</summary>
+            <p>Inside Claude Code, type <code>/plugin marketplace add arampersand/tasky</code>, then <code>/plugin install tasky@tasky</code>.</p>
+            <p>Without the plugin, run this in Terminal. It adds Tasky to your Claude Code settings file, <code>~/.claude/settings.json</code>. It saves a backup first.</p>
             <div class="wz-cmd"><code>curl -fsSL https://tasky-flash.vercel.app/agents/install.sh | sh</code><button class="btn ghost" data-copy type="button">Copy</button></div>
-            <p>Use the plugin or this, not both. To remove this one: <code>curl -fsSL https://tasky-flash.vercel.app/agents/install.sh | sh -s -- --uninstall</code></p>
+            <p>Use the plugin or this command, not both. To remove it later: <code>curl -fsSL https://tasky-flash.vercel.app/agents/install.sh | sh -s -- --uninstall</code></p>
           </details>
           <button class="btn ghost" id="wz-agent-test" type="button">Show a test card on Tasky</button>
           <p class="wz-status" id="wz-agents-status" role="status"></p>
@@ -313,53 +321,53 @@
         <div class="wz-step" data-step="done" hidden>
           <h3>Your Tasky is ready ✨</h3>
           <ul class="wz-tips">
-            <li><strong>Home</strong> shows the time, weather, what's next and your tasks.</li>
-            <li><strong>Press the knob</strong> to start focusing. Press again to pause.</li>
-            <li><strong>MODE</strong> moves to the next screen; double-press goes back.</li>
+            <li><strong>Home</strong> shows the date, weather, a big clock, today's focus bar and one task.</li>
+            <li><strong>Press the knob</strong> on Home to start focusing. Press again to pause. Hold it for quick settings.</li>
+            <li><strong>MODE</strong> shows the next screen. Press it twice to go back. Hold it for the rest screen.</li>
           </ul>
           <div class="wz-agents" id="wz-agents-tip" hidden>
-            <p><strong>One last thing:</strong> this page is holding Tasky's USB port. Disconnect (or close the tab) so Claude Code can reach Tasky. For the <strong>Controls</strong> keys, open Controls on Tasky (Bluetooth starts then) and pair "Tasky" on your computer.</p>
+            <p><strong>One last thing:</strong> this page is still connected to Tasky over USB. Click Disconnect (or close this tab) so Claude Code can reach Tasky. For the Bluetooth keys, open <strong>Controls</strong> on Tasky (this turns Bluetooth on). Then pair “Tasky” on your computer.</p>
             <button class="btn ghost" id="wz-disconnect" type="button">Disconnect</button>
           </div>
-          <p class="small">Need more? Read the <a href="https://github.com/arampersand/tasky/blob/main/docs/MANUAL.md">manual</a>, or <a href="/start" target="_blank" rel="noopener">print the quick-start card</a>.</p>
+          <p class="small">Want to know more? Read the <a href="https://github.com/arampersand/tasky/blob/main/docs/MANUAL.md">manual</a>, or <a href="/start" target="_blank" rel="noopener">print the quick-start card</a>.</p>
         </div>
       </div>
-      <p class="wz-unsupported note warn" id="wz-unsupported" hidden>Setup over USB needs Chrome or Edge on a computer. On your phone, open <strong>Settings → More → Setup (QR)</strong> on Tasky and scan the code.</p>
+      <p class="wz-unsupported note warn" id="wz-unsupported" hidden>Setting up over USB needs Chrome or Edge on a computer. On a phone? On Tasky, open <strong>Settings → More → Setup (QR)</strong> and scan the code.</p>
     </div>
 
-    <p class="small after-note">Already running Tasky? You can also update over Wi-Fi: open <strong>Settings → More → Update</strong> on the device, then upload the release's <code>…-ota.bin</code> from its setup page. Reinstalling here keeps your settings unless you choose to erase.</p>
+    <p class="small after-note">Is Tasky already working? You can also update it over Wi-Fi. On Tasky, open <strong>Settings → More → Update</strong>. Tasky shows a web address: open it on your computer and upload the release file that ends in <code>-ota.bin</code>. Installing again from this page keeps your settings, unless you turn on Erase device.</p>
   </section>
 
   <section id="tasky" class="wrap section">
     <div class="section-head">
-      <p class="kicker">One firmware</p>
+      <p class="kicker">All in one</p>
       <h2>Everything Tasky does</h2>
-      <p class="sub">Since 3.0 there's a single firmware with it all. Bluetooth turns on the first time you open <strong>Controls</strong>.</p>
+      <p class="sub">Since version 3.0, one version of the Tasky software does it all. Bluetooth turns on the first time you open the <strong>Controls</strong> screen.</p>
     </div>
     <div class="editions-grid">
       <article class="edition">
         <img src="/img/hero.jpg" alt="Tasky showing a 25:00 focus timer" loading="lazy">
         <div>
           <h3>At your desk</h3>
-          <p>Glance at the time, weather, next meeting and today's tasks; press the knob to focus.</p>
+          <p>See the time, the weather, your next meeting and today's tasks. Press the knob to focus.</p>
           <ul>
-            <li>Focus timer with a "do not disturb" light</li>
+            <li>Focus timer, with a light that tells others “do not disturb”</li>
             <li>Today's three tasks and your calendar</li>
-            <li>Streak from focus sessions and GitHub, plus Notion</li>
-            <li>Rotating phrases, weather, and ChatGPT or Claude on the AI screen</li>
+            <li>A streak from your focus sessions, and your GitHub streak next to it</li>
+            <li>Phrases, weather, and a morning brief from ChatGPT or Claude</li>
           </ul>
         </div>
       </article>
       <article class="edition">
-        <img src="/img/render-ring.jpg" alt="Tasky render" loading="lazy">
+        <img src="/img/render-ring.jpg" alt="3D drawing of Tasky" loading="lazy">
         <div>
           <h3>With your computer <span class="tag">3.0</span></h3>
-          <p>A companion for your computer and the AI agents running on it.</p>
+          <p>Tasky also works with your computer and the AI tools on it.</p>
           <ul>
-            <li>Claude Code sessions on screen; the light breathes when an agent needs you</li>
-            <li>Allow or deny permission prompts with the knob</li>
-            <li>Bluetooth controls for Mac and Windows: volume, brightness, media</li>
-            <li>One-press shortcuts: search, screenshot, lock</li>
+            <li>See your Claude Code sessions. The light breathes when Claude needs you.</li>
+            <li>Say yes or no to Claude's requests with the knob</li>
+            <li>Bluetooth keys for Mac, Windows or phone: volume, brightness, music</li>
+            <li>One-press shortcuts: search, screenshot, lock screen</li>
           </ul>
           <a class="small-link" href="/claude">Connect Claude Code in one step →</a>
         </div>
@@ -370,23 +378,23 @@
   <section id="features" class="wrap section">
     <div class="section-head">
       <p class="kicker">What it does</p>
-      <h2>Calm tech for deep work</h2>
+      <h2>Simple tools that help you focus</h2>
     </div>
     <div class="features">
-      <article><h3>Focus timer</h3><p>Pomodoro-style sessions with a draining ring. The light bar turns on so people around you know you're heads-down.</p></article>
-      <article><h3>Today's tasks</h3><p>Three tasks, no more. Track focus minutes per task and tick them off with a click.</p></article>
-      <article><h3>Streak</h3><p>A GitHub-style grid fed by your focus sessions and, optionally, your real GitHub contributions.</p></article>
-      <article><h3>Calendar &amp; agenda</h3><p>Reads any iCal feed. Warns you 5 minutes before a meeting and gives you a morning brief.</p></article>
-      <article><h3>Weather</h3><p>Today at a glance, no API key needed.</p></article>
-      <article><h3>AI agent</h3><p>Bring your Claude or OpenAI key for a pocket assistant on your desk.</p></article>
+      <article><h3>Focus timer</h3><p>Work in timed sessions. A ring on screen shrinks as time passes. The light turns on so people nearby know you're busy.</p></article>
+      <article><h3>Today's tasks</h3><p>Three tasks, no more. Tasky counts how long you focus on each one. Mark a task done with a press.</p></article>
+      <article><h3>Streak</h3><p>A grid with one square per day. It fills in as you focus. If you want, your GitHub activity counts too.</p></article>
+      <article><h3>Calendar &amp; agenda</h3><p>Works with Google, iCloud and Outlook calendars. Reminds you 5 minutes before a meeting and gives you a morning brief.</p></article>
+      <article><h3>Weather</h3><p>Today's weather at a glance. No account or key needed.</p></article>
+      <article><h3>AI brief</h3><p>Add your own ChatGPT or Claude key. Each morning, Tasky writes your day in three lines.</p></article>
     </div>
     <div class="gallery" aria-label="Photos of a real Tasky">
       <img src="/img/focus.jpg" alt="Tasky showing a 25:00 focus timer" loading="lazy">
-      <img src="/img/tasks.jpg" alt="Tasky tasks screen" loading="lazy">
-      <img src="/img/stats.jpg" alt="Tasky stats screen" loading="lazy">
-      <img src="/img/menu.jpg" alt="Tasky More menu" loading="lazy">
-      <img src="/img/top.jpg" alt="Tasky enclosure with engraved logo" loading="lazy">
-      <img src="/img/encoder.jpg" alt="Tasky rotary knob and mode button" loading="lazy">
+      <img src="/img/tasks.jpg" alt="Tasky's tasks screen" loading="lazy">
+      <img src="/img/stats.jpg" alt="Tasky's stats screen" loading="lazy">
+      <img src="/img/menu.jpg" alt="Tasky's More menu" loading="lazy">
+      <img src="/img/top.jpg" alt="Top of Tasky's case, with the engraved logo" loading="lazy">
+      <img src="/img/encoder.jpg" alt="Tasky's knob and MODE button" loading="lazy">
     </div>
   </section>
 
@@ -394,20 +402,20 @@
     <div class="section-head">
       <p class="kicker">Make it yours</p>
       <h2>Build your own Tasky</h2>
-      <p class="sub">Everything is open: firmware, docs and this flasher. Fork it, change the screens, ship your own version.</p>
+      <p class="sub">Everything is open: the software, the guides and this page. Copy it, change it and make your own version.</p>
     </div>
     <div class="links">
-      <a href="https://github.com/arampersand/tasky/blob/main/docs/HARDWARE.md"><strong>Hardware</strong><span>Parts list, pinout and wiring</span></a>
-      <a href="https://github.com/arampersand/tasky/blob/main/docs/BUILDING.md"><strong>Build from source</strong><span>PlatformIO or Arduino IDE</span></a>
-      <a href="https://github.com/arampersand/tasky/blob/main/docs/CUSTOMIZING.md"><strong>Customize</strong><span>Screens, colours, pins, services, your own flasher</span></a>
-      <a href="https://github.com/arampersand/tasky/blob/main/docs/MANUAL.md"><strong>User manual</strong><span>Every screen and control</span></a>
+      <a href="https://github.com/arampersand/tasky/blob/main/docs/HARDWARE.md"><strong>Hardware</strong><span>Parts list and how to wire them</span></a>
+      <a href="https://github.com/arampersand/tasky/blob/main/docs/BUILDING.md"><strong>Build the software yourself</strong><span>With PlatformIO or the Arduino IDE</span></a>
+      <a href="https://github.com/arampersand/tasky/blob/main/docs/CUSTOMIZING.md"><strong>Customize</strong><span>Change screens, colors, pins and services, or make your own install page</span></a>
+      <a href="https://github.com/arampersand/tasky/blob/main/docs/MANUAL.md"><strong>User manual</strong><span>Every screen and button, explained</span></a>
     </div>
   </section>
 </main>
 
 <footer class="wrap footer">
   <span>Tasky · GPL-3.0 · made by <a href="https://github.com/arampersand" rel="noopener">@arampersand</a></span>
-  <span>Flashing powered by <a href="https://esphome.github.io/esp-web-tools/" rel="noopener">ESP Web Tools</a></span>
+  <span>Installer powered by <a href="https://esphome.github.io/esp-web-tools/" rel="noopener">ESP Web Tools</a></span>
 </footer>
 </body>
 </html>

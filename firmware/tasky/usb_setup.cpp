@@ -45,6 +45,8 @@ void UsbSetup::loop() {
 }
 
 void UsbSetup::handle(const String &cmd) {
+  if (taskyOut == &Serial)
+    lastCommandAt = millis();
   if (cmd == "TASKY?")
     sendStatus();
   else if (cmd == "TASKY SCAN")

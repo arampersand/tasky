@@ -483,6 +483,13 @@ bool TaskyModel::isFocusModeActive() {
   return cfg.focusAutoMode && st.running && phase == PHASE_WORK;
 }
 
+bool TaskyModel::hasAnyTask() {
+  for (int i = 0; i < 3; i++)
+    if (tasks[i].length() && tasks[i] != "Empty")
+      return true;
+  return false;
+}
+
 bool TaskyModel::hasCurrentTask() {
   return currentTask >= 0 && currentTask < 3 && tasks[currentTask] != "Empty" &&
          tasks[currentTask].length() > 0;

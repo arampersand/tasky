@@ -199,6 +199,7 @@ public:
   // Focus mode
   bool isFocusModeActive();        // True while a work session runs (if enabled)
   bool hasCurrentTask();           // currentTask points at a real task
+  bool hasAnyTask();               // at least one of today's tasks is written
 
   // Local time (false until NTP has synced)
   bool localNow(struct tm &out);

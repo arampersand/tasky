@@ -117,6 +117,54 @@ async function busy(btn, fn) {
   try { await fn(); } finally { btn.disabled = false; }
 }
 
+// ---------- Remember what you typed ----------
+// Tasky keeps your settings; the browser also remembers the plain ones (never
+// passwords, keys or the calendar's secret link) to fill a new or reset Tasky.
+const CACHE_KEY = "tasky-setup";
+const SECRET = new Set(["pass", "llmKey", "cal", "time", "tz"]);
+const cached = () => { try { return JSON.parse(localStorage.getItem(CACHE_KEY)) || {}; } catch { return {}; } };
+function remember(payload) {
+  const keep = Object.fromEntries(Object.entries(payload).filter(([k]) => !SECRET.has(k)));
+  try { localStorage.setItem(CACHE_KEY, JSON.stringify({ ...cached(), ...keep })); } catch { /* private mode */ }
+}
+
+// ---------- Overview ----------
+// A Tasky that's already set up opens on a summary instead of step 1.
+function renderOverview(s) {
+  const c = s.cfg || {};
+  const tasks = (c.tasks || []).filter((t) => t && t !== "Empty");
+  const rows = [
+    ["wifi", "Wi-Fi", s.wifi?.ssid ? `${s.wifi.ssid}${s.wifi.connected ? " · connected" : " · not connected"}` : "", Boolean(s.wifi?.connected)],
+    ["calendar", "Calendar", c.cal ? "Saved" : "", Boolean(c.cal)],
+    ["tasks", "Today's tasks", tasks.join(" · "), tasks.length > 0],
+    ["github", "GitHub streak", c.ghu || "", Boolean(c.ghu)],
+    ["ai", "AI brief", c.llmKey ? (c.llm === 0 ? "Claude" : "ChatGPT") : "", Boolean(c.llmKey)],
+    ["place", "Weather", c.city || "", Boolean(c.city)],
+  ];
+  if (STEPS.includes("screens")) rows.push(["screens", "Screens", `${(c.screens || []).length + 1} in the carousel`, true]);
+  if (STEPS.includes("bluetooth")) rows.push(["bluetooth", "Bluetooth keys", "Pair with your computer or phone", false]);
+  if (STEPS.includes("agents")) rows.push(["agents", "Claude Code", "Your sessions on Tasky", false]);
+  const box = $("wz-overview");
+  box.textContent = "";
+  for (const [step, title, detail, ok] of rows) {
+    const li = document.createElement("li");
+    const mark = Object.assign(document.createElement("span"), { className: "mark" + (ok ? " ok" : ""), textContent: ok ? "✓" : "–" });
+    const what = Object.assign(document.createElement("span"), { className: "what" });
+    what.append(Object.assign(document.createElement("strong"), { textContent: title }),
+                Object.assign(document.createElement("small"), { textContent: detail || "Not set up yet" }));
+    const btn = Object.assign(document.createElement("button"), { className: "btn ghost", type: "button", textContent: ok ? "Change" : "Set up" });
+    btn.addEventListener("click", () => show(step));
+    li.append(mark, what, btn);
+    box.append(li);
+  }
+}
+$("wz-overview-all").addEventListener("click", () => show("wifi"));
+wizard.querySelector(".wz-progress").addEventListener("click", (e) => {
+  const li = e.target.closest("li");
+  if (!state || !li || li.dataset.step === "connect") return;  // jump once connected
+  show(li.dataset.step);
+});
+
 // ---------- Connect ----------
 const older = (v, min = MIN_VERSION) => {
   const p = String(v).split(".").map(Number);
@@ -181,15 +229,21 @@ $("wz-connect").addEventListener("click", (e) => busy(e.currentTarget, async () 
     wizard.querySelector('.wz-progress li[data-step="ai"]').hidden = true;
   }
   setStatus("wz-connect-status", `Connected to ${oldAgents ? "Tasky for Agents" : "Tasky"} v${state.v}.`, "ok");
-  setTimeout(() => show("wifi"), 500);
+  wizard.querySelector(".wz-progress").classList.add("jump");
+  // Already set up: start on the summary of what's saved
+  const configured = Boolean(state.wifi?.ssid);
+  if (configured) renderOverview(state);
+  setTimeout(() => show(configured ? "overview" : "wifi"), 500);
 }));
 
 function prefill(s) {
+  const mem = cached();  // what this browser saved last time (a new or reset Tasky starts empty)
   $("wz-wifi-intro").hidden = Boolean(s.wifi?.ssid);  // first time: a friendly hello
-  $("wz-ssid").value = s.wifi?.ssid || "";
+  $("wz-ssid").value = s.wifi?.ssid || mem.ssid || "";
+  $("wz-pass").placeholder = s.wifi?.ssid ? "Saved on Tasky. Type a new one to change it" : "Wi-Fi password";
   if (s.wifi?.connected) setStatus("wz-wifi-status", `Already connected to ${s.wifi.ssid}. Change it below or continue.`, "ok");
-  $("wz-ghu").value = s.cfg?.ghu || "";
-  $("wz-city").value = s.cfg?.city || "";
+  $("wz-ghu").value = s.cfg?.ghu || mem.ghu || "";
+  $("wz-city").value = s.cfg?.city || mem.city || "";
   (s.cfg?.tasks || []).forEach((t, i) => { if (t && t !== "Empty") $("wz-t" + i).value = t; });
   if (s.cfg?.cal) $("wz-cal").placeholder = "Saved. Paste a new link to replace it";
   if (s.cfg?.llmKey) $("wz-llmkey").placeholder = "Saved. Paste a new key to replace it";
@@ -327,7 +381,11 @@ $("wz-wifi-save").addEventListener("click", (e) => busy(e.currentTarget, async (
   const ssid = $("wz-ssid").value.trim();
   if (!ssid) { setStatus("wz-wifi-status", "Pick or type a network.", "error"); return; }
   setStatus("wz-wifi-status", `Connecting to ${ssid}…`);
-  await link.set({ ssid, pass: $("wz-pass").value });
+  const pass = $("wz-pass").value;
+  // Same network and no new password: keep the one saved on Tasky
+  const keepPass = !pass && ssid === state?.wifi?.ssid;
+  await link.set(keepPass ? { ssid } : { ssid, pass });
+  remember({ ssid });
   for (let i = 0; i < 20; i++) {
     await new Promise((r) => setTimeout(r, 1000));
     const s = await link.status().catch(() => null);
@@ -393,6 +451,7 @@ for (const btn of wizard.querySelectorAll("[data-save]")) {
       if (payload) {
         const r = await link.set(payload);
         if (!r.ok) throw new Error(r.error || "Tasky didn't accept that");
+        remember(payload);
       }
       if (payload && AFTER_SAVE[step]?.()) return;  // the step stays open (e.g. to test the calendar)
       next(step);

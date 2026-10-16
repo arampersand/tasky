@@ -111,6 +111,15 @@ pre { white-space: pre-wrap; word-break: break-word; color: #b4bccb; max-height:
 .wz-progress li.current::before { background: var(--teal); color: #03211e; }
 .wz-progress li.done { color: var(--teal); }
 .wz-progress li.done::before { content: "✓"; background: rgba(41, 203, 189, .15); }
+.wz-progress.jump li:not([hidden]) { cursor: pointer; }
+.wz-progress.jump li:hover { border-color: var(--teal); }
+.wz-overview { list-style: none; margin: 0 0 16px; padding: 0; display: grid; gap: 8px; }
+.wz-overview li { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: #0a0f1d; }
+.wz-overview .mark { width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; font-size: 12px; font-weight: 700; flex: none; background: #141b2e; color: var(--muted); }
+.wz-overview .mark.ok { background: rgba(41, 203, 189, .15); color: var(--teal); }
+.wz-overview .what { flex: 1; min-width: 0; }
+.wz-overview .what strong { display: block; }
+.wz-overview .what small { color: var(--muted); overflow-wrap: anywhere; }
 .wz-card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 28px; max-width: 640px; }
 .wz-step h3 { font-size: 22px; margin-bottom: 6px; }
 .wz-step > p { color: #b4bccb; margin: 0 0 16px; }

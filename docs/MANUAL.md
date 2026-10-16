@@ -66,7 +66,7 @@ Once Tasky is online it sets its clock over NTP. Your calendar, weather, GitHub 
 
 A single MODE press takes effect about 0.4 s after you let go, because Tasky first waits to see whether a second press follows.
 
-**First boot tour and hints.** A new Tasky starts with a four-step tour: turn the knob, press it, press MODE, done. Each step waits until you do it. Hold MODE to skip. Replay it any time from **Settings → More → Tour**. After that, the first three times you open each screen a one-line hint at the bottom says what the knob does there ("Turn: time  Press: start"). It disappears after 3 seconds or as soon as you touch a control. A [factory reset](#factory-reset) brings back both.
+**First boot tour and hints.** A new Tasky starts with a short tour: turn the knob, press it, press MODE (each step waits until you do it), then **connect** (open tasky-flash.vercel.app on a computer with Tasky plugged in, or press the knob for a QR code your phone can scan) and **set up**: a checklist (Wi-Fi, calendar, tasks, weather, AI brief) that ticks itself while you fill in the web or phone setup. Press when you're done. Hold MODE to skip. A Tasky that's already online skips the two setup steps. Replay it any time from **Settings → More → Tour**. After that, the first three times you open each screen a one-line hint at the bottom says what the knob does there ("Turn: time  Press: start"). It disappears after 3 seconds or as soon as you touch a control. A [factory reset](#factory-reset) brings back both.
 
 ![The knob on the side and the MODE button on top](images/tasky-encoder.jpg)
 

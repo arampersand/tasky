@@ -7,6 +7,11 @@ All notable changes to the Tasky firmware. Versions match `firmware/tasky/versio
 ### Added
 - **Claude Code over Wi-Fi.** Plug Tasky into your computer once and the plugin pairs with it; from then on your session cards and knob approvals also work unplugged, on battery, anywhere on the same network. Tasky listens on TCP 7778 with a per-device token and answers a UDP broadcast so the plugin finds it when its address changes. Over Wi-Fi it only takes cards and questions, never settings.
 
+- **Complete onboarding on the device:** after turn / press / MODE, the tour now has a **Connect** step (the web setup over USB, or press for the phone's QR code) and a **Set up** checklist (Wi-Fi, calendar, tasks, weather, AI brief) that ticks itself as you go.
+- **Web setup remembers:** a Tasky that's already set up opens on a summary of what's saved, with a button to change each part; the step pills jump straight to any step; the browser remembers the plain fields (never passwords, keys or the calendar link) for a new or reset Tasky; re-saving Wi-Fi without typing the password keeps the saved one.
+- **Bluetooth step** in the web setup: turns Bluetooth on, opens Controls and shows when your computer or phone is paired.
+- The AI step (web and phone) is now **AI brief** and explains what it does.
+
 ### Changed
 - About 215 KB smaller firmware on both boards: the QR library no longer pulls in C++ string streams.
 - **Calmer Home:** the date in the top-left corner, the weather in the top-right, the clock in the middle, today's focus bar and **one** task (the one you're on, or the next open one). The next calendar event is on Agenda and Calendar.
