@@ -20,3 +20,7 @@ node_modules/
 *.swp
 *.log
 .playwright-mcp/
+
+# Python
+__pycache__/
+*.pyc
