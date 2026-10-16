@@ -236,7 +236,9 @@ class AgentTest(unittest.TestCase):
             if any('"w2"' in l for l in self.wifi.lines):
                 break
             time.sleep(0.1)
-        self.assertTrue(any('"w2"' in l for l in self.wifi.lines))
+        log = os.path.join(self.home, ".tasky", "daemon.log")
+        self.assertTrue(any('"w2"' in l for l in self.wifi.lines),
+                        open(log).read() if os.path.exists(log) else "no daemon.log")
         with open(os.path.join(self.home, ".tasky", "link.json")) as f:
             self.assertEqual(json.load(f)["ip"], "127.0.0.1")
 

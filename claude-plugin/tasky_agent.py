@@ -369,8 +369,8 @@ def find_tasky(link, timeout=1.5):
             msg = json.loads(text[7:])
             if isinstance(msg, dict) and msg.get("id") == link.get("id"):
                 return addr[0]
-    except (OSError, ValueError, TypeError, KeyError):
-        pass
+    except (OSError, ValueError, TypeError, KeyError) as e:
+        print(f"tasky: no answer to the Wi-Fi search: {e!r}", file=sys.stderr)
     finally:
         s.close()
     return None
