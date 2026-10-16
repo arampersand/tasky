@@ -1,8 +1,8 @@
 # Tasky companion: AI agents on your desk
 
-For the **Tasky for Agents** firmware. Your coding agents report what they're doing, and Tasky shows it:
+For **Tasky 3.0** or newer (or the 2.12+ **Tasky for Agents** firmware). Your coding agents report what they're doing, and Tasky shows it:
 
-- **Agents** screen: one card per session with a little robot that shows its state (working / **waiting for you** / done) and the last message. Turn to go through the cards.
+- **Agents** screen (it joins the MODE carousel when the first card arrives): one card per session with a little robot that shows its state (working / **waiting for you** / done) and the last message. Turn to go through the cards.
 - **Approve from the knob:** when Claude Code asks permission ("run `npm test`?", "edit `ui.cpp`?"), Tasky jumps to that card. **Turn** to pick *Allow*, *Deny* or *Allow edits*, **press** to answer. **Long press** leaves the question to the terminal.
 - The **light bar breathes** while an agent waits for you, plus a short beep (muted during focus sessions).
 - **Home** says "1 agent needs you" instead of the phrase.
@@ -11,7 +11,7 @@ Tasky talks over the same USB cable, so it has to be plugged into the computer r
 
 ## Set up (macOS / Linux)
 
-1. Flash **Tasky for Agents** from https://tasky-flash.vercel.app.
+1. Flash **Tasky 3.0 or newer** (or Tasky for Agents 2.12+) from https://tasky-flash.vercel.app.
 2. Install the Tasky plugin. In Claude Code, run:
    ```
    /plugin marketplace add arampersand/tasky

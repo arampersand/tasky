@@ -1682,13 +1682,12 @@ void TaskyUI::drawAgents(const AgentBoard &board, int sel) {
 // Controls: the key list as a wheel (previous / current / next), so it
 // moves the way the knob turns. Turning repaints the wheel only.
 void TaskyUI::drawControls(const char *prev, const char *key, const char *next,
-                           const char *hint, bool grabbed, bool connected, bool windows) {
+                           const char *hint, bool grabbed, bool connected, const char *osName) {
   bool full = !baseDrawn;
   baseDrawn = true;
   if (full) {
     clearScreen();
-    centerTextFont(windows ? "CONTROLS  -  Windows" : "CONTROLS  -  Mac", 30, C_MUTED,
-                   &FreeSans9pt7b);
+    centerTextFont((String("CONTROLS  -  ") + osName).c_str(), 30, C_MUTED, &FreeSans9pt7b);
     if (connected) {
       tft.fillCircle(26, 216, 4, C_GREEN);
       centerTextFont("  Bluetooth connected", 222, C_MUTED, &FreeSans9pt7b);

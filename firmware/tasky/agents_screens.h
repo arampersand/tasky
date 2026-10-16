@@ -275,33 +275,86 @@ static const ComputerKey KEYS[] = {
 };
 static const int KEYS_N = sizeof(KEYS) / sizeof(KEYS[0]);
 static const int KEY_DICTATION = 8;
+
+// Phone mode: what a phone does with a Bluetooth keyboard (iPhone and
+// Android). Dials send consumer keys or arrow keys for each knob direction.
+struct PhoneKey {
+  const char *name;
+  uint16_t media;            // consumer usage to send on press (0 = none)
+  uint8_t key;               // keyboard usage to send on press (0 = none)
+  uint16_t upMedia, downMedia;  // dial: consumer usages
+  uint8_t upKey, downKey;       // dial: keyboard usages
+};
+static const PhoneKey PHONE_KEYS[] = {
+    {"Volume", 0, 0, BleHid::VOL_UP, BleHid::VOL_DOWN, 0, 0},
+    {"Play / Pause", BleHid::PLAY_PAUSE, 0, 0, 0, 0, 0},
+    {"Next", BleHid::NEXT, 0, 0, 0, 0, 0},
+    {"Previous", BleHid::PREV, 0, 0, 0, 0, 0},
+    {"Mute", BleHid::MUTE, 0, 0, 0, 0, 0},
+    {"Take photo", BleHid::VOL_UP, 0, 0, 0, 0, 0},     // the camera's shutter key
+    {"Scroll", 0, 0, 0, 0, 0x52, 0x51},                 // Up / Down: next reel, list
+    {"Next page", 0, 0x4F, 0, 0, 0, 0},                 // Right arrow: books, slides
+    {"Previous page", 0, 0x50, 0, 0, 0, 0},             // Left arrow
+};
+static const int PHONE_N = sizeof(PHONE_KEYS) / sizeof(PHONE_KEYS[0]);
+static const char *const OS_NAME[] = {"Mac", "Windows", "Phone"};
+
 int keySel = 0;
 bool dialGrabbed = false;
 
+static bool phoneMode() { return model.cfg.hostOs == 2; }
+static int keyCount() { return phoneMode() ? PHONE_N : KEYS_N; }
+
 static const char *keyName(int i) {
-  i = (i + KEYS_N) % KEYS_N;
-  return model.cfg.hostOs ? KEYS[i].win : KEYS[i].mac;
+  int n = keyCount();
+  i = ((i % n) + n) % n;
+  if (phoneMode())
+    return PHONE_KEYS[i].name;
+  return model.cfg.hostOs == 1 ? KEYS[i].win : KEYS[i].mac;
+}
+
+static bool isDial(int i) {
+  return phoneMode() ? (PHONE_KEYS[i].upMedia || PHONE_KEYS[i].upKey) : KEYS[i].up != 0;
 }
 
 void drawControlsScreen() {
-  const ComputerKey &k = KEYS[keySel];
-  const char *hint = dialGrabbed  ? "Turn: adjust  Press: done"
-                     : k.up       ? "Press: grab the dial"
-                                  : "Press: send";
+  const char *hint = dialGrabbed    ? "Turn: adjust  Press: done"
+                     : isDial(keySel) ? "Press: grab the dial"
+                                      : "Press: send";
   ui.drawControls(keyName(keySel - 1), keyName(keySel), keyName(keySel + 1), hint,
-                  dialGrabbed, BleHid::connected(), model.cfg.hostOs == 1);
+                  dialGrabbed, BleHid::connected(), OS_NAME[model.cfg.hostOs % 3]);
 }
 
-static void sendKey(const ComputerKey &k) {
-  if (k.media) {
-    BleHid::media(k.media);
-  } else if (&k == &KEYS[KEY_DICTATION] && !model.cfg.hostOs) {
-    BleHid::media(BleHid::VOICE);  // macOS maps the consumer Voice key
-  } else if (model.cfg.hostOs) {
-    BleHid::keys(k.winMods, k.winKey);
-  } else {
-    BleHid::keys(k.macMods, k.macKey);
+static void sendKey(int i) {
+  if (phoneMode()) {
+    const PhoneKey &k = PHONE_KEYS[i];
+    if (k.media)
+      BleHid::media(k.media);
+    else if (k.key)
+      BleHid::keys(0, k.key);
+    return;
   }
+  const ComputerKey &k = KEYS[i];
+  if (k.media)
+    BleHid::media(k.media);
+  else if (i == KEY_DICTATION && model.cfg.hostOs == 0)
+    BleHid::media(BleHid::VOICE);  // macOS maps the consumer Voice key
+  else if (model.cfg.hostOs == 1)
+    BleHid::keys(k.winMods, k.winKey);
+  else
+    BleHid::keys(k.macMods, k.macKey);
+}
+
+static void turnDial(int i, bool up) {
+  if (phoneMode()) {
+    const PhoneKey &k = PHONE_KEYS[i];
+    if (k.upMedia)
+      BleHid::media(up ? k.upMedia : k.downMedia);
+    else
+      BleHid::keys(0, up ? k.upKey : k.downKey);
+    return;
+  }
+  BleHid::media(up ? KEYS[i].up : KEYS[i].down);
 }
 
 void handleControls(int step, EncClickType click) {
@@ -313,31 +366,32 @@ void handleControls(int step, EncClickType click) {
   }
   if (!ui.baseDrawn)
     drawControlsScreen();
-  const ComputerKey &k = KEYS[keySel];
-  if (click == ENC_LONG) {
+  if (click == ENC_LONG) {  // Mac -> Windows -> Phone
     ui.uiTick(true);
-    model.cfg.hostOs = model.cfg.hostOs ? 0 : 1;
+    model.cfg.hostOs = (model.cfg.hostOs + 1) % 3;
     model.save();
     dialGrabbed = false;
+    keySel = 0;
     ui.baseDrawn = false;
     return;
   }
   if (click == ENC_SHORT) {
     ui.uiTick(true);
-    if (k.up)
+    if (isDial(keySel))
       dialGrabbed = !dialGrabbed;
     else
-      sendKey(k);
+      sendKey(keySel);
     drawControlsScreen();
   }
   if (step == 0)
     return;
   if (dialGrabbed) {  // clockwise = up (the knob's steps count the other way, as on the Timer)
     for (int i = 0; i < abs(step); i++)
-      BleHid::media(step < 0 ? k.up : k.down);
+      turnDial(keySel, step < 0);
     return;
   }
-  keySel = ((keySel + step) % KEYS_N + KEYS_N) % KEYS_N;
+  int n = keyCount();
+  keySel = ((keySel + step) % n + n) % n;
   ui.uiTick(false);
   drawControlsScreen();
 }

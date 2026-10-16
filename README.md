@@ -30,17 +30,11 @@ A knob, a screen and a light bar: focus timer, today's tasks, your streak, your 
 </tr>
 </table>
 
-## Two firmwares
+## One firmware, everything
 
-| | **Tasky** | **Tasky for Agents** |
-|---|---|---|
-| For | Your calm desk companion | A companion for your computer and its AI agents |
-| Highlights | Home at a glance, focus timer, tasks, calendar, weather, GitHub, Notion, ask ChatGPT/Claude | **Claude Code status** (light breathes when an agent needs you), **Bluetooth volume/brightness/media dial**, Spotlight/Siri/screenshot shortcuts, plus timer, tasks, calendar, weather |
-| Flash | [tasky-flash.vercel.app](https://tasky-flash.vercel.app) → *Tasky* | [tasky-flash.vercel.app](https://tasky-flash.vercel.app) → *Tasky for Agents* + the [Claude Code plugin](companion/README.md) |
+Since **3.0** there is a single firmware for both boards (XIAO C3 and C6) with everything: Home at a glance, focus timer, tasks, calendar, weather, GitHub streak, Notion, ask ChatGPT/Claude, **Claude Code agent cards** (the light breathes when an agent needs you, and you allow or deny permission prompts with the knob) and a **Bluetooth key row** (volume, brightness, media and shortcuts for Mac or Windows). Agents and Controls join the MODE carousel the first time you use them; until then they wait in **More**. Bluetooth only starts the first time you open Controls.
 
-Same hardware; switch any time by flashing the other one.
-
-**Connect Claude Code** (Tasky for Agents): in Claude Code, run
+**Connect Claude Code**: in Claude Code, run
 
 ```
 /plugin marketplace add arampersand/tasky
@@ -63,6 +57,8 @@ Your phone is the worst focus tool you own. Tasky is a single-purpose object tha
 | 📅 **Calendar & agenda** | Any iCal feed (Google, Outlook, iCloud). Meeting alert 5 minutes before, a morning brief and an end-of-day close. |
 | 🌤 **Weather** | Open-Meteo, so no API key is needed. Just your city. |
 | 🤖 **AI agent** | Bring your Claude or OpenAI key. |
+| 🧑‍💻 **Claude Code agents** | One card per session; the light breathes when an agent waits for you; allow or deny permission prompts with the knob. |
+| 🎛 **Controls** | Tasky as a Bluetooth key row: volume, brightness, media and shortcuts for Mac or Windows. |
 | 📊 **Stats** | Total focus time, sessions and minutes today. |
 | 🏠 **Home at a glance** | Time, weather, what's next, your open tasks and a rotating phrase. Press the knob to start focusing. |
 | 🪄 **Two-minute setup** | Right after flashing, the website walks you through Wi-Fi, calendar, tasks, GitHub and AI over USB. Or scan a QR with your phone. |
@@ -133,7 +129,7 @@ Deep dive: **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**.
 
 ## Roadmap
 
-Next up is **Tasky 3.0**: set up entirely from the browser (Wi-Fi → calendar → GitHub → AI), a glance-first home screen, and two variants: **Tasky Desk** (a companion for your computer: volume, Claude Code agents) and **Tasky Go** (battery, phone notifications). See **[docs/ROADMAP.md](docs/ROADMAP.md)**. Code-level fixes and good first issues live in **[docs/IMPROVEMENTS.md](docs/IMPROVEMENTS.md)**.
+**Tasky 3.0** merges the two 2.x firmwares (Tasky and Tasky for Agents) into one. Next up: **Tasky Go** (battery, phone notifications), more agents (Codex, Cursor) and Windows support for the companion. See **[docs/ROADMAP.md](docs/ROADMAP.md)**. Code-level fixes and good first issues live in **[docs/IMPROVEMENTS.md](docs/IMPROVEMENTS.md)**.
 
 ## Contributing
 

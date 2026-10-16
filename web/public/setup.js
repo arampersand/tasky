@@ -165,15 +165,20 @@ $("wz-connect").addEventListener("click", (e) => busy(e.currentTarget, async () 
     STEPS = STEPS.filter((s) => s !== "light");
     wizard.querySelector('.wz-progress li[data-step="light"]').hidden = true;
   }
-  if (state.edition !== "agents") STEPS = STEPS.filter((s) => s !== "agents");
-  else wizard.querySelector('.wz-progress li[data-step="agents"]').hidden = false;
-  if (state.edition === "agents") {
-    // The Agents edition has no on-device AI chat: skip that step, explain hooks instead
-    STEPS = STEPS.filter((s) => s !== "ai");
-    wizard.querySelector('.wz-progress li[data-step="ai"]').hidden = true;
+  // Claude Code cards: Tasky 3.0+ reports "agents":true; 2.7–2.13 Agents builds report edition "agents".
+  const oldAgents = state.edition === "agents";
+  const hasAgents = state.agents === true || oldAgents;
+  if (!hasAgents) STEPS = STEPS.filter((s) => s !== "agents");
+  else {
+    wizard.querySelector('.wz-progress li[data-step="agents"]').hidden = false;
     $("wz-agents-tip").hidden = false;
   }
-  setStatus("wz-connect-status", `Connected to ${state.edition === "agents" ? "Tasky for Agents" : "Tasky"} v${state.v}.`, "ok");
+  if (oldAgents) {
+    // The 2.x Agents builds have no on-device AI chat (3.0 has both again)
+    STEPS = STEPS.filter((s) => s !== "ai");
+    wizard.querySelector('.wz-progress li[data-step="ai"]').hidden = true;
+  }
+  setStatus("wz-connect-status", `Connected to ${oldAgents ? "Tasky for Agents" : "Tasky"} v${state.v}.`, "ok");
   setTimeout(() => show("wifi"), 500);
 }));
 
@@ -249,7 +254,7 @@ $("wz-agent-test").addEventListener("click", (e) => busy(e.currentTarget, async 
     clearTimeout(testCardTimer);
     testCardTimer = setTimeout(removeTestCard, 10000);
   } catch {
-    setStatus("wz-agents-status", "Tasky didn't answer. Is it the Tasky for Agents firmware?", "error");
+    setStatus("wz-agents-status", "Tasky didn't answer. Flash the latest firmware above, then reconnect.", "error");
   }
 }));
 $("wz-disconnect").addEventListener("click", (e) => busy(e.currentTarget, async () => {

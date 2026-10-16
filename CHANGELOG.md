@@ -2,6 +2,16 @@
 
 All notable changes to the Tasky firmware. Versions match `firmware/tasky/version.h` and git tags.
 
+## Unreleased (3.0)
+
+### Changed
+- **One firmware.** Tasky and Tasky for Agents are now the same firmware with everything: focus timer, tasks, calendar, weather, GitHub, Notion, AI, Claude Code agent cards and approvals, and the Bluetooth key row. The web flasher only asks for your board. Bluetooth starts the first time you open Controls (then on every boot); Agents and Controls join the carousel once you use them.
+- `TASKY?` reports `"edition":"tasky"` with `"agents":true`; the companion and the web setup accept both this and 2.x Agents builds.
+
+### Added
+- **More > Screens** on the device: choose the screen Tasky starts on, and tick, untick and reorder the carousel with the knob.
+- **Phone mode** in Controls (long press cycles Mac → Windows → Phone): volume and scroll dials, play/pause, next/previous, mute, take a photo (camera shutter), next/previous page.
+
 ## v2.13.0 — 2026-10-16 · Easy setup & polish
 
 ### Added

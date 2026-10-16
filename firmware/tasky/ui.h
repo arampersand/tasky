@@ -172,7 +172,7 @@ public:
 #endif
 #if FEATURE_BLE_HID
   void drawControls(const char *prev, const char *key, const char *next, const char *hint,
-                    bool grabbed, bool connected, bool windows);
+                    bool grabbed, bool connected, const char *osName);
 #endif
   void drawMeetingAlert(const CalendarEventItem &ev, int minutes, bool timerPaused);
   void drawMorningBrief();

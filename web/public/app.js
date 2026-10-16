@@ -1,4 +1,4 @@
-// Edition + board selector, USB port filter and latest-release info for the flasher page.
+// Board selector, USB port filter and latest-release info for the flasher page.
 const $ = (id) => document.getElementById(id);
 const installer = $("installer");
 
@@ -24,10 +24,12 @@ if ("serial" in navigator) {
   showUsbStatus();
 }
 
-const picked = (name) => document.querySelector(`input[name="${name}"]:checked`).value;
-const updateManifest = () =>
-  installer.setAttribute("manifest", `/firmware/manifest-${picked("board")}${picked("edition")}.json`);
-for (const radio of document.querySelectorAll('input[name="board"], input[name="edition"]')) {
+// One firmware since 3.0 (the 2.x "-agents" manifests are no longer offered).
+const updateManifest = () => {
+  const board = document.querySelector('input[name="board"]:checked').value;
+  installer.setAttribute("manifest", `/firmware/manifest-${board}.json`);
+};
+for (const radio of document.querySelectorAll('input[name="board"]')) {
   radio.addEventListener("change", updateManifest);
 }
 
@@ -49,10 +51,8 @@ if (!latest.version) {
   $("rel-notes").textContent = latest.notes || "No notes for this release.";  // plain text, never HTML
   $("rel-link").href = latest.url;
   $("hero-version").textContent = `v${latest.version} · ESP32-C3 / C6 · open source`;
-  // Releases before 2.7 have no Agents edition
-  if (latest.available && !latest.available.includes("c3-agents")) {
-    const agents = $("edition-agents");
-    agents.querySelector("input").disabled = true;
-    agents.querySelector("small").textContent = "Coming in the next release";
+  // A board missing from the release can't be picked (latest.json lists what was built)
+  for (const radio of document.querySelectorAll('input[name="board"]')) {
+    if (latest.available && !latest.available.includes(radio.value)) radio.disabled = true;
   }
 }
